@@ -129,7 +129,13 @@ class BodyLimit:
             elif not too_large:
                 await send(message)
 
-        await self._app(scope, counted, guarded)
+        try:
+            await self._app(scope, counted, guarded)
+        except Exception:
+            # Cutting the body short makes some handlers fail mid-read. That is this limit at
+            # work, not a fault; anything else is re-raised.
+            if not too_large:
+                raise
         if too_large and not answered:
             await self._refuse(scope, receive, send)
 
