@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { LiveSource } from "./SocketSource";
 
 const CLOSED = 2;
 
@@ -39,7 +40,7 @@ export function useLiveDocument<T extends Revisioned & { server_time: number }>(
   const accept = useCallback((incoming: T) => take(incoming, false), [take]);
 
   useEffect(() => {
-    const source = new (EventSourceImpl ?? EventSource)(url);
+    const source = new (EventSourceImpl ?? LiveSource)(url);
     let first = true;
     let retry: ReturnType<typeof setTimeout> | undefined;
     source.onopen = () => {
@@ -59,7 +60,7 @@ export function useLiveDocument<T extends Revisioned & { server_time: number }>(
     };
     source.onerror = () => {
       setConnected(false);
-      // The browser retries a dropped stream itself. One the server refused stays closed.
+      // The source retries a dropped stream itself. One the server refused stays closed.
       if (source.readyState === CLOSED) retry = setTimeout(() => setAttempt((count) => count + 1), retryMs);
     };
     return () => {

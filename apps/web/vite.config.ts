@@ -5,7 +5,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [react()],
   // KICKSTREAM_API lets the browser tests point their own dev server at their own pipeline.
-  server: { port: 5173, proxy: { "/api": process.env.KICKSTREAM_API ?? "http://127.0.0.1:8000" } },
+  server: { port: 5173, proxy: { "/api": { target: process.env.KICKSTREAM_API ?? "http://127.0.0.1:8000", ws: true } } },
   test: {
     environment: "jsdom",
     globals: true,

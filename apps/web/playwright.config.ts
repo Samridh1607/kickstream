@@ -6,7 +6,8 @@ const NO_MODEL = { KICKSTREAM_LLM_BASE_URL: "", KICKSTREAM_LLM_MODEL: "", KICKST
 // never touch the scenes, polls or match of a developer who has Kickstream running.
 const API = "http://127.0.0.1:8010";
 const WEB = "http://127.0.0.1:5183";
-const TEST_SERVER = { ...NO_MODEL, KICKSTREAM_DATA_DIR: ".data-e2e" };
+// A fresh data directory for every run, so one run's scenes, polls and questions never meet the next.
+const TEST_SERVER = { ...NO_MODEL, KICKSTREAM_DATA_DIR: `.data-e2e/${Date.now()}` };
 
 export default defineConfig({
   testDir: "e2e",

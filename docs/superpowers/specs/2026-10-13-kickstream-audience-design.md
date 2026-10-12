@@ -28,6 +28,8 @@ The studio lets a streamer compose a picture. This sub-project lets the audience
 | Without a model | No AI draft; the streamer types the answer |
 | State | A separate audience document, not part of the studio document |
 | Updates to fans | Pushed at most twice a second, however many votes arrive |
+| Transport | Pages follow every live stream (match, studio, audience) over a WebSocket. Browsers allow six HTTP connections to one server and each Server-Sent Events stream holds one, so the studio and program pages together would leave none for a button press. The Server-Sent Events routes remain for tools |
+| Other sites | A WebSocket is refused unless the page that opens it was served from the same host, because the browser's same-origin rule does not cover WebSockets |
 
 ## Definition of done
 

@@ -87,10 +87,12 @@ Stages talk only through the event bus and the contracts, and never import one a
 ```bash
 pnpm test:api                         # pipeline unit and integration tests
 pnpm test:web                         # dashboard unit and component tests
-(cd apps/web && pnpm e2e)             # one match, end to end, in a real browser
+(cd apps/web && pnpm e2e)             # the dashboard, the studio and the fan page, in a real browser
 ```
 
 No test calls a live model.
+
+The browser tests start their own pipeline (port 8010) and dev server (port 5183) with a fresh data directory, so they never touch a Kickstream you have running.
 
 After changing `packages/contracts/kickstream.schema.json`, regenerate both sets of types:
 

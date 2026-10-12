@@ -1,4 +1,5 @@
 import type { Envelope } from "../contracts";
+import { LiveSource } from "./SocketSource";
 import type { Connection } from "./store";
 
 export interface StreamHandlers {
@@ -15,14 +16,14 @@ function isEnvelope(value: unknown): value is Envelope {
 }
 
 /**
- * Opens the one stream connection for a viewer. The browser reconnects a dropped connection
- * by itself and sends Last-Event-ID, so the server replays only what was missed. A connection
+ * Opens the one stream connection for a viewer. The source reconnects a dropped connection by
+ * itself and says which id it last saw, so the server replays only what was missed. A connection
  * the server refuses (unknown match) is left closed and reported as "no_match".
  */
 export function connect(
   url: string,
   handlers: StreamHandlers,
-  EventSourceImpl: new (url: string) => EventSource = EventSource,
+  EventSourceImpl: new (url: string) => EventSource = LiveSource,
 ): () => void {
   handlers.onConnection("connecting");
   const source = new EventSourceImpl(url);
