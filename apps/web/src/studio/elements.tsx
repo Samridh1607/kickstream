@@ -2,7 +2,7 @@ import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
 import { Pitch } from "../components/Pitch";
 import { StatsPanel } from "../components/StatsPanel";
 import { Timeline } from "../components/Timeline";
-import type { Banner, MatchEvent, Replay, SceneElement, Studio } from "../contracts";
+import type { Audience, Banner, MatchEvent, Replay, SceneElement, Studio } from "../contracts";
 import { type Language, t } from "../i18n";
 import type { MatchData } from "../stream/store";
 import { fetchReplay, imageUrl } from "./api";
@@ -14,6 +14,8 @@ export interface ProgramData {
   studio: Studio;
   now: number;
   language: Language;
+  /** The fan view of the audience; absent until it has loaded. */
+  audience?: Audience | null;
 }
 
 // The program is a broadcast picture, not themed interface: one fixed look, sized for 1080p.
@@ -170,7 +172,47 @@ function ImageView({ imageId, fit }: { imageId: unknown; fit: unknown }) {
   );
 }
 
-/** Draws one scene element from the match and the studio document. */
+function PollView({ data }: { data: ProgramData }) {
+  const poll = data.audience?.poll;
+  if (!poll || !data.audience?.poll_on_air) return null;
+  const total = poll.options.reduce((sum, option) => sum + option.votes, 0);
+  return (
+    <div data-testid="program-poll" style={{ ...PANEL, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 16 }}>
+        <span style={{ flex: 1, fontSize: 40, fontWeight: 700 }}>{poll.question}</span>
+        <span style={{ fontSize: 24, opacity: 0.8 }}>{t(data.language, poll.state === "open" ? "pollOpen" : "pollClosed")}</span>
+      </div>
+      {poll.options.map((option) => {
+        const percent = total === 0 ? 0 : Math.round((option.votes / total) * 100);
+        return (
+          <div key={option.id}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+              <span>{option.text}</span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>{`${option.votes} · ${percent}%`}</span>
+            </div>
+            <div style={{ height: 14, borderRadius: 7, overflow: "hidden", backgroundColor: "rgba(255, 255, 255, 0.18)" }}>
+              <div style={{ width: `${percent}%`, height: "100%", backgroundColor: "#479EF5" }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function QaView({ data }: { data: ProgramData }) {
+  const qa = data.audience?.qa;
+  if (!qa) return null;
+  return (
+    <div data-testid="program-qa" style={{ ...PANEL, display: "flex", flexDirection: "column", gap: 12, backgroundColor: "#101828" }}>
+      <span style={{ fontSize: 26, opacity: 0.8 }}>{`${qa.nickname} ${t(data.language, "asks")}`}</span>
+      <span style={{ fontSize: 36, fontWeight: 700 }}>{qa.question}</span>
+      <span>{qa.answer}</span>
+    </div>
+  );
+}
+
+/** Draws one scene element from the match, the studio document and the audience. */
 export function ElementView({ element, data }: { element: SceneElement; data: ProgramData }) {
   const { match, studio, language } = data;
   const props = element.props as Record<string, unknown>;
@@ -210,6 +252,10 @@ export function ElementView({ element, data }: { element: SceneElement; data: Pr
       return studio.replay ? <ReplayView replay={studio.replay} data={data} /> : null;
     case "countdown":
       return <CountdownView data={data} />;
+    case "poll":
+      return <PollView data={data} />;
+    case "qa":
+      return <QaView data={data} />;
     case "text":
       return (
         <div style={{ ...PANEL, ...CENTERED, backgroundColor: "transparent" }}>

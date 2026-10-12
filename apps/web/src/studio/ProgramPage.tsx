@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Scene, Studio, ViewerProfile } from "../contracts";
+import { AUDIENCE_STREAM } from "../audience/api";
+import type { Audience, Scene, Studio, ViewerProfile } from "../contracts";
 import { useMatch } from "../stream/store";
+import { useLiveDocument } from "../stream/useLiveDocument";
 import { type CurrentMatchOptions, useCurrentMatch } from "../stream/useCurrentMatch";
 import { fitScale, nextLayer } from "./geometry";
 import { SceneCanvas } from "./SceneCanvas";
@@ -13,6 +15,22 @@ export function withReplayFallback(scene: Scene, studio: Studio): Scene {
   if (!studio.replay || scene.elements.some((element) => element.type === "replay" && element.visible)) return scene;
   const fallback = { id: "__replay", type: "replay" as const, ...REPLAY_BOX, layer: nextLayer(scene.elements), visible: true, props: {} };
   return { ...scene, elements: [...scene.elements, fallback] };
+}
+
+const POLL_BOX = { x: 1240, y: 200, width: 640, height: 560 };
+const QA_BOX = { x: 260, y: 700, width: 1400, height: 300 };
+
+/** Whatever is on air must be visible: add a default box for each thing the scene has no element for. */
+export function withFallbacks(scene: Scene, studio: Studio, audience: Audience | null | undefined): Scene {
+  let shown = withReplayFallback(scene, studio);
+  const missing = (type: "poll" | "qa") => !shown.elements.some((element) => element.type === type && element.visible);
+  const add = (type: "poll" | "qa", box: typeof POLL_BOX) => {
+    const fallback = { id: `__${type}`, type, ...box, layer: nextLayer(shown.elements), visible: true, props: {} };
+    shown = { ...shown, elements: [...shown.elements, fallback] };
+  };
+  if (audience?.poll && audience.poll_on_air && missing("poll")) add("poll", POLL_BOX);
+  if (audience?.qa && missing("qa")) add("qa", QA_BOX);
+  return shown;
 }
 
 function useWindowSize() {
@@ -28,6 +46,7 @@ function useWindowSize() {
 /** The clean output: the active scene, scaled to the window, with no controls. */
 export function ProgramPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) {
   const { studio, offset } = useStudio(eventSource, retryMs);
+  const { doc: audience } = useLiveDocument<Audience>(AUDIENCE_STREAM, eventSource, retryMs);
   const mode = studio?.settings.mode;
   const language = studio?.settings.language;
   const profile = useMemo<ViewerProfile | null>(
@@ -44,8 +63,8 @@ export function ProgramPage({ eventSource, retryMs, pollMs }: CurrentMatchOption
     <div data-testid="program"
       style={{ position: "fixed", inset: 0, display: "grid", placeItems: "center", overflow: "hidden", backgroundColor: "#000000", cursor: "none" }}>
       {studio && active && (
-        <SceneCanvas scene={withReplayFallback(active, studio)} scale={fitScale(size.width, size.height)}
-          data={{ match, studio, now, language: studio.settings.language }} />
+        <SceneCanvas scene={withFallbacks(active, studio, audience)} scale={fitScale(size.width, size.height)}
+          data={{ match, studio, now, language: studio.settings.language, audience }} />
       )}
     </div>
   );

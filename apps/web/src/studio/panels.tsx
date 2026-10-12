@@ -10,7 +10,7 @@ import { lower, nextLayer, raise } from "./geometry";
 
 const BUILTIN = ["Starting soon", "Live match", "Analyst desk", "Break", "Full-time"];
 const ELEMENT_TYPES: SceneElement["type"][] = [
-  "scoreboard", "pitch", "narration", "stats", "banner", "ticker", "timeline", "recap", "replay", "countdown", "text", "image",
+  "scoreboard", "pitch", "narration", "stats", "banner", "ticker", "timeline", "recap", "replay", "countdown", "text", "image", "poll", "qa",
 ];
 
 const useStyles = makeStyles({

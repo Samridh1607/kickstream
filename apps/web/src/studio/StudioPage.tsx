@@ -1,20 +1,23 @@
 import { Badge, Link, makeStyles, MessageBar, MessageBarBody, Tab, TabList, Text, tokens } from "@fluentui/react-components";
 import { useEffect, useMemo, useState } from "react";
-import type { Scene, SceneElement, Studio, ViewerProfile } from "../contracts";
+import { STUDIO_AUDIENCE_STREAM } from "../audience/api";
+import { AudienceTab } from "../audience/AudienceTab";
+import type { Audience, Scene, SceneElement, Studio, ViewerProfile } from "../contracts";
 import { useMatch } from "../stream/store";
+import { useLiveDocument } from "../stream/useLiveDocument";
 import { type CurrentMatchOptions, useCurrentMatch } from "../stream/useCurrentMatch";
 import {
   activateScene, clearBanner, createScene, deleteScene, deleteTemplate, endCountdown, saveScene, saveSettings,
   saveTemplate, saveTicker, showBanner, startBreak, startCountdown, startReplay, stopReplay, uploadImage,
 } from "./api";
 import { BannerPanel, CountdownPanel, ElementPanel, HighlightsPanel, SceneList, SettingsPanel, TickerPanel } from "./panels";
-import { withReplayFallback } from "./ProgramPage";
+import { withFallbacks } from "./ProgramPage";
 import { SceneCanvas } from "./SceneCanvas";
 import { useNow, useStudio } from "./useStudio";
 
 const EDITOR_SCALE = 0.45;
 const PREVIEW_SCALE = 0.16;
-const TABS = ["Elements", "Banner", "Ticker", "Highlights", "Countdown", "Settings"] as const;
+const TABS = ["Elements", "Banner", "Ticker", "Highlights", "Audience", "Countdown", "Settings"] as const;
 type TabName = (typeof TABS)[number];
 
 const useStyles = makeStyles({
@@ -33,6 +36,7 @@ const useStyles = makeStyles({
 export function StudioPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) {
   const styles = useStyles();
   const { studio, offset, connected, accept } = useStudio(eventSource, retryMs);
+  const { doc: audience, accept: acceptAudience } = useLiveDocument<Audience>(STUDIO_AUDIENCE_STREAM, eventSource, retryMs);
   const mode = studio?.settings.mode;
   const language = studio?.settings.language;
   const profile = useMemo<ViewerProfile | null>(
@@ -87,10 +91,21 @@ export function StudioPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions
     }
   };
 
+  const runAudience = async (request: () => Promise<Audience>): Promise<boolean> => {
+    try {
+      acceptAudience(await request());
+      setProblem(null);
+      return true;
+    } catch (caught) {
+      setProblem(caught instanceof Error ? caught.message : "The change was not saved.");
+      return false;
+    }
+  };
+
   const onAir = studio.scenes.find((scene) => scene.id === studio.active_scene_id) ?? studio.scenes[0];
   const saved = studio.scenes.find((scene) => scene.id === editingId) ?? onAir;
   const editing = pending?.id === saved.id ? pending : saved;
-  const data = { match, studio, now, language: studio.settings.language };
+  const data = { match, studio, now, language: studio.settings.language, audience };
 
   const changeElements = async (elements: SceneElement[]) => {
     const edited = { ...editing, elements };
@@ -148,7 +163,7 @@ export function StudioPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions
           </section>
           <section className={styles.card} aria-label="Program preview">
             <Text as="h2" weight="semibold" block>Program</Text>
-            <SceneCanvas scene={withReplayFallback(onAir, studio)} data={data} scale={PREVIEW_SCALE} />
+            <SceneCanvas scene={withFallbacks(onAir, studio, audience)} data={data} scale={PREVIEW_SCALE} />
           </section>
         </div>
         <div className={styles.card}>
@@ -175,6 +190,7 @@ export function StudioPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions
                 onStopReplay={() => void run(stopReplay)}
                 onBanner={(narrative) => void run(() => showBanner({ text: narrative.text.slice(0, 200), kind: "info", source_id: narrative.id }))} />
             )}
+            {tab === "Audience" && <AudienceTab audience={audience} onRun={runAudience} />}
             {tab === "Countdown" && (
               <CountdownPanel studio={studio} now={now}
                 onStart={(startsAt) => void run(() => startCountdown(startsAt))}
