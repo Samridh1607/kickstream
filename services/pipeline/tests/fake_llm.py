@@ -12,10 +12,12 @@ from starlette.responses import JSONResponse, StreamingResponse
 from starlette.routing import Route
 
 ROLES = ("commentator", "tactical_analyst", "recap_writer", "localizer")
-RECAP_JSON = json.dumps({
-    "fan": {"title": "Fan title", "bullets": ["f1", "f2", "f3"], "text": "Fan recap."},
-    "analyst": {"title": "Analyst title", "bullets": ["a1", "a2", "a3"], "text": "Analyst recap."},
-})
+RECAP_JSON = json.dumps(
+    {
+        "fan": {"title": "Fan title", "bullets": ["f1", "f2", "f3"], "text": "Fan recap."},
+        "analyst": {"title": "Analyst title", "bullets": ["a1", "a2", "a3"], "text": "Analyst recap."},
+    }
+)
 
 
 def _text(content) -> str:
@@ -34,7 +36,7 @@ def _tag(value, tag: str):
 
 class FakeLLM:
     def __init__(self) -> None:
-        self.calls: list[dict] = []     # {"role": ..., "user": ...} per request
+        self.calls: list[dict] = []  # {"role": ..., "user": ...} per request
         self.replies: dict[str, str] = {}  # role -> canned reply overriding the default
         self.app = Starlette(routes=[Route("/v1/chat/completions", self._complete, methods=["POST"])])
         self._server = None
@@ -67,17 +69,29 @@ class FakeLLM:
         reply = self._reply(role, user)
         if body.get("stream"):
             return StreamingResponse(self._chunks(reply), media_type="text/event-stream")
-        return JSONResponse({
-            "id": "chatcmpl-fake", "object": "chat.completion", "created": 0, "model": body.get("model", "fake"),
-            "choices": [{"index": 0, "message": {"role": "assistant", "content": reply}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
-        })
+        return JSONResponse(
+            {
+                "id": "chatcmpl-fake",
+                "object": "chat.completion",
+                "created": 0,
+                "model": body.get("model", "fake"),
+                "choices": [
+                    {"index": 0, "message": {"role": "assistant", "content": reply}, "finish_reason": "stop"}
+                ],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            }
+        )
 
     @staticmethod
     async def _chunks(reply: str):
         def chunk(delta, finish=None):
-            payload = {"id": "chatcmpl-fake", "object": "chat.completion.chunk", "created": 0, "model": "fake",
-                       "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
+            payload = {
+                "id": "chatcmpl-fake",
+                "object": "chat.completion.chunk",
+                "created": 0,
+                "model": "fake",
+                "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
+            }
             return f"data: {json.dumps(payload)}\n\n"
 
         yield chunk({"role": "assistant", "content": reply})
@@ -89,7 +103,9 @@ class FakeLLM:
             probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]
         self.base_url = f"http://127.0.0.1:{port}/v1"
-        self._server = uvicorn.Server(uvicorn.Config(self.app, host="127.0.0.1", port=port, log_level="warning"))
+        self._server = uvicorn.Server(
+            uvicorn.Config(self.app, host="127.0.0.1", port=port, log_level="warning")
+        )
         self._thread = threading.Thread(target=self._server.run, daemon=True)
         self._thread.start()
         while not self._server.started:

@@ -57,22 +57,28 @@ _MOMENT: dict[Language, dict[Mode, dict[str, str]]] = {
 
 _RECAP: dict[Language, dict[str, str]] = {
     "en": {
-        "half_time": "Half-time", "full_time": "Full-time",
-        "lead": "{leader} lead {score}.", "level": "{home} and {away} are level at {score}.",
+        "half_time": "Half-time",
+        "full_time": "Full-time",
+        "lead": "{leader} lead {score}.",
+        "level": "{home} and {away} are level at {score}.",
         "shots": "Shots {home_shots}-{away_shots}, possession {home_poss}%-{away_poss}%.",
         "xg": "Expected goals {home_xg}-{away_xg}.",
         "moments": "{count} key moments so far.",
     },
     "es": {
-        "half_time": "Descanso", "full_time": "Final",
-        "lead": "{leader} gana {score}.", "level": "{home} y {away} empatan {score}.",
+        "half_time": "Descanso",
+        "full_time": "Final",
+        "lead": "{leader} gana {score}.",
+        "level": "{home} y {away} empatan {score}.",
         "shots": "Remates {home_shots}-{away_shots}, posesión {home_poss}%-{away_poss}%.",
         "xg": "Goles esperados {home_xg}-{away_xg}.",
         "moments": "{count} momentos clave hasta ahora.",
     },
     "hi": {
-        "half_time": "हाफ टाइम", "full_time": "फुल टाइम",
-        "lead": "{leader} {score} से आगे है।", "level": "{home} और {away} {score} से बराबरी पर हैं।",
+        "half_time": "हाफ टाइम",
+        "full_time": "फुल टाइम",
+        "lead": "{leader} {score} से आगे है।",
+        "level": "{home} और {away} {score} से बराबरी पर हैं।",
         "shots": "शॉट {home_shots}-{away_shots}, कब्ज़ा {home_poss}%-{away_poss}%।",
         "xg": "अपेक्षित गोल {home_xg}-{away_xg}।",
         "moments": "अब तक {count} अहम पल।",
@@ -90,23 +96,43 @@ class ScriptedNarrativeWriter:
     async def write_moment(self, ctx: MomentContext) -> dict[Variant, WrittenText]:
         moment = ctx.moment
         team = (ctx.home if moment.team == "home" else ctx.away).name
-        values = dict(team=team, player=ctx.player_name or team, minute=moment.minute,
-                      score=f"{moment.score_home}-{moment.score_away}")
+        values = dict(
+            team=team,
+            player=ctx.player_name or team,
+            minute=moment.minute,
+            score=f"{moment.score_home}-{moment.score_away}",
+        )
         return {
             (mode, language): WrittenText(
-                _MOMENT[language][mode][moment.kind].format(**values, facts=fact_text(moment.facts, language)),
-                "scripted")
+                _MOMENT[language][mode][moment.kind].format(
+                    **values, facts=fact_text(moment.facts, language)
+                ),
+                "scripted",
+            )
             for mode, language in VARIANTS
         }
 
     async def write_recap(self, ctx: RecapContext) -> dict[Variant, WrittenRecap]:
         home, away = ctx.stats.home, ctx.stats.away
         score = f"{home.goals}-{away.goals}"
-        leader = None if home.goals == away.goals else (ctx.home.name if home.goals > away.goals else ctx.away.name)
-        values = dict(home=ctx.home.name, away=ctx.away.name, score=score, leader=leader,
-                      home_shots=home.shots, away_shots=away.shots,
-                      home_poss=_percent(home.possession), away_poss=_percent(away.possession),
-                      home_xg=home.xg, away_xg=away.xg, count=len(ctx.moments))
+        leader = (
+            None
+            if home.goals == away.goals
+            else (ctx.home.name if home.goals > away.goals else ctx.away.name)
+        )
+        values = dict(
+            home=ctx.home.name,
+            away=ctx.away.name,
+            score=score,
+            leader=leader,
+            home_shots=home.shots,
+            away_shots=away.shots,
+            home_poss=_percent(home.possession),
+            away_poss=_percent(away.possession),
+            home_xg=home.xg,
+            away_xg=away.xg,
+            count=len(ctx.moments),
+        )
         written = {}
         for mode, language in VARIANTS:
             strings = _RECAP[language]
@@ -114,5 +140,7 @@ class ScriptedNarrativeWriter:
             shots, expected = strings["shots"].format(**values), strings["xg"].format(**values)
             title = f"{strings[ctx.period]}: {ctx.home.name} {score} {ctx.away.name}"
             closing = strings["moments"].format(**values) if mode == "fan" else f"{shots} {expected}"
-            written[(mode, language)] = WrittenRecap(title, (headline, shots, expected), f"{headline} {closing}", "scripted")
+            written[(mode, language)] = WrittenRecap(
+                title, (headline, shots, expected), f"{headline} {closing}", "scripted"
+            )
         return written

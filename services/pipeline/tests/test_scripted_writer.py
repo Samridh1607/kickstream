@@ -2,7 +2,6 @@ import pytest
 
 from kickstream.adapters.scripted_writer import ScriptedNarrativeWriter
 from kickstream.domain.types import VARIANTS
-
 from tests.factories import moment_ctx, recap_ctx
 
 KINDS = ["goal", "red_card", "big_chance", "momentum_swing", "sustained_pressure"]
@@ -41,7 +40,9 @@ async def test_moment_without_a_player_falls_back_to_the_team_name():
 
 
 async def test_away_moments_use_the_away_team_name():
-    text = (await ScriptedNarrativeWriter().write_moment(moment_ctx(kind="sustained_pressure", team="away")))[("fan", "en")].text
+    text = (await ScriptedNarrativeWriter().write_moment(moment_ctx(kind="sustained_pressure", team="away")))[
+        ("fan", "en")
+    ].text
     assert text.startswith("Harbour City")
 
 
@@ -68,5 +69,6 @@ async def test_full_time_titles_and_level_scores():
     ctx = recap_ctx()
     level = ctx.stats.model_copy(update={"away": ctx.stats.away.model_copy(update={"goals": 2})})
     from dataclasses import replace
+
     written = await ScriptedNarrativeWriter().write_recap(replace(ctx, stats=level))
     assert written[("fan", "en")].bullets[0] == "Northbridge FC and Harbour City are level at 2-2."

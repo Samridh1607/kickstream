@@ -12,13 +12,13 @@ _PRESSURE_WEIGHT = {"pass": 1.0, "corner": 3.0, "shot": 4.0, "goal": 5.0}
 @dataclass(frozen=True)
 class AnalyticsConfig:
     big_chance_xg: float = 0.30
-    swing_strength: float = 0.35      # |momentum| at which one side is "in control"
-    swing_window_min: int = 10        # control must change sides within this many minutes
+    swing_strength: float = 0.35  # |momentum| at which one side is "in control"
+    swing_window_min: int = 10  # control must change sides within this many minutes
     swing_cooldown_min: int = 8
-    pressure_level: float = 12.0      # attacking-third pressure that counts as high
-    pressure_minutes: int = 4         # how long it must be held
+    pressure_level: float = 12.0  # attacking-third pressure that counts as high
+    pressure_minutes: int = 4  # how long it must be held
     pressure_cooldown_min: int = 10
-    half_life_s: float = 300.0        # pressure decay
+    half_life_s: float = 300.0  # pressure decay
 
 
 @dataclass
@@ -71,19 +71,42 @@ def _possession(state: MatchState, side: Side) -> float:
 def _team_stats(state: MatchState, side: Side) -> TeamStats:
     tally = state.tally[side]
     accuracy = 0.0 if tally.passes == 0 else round(tally.completed / tally.passes * 100, 1)
-    return TeamStats(goals=tally.goals, possession=_possession(state, side), shots=tally.shots,
-                     shots_on_target=tally.on_target, passes=tally.passes, pass_accuracy=accuracy,
-                     fouls=tally.fouls, yellow_cards=tally.yellow, red_cards=tally.red, xg=round(tally.xg, 2))
+    return TeamStats(
+        goals=tally.goals,
+        possession=_possession(state, side),
+        shots=tally.shots,
+        shots_on_target=tally.on_target,
+        passes=tally.passes,
+        pass_accuracy=accuracy,
+        fouls=tally.fouls,
+        yellow_cards=tally.yellow,
+        red_cards=tally.red,
+        xg=round(tally.xg, 2),
+    )
 
 
-def _moment(state: MatchState, event: MatchEvent, kind: str, team: Side, facts: list[tuple[str, float]],
-            *, from_event: bool) -> KeyMoment:
+def _moment(
+    state: MatchState,
+    event: MatchEvent,
+    kind: str,
+    team: Side,
+    facts: list[tuple[str, float]],
+    *,
+    from_event: bool,
+) -> KeyMoment:
     state.moment_count += 1
     return KeyMoment(
-        id=f"{state.match_id}-k{state.moment_count}", match_id=state.match_id, minute=event.minute, kind=kind,
-        team=team, player_id=event.player_id if from_event else None, event_id=event.id if from_event else None,
-        score_home=state.tally["home"].goals, score_away=state.tally["away"].goals,
-        facts=[StatFact(label=label, value=round(value, 2)) for label, value in facts])
+        id=f"{state.match_id}-k{state.moment_count}",
+        match_id=state.match_id,
+        minute=event.minute,
+        kind=kind,
+        team=team,
+        player_id=event.player_id if from_event else None,
+        event_id=event.id if from_event else None,
+        score_home=state.tally["home"].goals,
+        score_away=state.tally["away"].goals,
+        facts=[StatFact(label=label, value=round(value, 2)) for label, value in facts],
+    )
 
 
 def _record(state: MatchState, event: MatchEvent, cfg: AnalyticsConfig) -> list[KeyMoment]:
@@ -106,7 +129,16 @@ def _record(state: MatchState, event: MatchEvent, cfg: AnalyticsConfig) -> list[
         tally.xg += chance
         tally.on_target += 1 if event.outcome in ("goal", "saved") else 0
         if chance >= cfg.big_chance_xg and event.outcome != "goal":
-            return [_moment(state, event, "big_chance", side, [("xg", chance), ("shots", tally.shots)], from_event=True)]
+            return [
+                _moment(
+                    state,
+                    event,
+                    "big_chance",
+                    side,
+                    [("xg", chance), ("shots", tally.shots)],
+                    from_event=True,
+                )
+            ]
     elif event.type == "goal":
         tally.goals += 1
         facts = [("xg", tally.xg), ("shots", tally.shots), ("possession", _possession(state, side))]
@@ -158,7 +190,9 @@ def _sustained(state: MatchState, event: MatchEvent, cfg: AnalyticsConfig) -> li
     return found
 
 
-def apply(state: MatchState, event: MatchEvent, cfg: AnalyticsConfig) -> list[KeyMoment | StatsSnapshot | PressureSnapshot]:
+def apply(
+    state: MatchState, event: MatchEvent, cfg: AnalyticsConfig
+) -> list[KeyMoment | StatsSnapshot | PressureSnapshot]:
     at = event.minute * 60 + event.second
     decay = 0.5 ** (max(0.0, at - state.clock) / cfg.half_life_s)
     state.clock = at
@@ -170,11 +204,26 @@ def apply(state: MatchState, event: MatchEvent, cfg: AnalyticsConfig) -> list[Ke
     period_end = event.type if event.type in ("half_time", "full_time") else None
     if event.minute > state.snapshot_minute or period_end:
         state.snapshot_minute = event.minute
-        out.append(StatsSnapshot(
-            id=f"{state.match_id}-s{event.seq}", match_id=state.match_id, minute=event.minute,
-            home=_team_stats(state, "home"), away=_team_stats(state, "away"),
-            momentum=round(momentum(state), 3), period_end=period_end))
-        out.append(PressureSnapshot(
-            id=f"{state.match_id}-p{event.seq}", match_id=state.match_id, minute=event.minute, cols=COLS, rows=ROWS,
-            home=[round(v, 2) for v in state.grid["home"]], away=[round(v, 2) for v in state.grid["away"]]))
+        out.append(
+            StatsSnapshot(
+                id=f"{state.match_id}-s{event.seq}",
+                match_id=state.match_id,
+                minute=event.minute,
+                home=_team_stats(state, "home"),
+                away=_team_stats(state, "away"),
+                momentum=round(momentum(state), 3),
+                period_end=period_end,
+            )
+        )
+        out.append(
+            PressureSnapshot(
+                id=f"{state.match_id}-p{event.seq}",
+                match_id=state.match_id,
+                minute=event.minute,
+                cols=COLS,
+                rows=ROWS,
+                home=[round(v, 2) for v in state.grid["home"]],
+                away=[round(v, 2) for v in state.grid["away"]],
+            )
+        )
     return out

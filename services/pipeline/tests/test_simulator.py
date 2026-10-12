@@ -48,7 +48,9 @@ def test_goals_follow_scoring_shots():
         if e.type == "shot" and e.outcome == "goal":
             follow = events[index + 1]
             assert (follow.type, follow.team, follow.player_id) == ("goal", e.team, e.player_id)
-    assert sum(e.type == "goal" for e in events) == sum(e.type == "shot" and e.outcome == "goal" for e in events)
+    assert sum(e.type == "goal" for e in events) == sum(
+        e.type == "shot" and e.outcome == "goal" for e in events
+    )
 
 
 def test_passes_record_completion_and_substitutions_come_from_the_bench():
@@ -93,5 +95,10 @@ async def test_play_publishes_events_in_order_and_tracks_status():
     assert "half_time" in [s.state for s in statuses]
     assert [s.state for s in statuses].index("half_time") < len(statuses) - 1
     final = statuses[-1]
-    assert (final.state, final.minute, final.score_home, final.score_away) == ("finished", 90, home_goals, away_goals)
+    assert (final.state, final.minute, final.score_home, final.score_away) == (
+        "finished",
+        90,
+        home_goals,
+        away_goals,
+    )
     assert simulator.status == final

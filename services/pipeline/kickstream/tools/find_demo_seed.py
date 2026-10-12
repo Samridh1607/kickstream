@@ -16,8 +16,12 @@ def summarize(seed: int) -> tuple[int, list[KeyMoment]]:
 
 
 def is_watchable(goals: int, key_moments: list[KeyMoment]) -> bool:
-    return (2 <= goals <= 5 and 10 <= len(key_moments) <= 20 and len({m.kind for m in key_moments}) >= 3
-            and any(m.kind == "goal" and m.minute < 45 for m in key_moments))
+    return (
+        2 <= goals <= 5
+        and 10 <= len(key_moments) <= 20
+        and len({m.kind for m in key_moments}) >= 3
+        and any(m.kind == "goal" and m.minute < 45 for m in key_moments)
+    )
 
 
 def main() -> None:
@@ -26,11 +30,15 @@ def main() -> None:
         goals, key_moments = summarize(seed)
         counts.append(len(key_moments))
         if is_watchable(goals, key_moments):
-            print(f"DEMO_SEED = {seed}  goals={goals} moments={len(key_moments)} "
-                  f"kinds={dict(Counter(m.kind for m in key_moments))}")
+            print(
+                f"DEMO_SEED = {seed}  goals={goals} moments={len(key_moments)} "
+                f"kinds={dict(Counter(m.kind for m in key_moments))}"
+            )
             return
     counts.sort()
-    print(f"no seed in 1..300 qualifies; key moments per match: min={counts[0]} median={counts[150]} max={counts[-1]}")
+    print(
+        f"no seed in 1..300 qualifies; key moments per match: min={counts[0]} median={counts[150]} max={counts[-1]}"
+    )
 
 
 if __name__ == "__main__":

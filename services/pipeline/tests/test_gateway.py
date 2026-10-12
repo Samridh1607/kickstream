@@ -9,18 +9,29 @@ from kickstream.gateway.personalize import to_envelope
 from kickstream.gateway.recorder import Recorder
 from kickstream.gateway.stream import stream_items
 from kickstream.ports.bus import EVENTS, INSIGHTS, NARRATIVES, STATUS
-
 from tests.factories import MATCH, event, moment, stats
 
-STATUS_LIVE = MatchStatus(match_id=MATCH, state="live", minute=0, score_home=0, score_away=0, speed=30,
-                          home=HOME, away=AWAY)
+STATUS_LIVE = MatchStatus(
+    match_id=MATCH, state="live", minute=0, score_home=0, score_away=0, speed=30, home=HOME, away=AWAY
+)
 FAN_EN = ViewerProfile(mode="fan", language="en")
 
 
 def narrative(mode="fan", language="en", team="home", player_id="nbr-9", n=1) -> Narrative:
-    return Narrative(id=f"{MATCH}-k{n}-{mode}-{language}", match_id=MATCH, minute=10, moment_id=f"{MATCH}-k{n}",
-                     mode=mode, language=language, text="text", source="scripted", agent="scripted",
-                     evidence=[], team=team, player_id=player_id)
+    return Narrative(
+        id=f"{MATCH}-k{n}-{mode}-{language}",
+        match_id=MATCH,
+        minute=10,
+        moment_id=f"{MATCH}-k{n}",
+        mode=mode,
+        language=language,
+        text="text",
+        source="scripted",
+        agent="scripted",
+        evidence=[],
+        team=team,
+        player_id=player_id,
+    )
 
 
 def wired():
@@ -36,9 +47,21 @@ def test_recorder_types_items_and_keeps_variant_fields():
     recorder.record(MATCH, moment(1, team="away", player_id="hbc-9"))
     item = recorder.record(MATCH, narrative("analyst", "hi", team="away", player_id="hbc-9"))
 
-    assert [i.type for i in store.read(MATCH)] == ["match_status", "match_event", "stats", "key_moment", "narrative"]
+    assert [i.type for i in store.read(MATCH)] == [
+        "match_status",
+        "match_event",
+        "stats",
+        "key_moment",
+        "narrative",
+    ]
     assert [i.id for i in store.read(MATCH)] == [1, 2, 3, 4, 5]
-    assert (item.language, item.mode, item.team_id, item.player_id, item.minute) == ("hi", "analyst", "hbc", "hbc-9", 10)
+    assert (item.language, item.mode, item.team_id, item.player_id, item.minute) == (
+        "hi",
+        "analyst",
+        "hbc",
+        "hbc-9",
+        10,
+    )
     assert store.read(MATCH)[1].team_id == "hbc"
     assert store.read(MATCH)[2].language is None and store.read(MATCH)[2].team_id is None
 
@@ -89,13 +112,28 @@ def test_favorites_highlight_key_moments_and_narratives_only():
     def highlighted(profile):
         return [(e.type, e.highlighted) for e in (to_envelope(i, profile) for i in items()) if e is not None]
 
-    plain = [("match_status", False), ("match_event", False), ("key_moment", False), ("narrative", False), ("narrative", False)]
+    plain = [
+        ("match_status", False),
+        ("match_event", False),
+        ("key_moment", False),
+        ("narrative", False),
+        ("narrative", False),
+    ]
     assert highlighted(FAN_EN) == plain
     by_club = highlighted(ViewerProfile(mode="fan", language="en", club="nbr"))
-    assert by_club == [("match_status", False), ("match_event", False), ("key_moment", True), ("narrative", True), ("narrative", False)]
+    assert by_club == [
+        ("match_status", False),
+        ("match_event", False),
+        ("key_moment", True),
+        ("narrative", True),
+        ("narrative", False),
+    ]
     assert highlighted(ViewerProfile(mode="fan", language="en", player="hbc-9"))[-1] == ("narrative", True)
     assert highlighted(ViewerProfile(mode="fan", language="en", club="hbc", player="nbr-9"))[2:] == [
-        ("key_moment", True), ("narrative", True), ("narrative", True)]
+        ("key_moment", True),
+        ("narrative", True),
+        ("narrative", True),
+    ]
 
 
 def test_a_favorite_that_is_not_in_this_match_highlights_nothing():

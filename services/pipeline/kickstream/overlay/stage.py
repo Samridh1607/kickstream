@@ -1,7 +1,14 @@
 import logging
 
-from kickstream.contracts import (KeyMoment, MatchStatus, Narrative, Overlay, PressureSnapshot, Recap,
-                                  StatsSnapshot)
+from kickstream.contracts import (
+    KeyMoment,
+    MatchStatus,
+    Narrative,
+    Overlay,
+    PressureSnapshot,
+    Recap,
+    StatsSnapshot,
+)
 from kickstream.domain.types import LANGUAGES
 from kickstream.overlay.build import lower_third, pressure_map, recap_card, stat_card
 from kickstream.ports.bus import INSIGHTS, NARRATIVES, OVERLAYS, STATUS, EventBus
@@ -35,7 +42,9 @@ class OverlayStage:
         elif isinstance(payload, Narrative) and payload.mode == "fan":
             moment = self._moments.get(payload.moment_id)
             if moment is None:
-                log.warning("no key moment %s for narrative %s; skipping lower third", payload.moment_id, payload.id)
+                log.warning(
+                    "no key moment %s for narrative %s; skipping lower third", payload.moment_id, payload.id
+                )
                 return []
             team = self._team_names.get(match_id, {}).get(moment.team, moment.team)
             return [lower_third(self._next_id(match_id), payload, moment, team)]

@@ -56,7 +56,13 @@ def test_find_player_returns_none_for_unknown_or_missing_ids():
 def test_labels_exist_for_every_language():
     for language in LANGUAGES:
         assert set(FACT_LABELS[language]) == set(FACT_LABELS["en"])
-        assert set(KIND_LABELS[language]) == {"goal", "red_card", "big_chance", "momentum_swing", "sustained_pressure"}
+        assert set(KIND_LABELS[language]) == {
+            "goal",
+            "red_card",
+            "big_chance",
+            "momentum_swing",
+            "sustained_pressure",
+        }
 
 
 def test_fact_text_localizes_labels_and_trims_whole_numbers():

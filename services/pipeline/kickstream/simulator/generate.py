@@ -51,13 +51,33 @@ class _Sim:
         players = self.outfield(side)
         return self.rng.choices(players, [_SHOT_WEIGHT[self._position(side, p)] for p in players])[0]
 
-    def emit(self, t: float, type_: str, side: Side | None = None, player_id: str | None = None,
-             ax: float = 50.0, y: float = 50.0, **extra) -> None:
+    def emit(
+        self,
+        t: float,
+        type_: str,
+        side: Side | None = None,
+        player_id: str | None = None,
+        ax: float = 50.0,
+        y: float = 50.0,
+        **extra,
+    ) -> None:
         seq = len(self.events) + 1
         x = 100.0 - ax if side == "away" else ax
-        self.events.append(MatchEvent(
-            id=f"{self.match_id}-e{seq}", match_id=self.match_id, seq=seq, minute=int(t // 60), second=int(t % 60),
-            type=type_, team=side, player_id=player_id, x=round(x, 1), y=round(y, 1), **extra))
+        self.events.append(
+            MatchEvent(
+                id=f"{self.match_id}-e{seq}",
+                match_id=self.match_id,
+                seq=seq,
+                minute=int(t // 60),
+                second=int(t % 60),
+                type=type_,
+                team=side,
+                player_id=player_id,
+                x=round(x, 1),
+                y=round(y, 1),
+                **extra,
+            )
+        )
 
     def substitute(self, t: float, side: Side) -> None:
         if not self.bench[side] or not self.outfield(side):

@@ -25,21 +25,25 @@ _INSTRUCTIONS = {
     COMMENTATOR: (
         "[role:commentator] You are a live football commentator speaking to fans. Write one or two short, vivid "
         "sentences in English about the key moment the user describes. Use only the facts given; do not invent "
-        "names, numbers or events. Reply with the sentences only."),
+        "names, numbers or events. Reply with the sentences only."
+    ),
     ANALYST: (
         "[role:tactical_analyst] You are a football tactical analyst. In two or three sentences in English, explain "
         "what changed and why this moment matters, citing the numbers given. Use only the facts given; do not "
-        "invent names, numbers or events. Reply with the sentences only."),
+        "invent names, numbers or events. Reply with the sentences only."
+    ),
     RECAP_WRITER: (
         "[role:recap_writer] You write football match recaps from the summary the user gives. Use only the facts "
         "given. Reply with JSON only, in exactly this shape: "
         '{"fan": {"title": "...", "bullets": ["...", "...", "..."], "text": "..."}, '
         '"analyst": {"title": "...", "bullets": ["...", "...", "..."], "text": "..."}}. '
-        "The fan version is short and vivid. The analyst version explains the numbers. Write in English."),
+        "The fan version is short and vivid. The analyst version explains the numbers. Write in English."
+    ),
     LOCALIZER: (
         "[role:localizer] You translate football text. The user sends a JSON object. Translate every string value "
         "into Spanish and into Hindi. Keep player names, club names, numbers and the JSON structure unchanged. "
-        'Reply with JSON only, in exactly this shape: {"es": <the object in Spanish>, "hi": <the object in Hindi>}.'),
+        'Reply with JSON only, in exactly this shape: {"es": <the object in Spanish>, "hi": <the object in Hindi>}.'
+    ),
 }
 
 
@@ -49,7 +53,7 @@ def parse_json(text: str) -> dict:
     if start == -1 or end <= start:
         raise NarrationError("no JSON object in model output")
     try:
-        value = json.loads(text[start:end + 1])
+        value = json.loads(text[start : end + 1])
     except ValueError as exc:
         raise NarrationError(f"invalid JSON in model output: {exc}") from exc
     if not isinstance(value, dict):
@@ -59,9 +63,11 @@ def parse_json(text: str) -> dict:
 
 def _stats_line(ctx: MomentContext | RecapContext) -> str:
     home, away = ctx.stats.home, ctx.stats.away
-    return (f"shots {home.shots}-{away.shots}, shots on target {home.shots_on_target}-{away.shots_on_target}, "
-            f"possession {home.possession}%-{away.possession}%, expected goals {home.xg}-{away.xg} "
-            f"({ctx.home.name} first)")
+    return (
+        f"shots {home.shots}-{away.shots}, shots on target {home.shots_on_target}-{away.shots_on_target}, "
+        f"possession {home.possession}%-{away.possession}%, expected goals {home.xg}-{away.xg} "
+        f"({ctx.home.name} first)"
+    )
 
 
 def moment_prompt(ctx: MomentContext) -> str:
@@ -91,7 +97,9 @@ def recap_prompt(ctx: RecapContext) -> str:
     ]
     for moment in ctx.moments:
         team = (ctx.home if moment.team == "home" else ctx.away).name
-        lines.append(f"- {moment.minute}' {moment.kind.replace('_', ' ')} for {team} ({fact_text(moment.facts, 'en')})")
+        lines.append(
+            f"- {moment.minute}' {moment.kind.replace('_', ' ')} for {team} ({fact_text(moment.facts, 'en')})"
+        )
     return "\n".join(lines)
 
 
@@ -144,8 +152,13 @@ class AgentNarrativeWriter:
     def _recap(raw, agent: str) -> WrittenRecap:
         try:
             title, bullets, text = raw["title"], raw["bullets"], raw["text"]
-            if not (isinstance(title, str) and isinstance(text, str) and isinstance(bullets, list)
-                    and len(bullets) == 3 and all(isinstance(bullet, str) for bullet in bullets)):
+            if not (
+                isinstance(title, str)
+                and isinstance(text, str)
+                and isinstance(bullets, list)
+                and len(bullets) == 3
+                and all(isinstance(bullet, str) for bullet in bullets)
+            ):
                 raise TypeError("wrong field types")
         except (KeyError, TypeError) as exc:
             raise NarrationError(f"recap from {agent} has the wrong shape: {exc}") from exc

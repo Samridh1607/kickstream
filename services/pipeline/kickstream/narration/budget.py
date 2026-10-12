@@ -5,8 +5,9 @@ from collections.abc import Callable
 class Budget:
     """Bounds model calls per match. Goals and recaps (priority) are served first."""
 
-    def __init__(self, max_calls: int, reserve: int, min_gap_s: float,
-                 now: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self, max_calls: int, reserve: int, min_gap_s: float, now: Callable[[], float] = time.monotonic
+    ) -> None:
         self._max_calls = max_calls
         self._reserve = reserve
         self._min_gap_s = min_gap_s

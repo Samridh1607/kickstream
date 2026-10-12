@@ -7,11 +7,11 @@ from kickstream.domain.teams import AWAY, HOME
 from kickstream.narration.service import NarrationService
 from kickstream.narration.stage import NarrationStage
 from kickstream.ports.bus import INSIGHTS, NARRATIVES, STATUS
-
 from tests.factories import MATCH, FakeWriter, moment, stats, team_stats
 
-STATUS_LIVE = MatchStatus(match_id=MATCH, state="live", minute=0, score_home=0, score_away=0, speed=30,
-                          home=HOME, away=AWAY)
+STATUS_LIVE = MatchStatus(
+    match_id=MATCH, state="live", minute=0, score_home=0, score_away=0, speed=30, home=HOME, away=AWAY
+)
 
 
 async def start(primary=None, max_pending=4):

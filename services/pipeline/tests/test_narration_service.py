@@ -6,7 +6,6 @@ from kickstream.narration.budget import Budget
 from kickstream.narration.cache import DiskCache
 from kickstream.narration.service import MOMENT_COST, RECAP_COST, NarrationService
 from kickstream.ports.writer import NarrationError
-
 from tests.factories import MATCH, FakeWriter, moment_ctx, recap_ctx
 
 
@@ -56,12 +55,16 @@ async def test_cache_key_depends_on_the_model_name(tmp_path):
     assert other.calls == 1
 
 
-@pytest.mark.parametrize("primary", [
-    FakeWriter(fail=NarrationError("malformed")),
-    FakeWriter(fail=RuntimeError("rate limited")),
-    FakeWriter(drop=("fan", "hi")),
-    FakeWriter(blank=("analyst", "es")),
-], ids=["narration-error", "provider-error", "missing-variant", "blank-variant"])
+@pytest.mark.parametrize(
+    "primary",
+    [
+        FakeWriter(fail=NarrationError("malformed")),
+        FakeWriter(fail=RuntimeError("rate limited")),
+        FakeWriter(drop=("fan", "hi")),
+        FakeWriter(blank=("analyst", "es")),
+    ],
+    ids=["narration-error", "provider-error", "missing-variant", "blank-variant"],
+)
 async def test_any_incomplete_or_failed_result_falls_back_whole(primary, tmp_path):
     cache = DiskCache(tmp_path)
     narratives = await service(primary, cache=cache).moment(moment_ctx())

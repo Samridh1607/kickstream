@@ -7,14 +7,36 @@ from kickstream.contracts import Player, TeamSheet
 _POSITIONS = ["GK", "DF", "DF", "DF", "DF", "MF", "MF", "MF", "FW", "FW", "FW", "DF", "MF", "FW"]
 
 _HOME_NAMES = [
-    "Tobin Ashgrove", "Milo Ferncastle", "Idris Vantongeren", "Caspian Holloway", "Renzo Albarran",
-    "Kellan Whitlock", "Jovan Stradling", "Emeka Okonjo-Reyes", "Luca Marrowby", "Dashiell Pruett",
-    "Arjun Venkataraghavan", "Soren Applewhite", "Mateus Calderwood", "Finnian Ostrander",
+    "Tobin Ashgrove",
+    "Milo Ferncastle",
+    "Idris Vantongeren",
+    "Caspian Holloway",
+    "Renzo Albarran",
+    "Kellan Whitlock",
+    "Jovan Stradling",
+    "Emeka Okonjo-Reyes",
+    "Luca Marrowby",
+    "Dashiell Pruett",
+    "Arjun Venkataraghavan",
+    "Soren Applewhite",
+    "Mateus Calderwood",
+    "Finnian Ostrander",
 ]
 _AWAY_NAMES = [
-    "Osric Pendlebury", "Bastien Roquefeuil", "Nikhil Thorncroft", "Aurelio Zambrana", "Wendell Kirkby",
-    "Tariq Halvorsen", "Ignatius Bellweather", "Rohan Castellane", "Evander Quillfeather", "Yusuf Marlowe-Diaz",
-    "Cormac Linthwaite", "Anselm Drakeford", "Vikram Elderfield", "Leopold Varga-Nilsen",
+    "Osric Pendlebury",
+    "Bastien Roquefeuil",
+    "Nikhil Thorncroft",
+    "Aurelio Zambrana",
+    "Wendell Kirkby",
+    "Tariq Halvorsen",
+    "Ignatius Bellweather",
+    "Rohan Castellane",
+    "Evander Quillfeather",
+    "Yusuf Marlowe-Diaz",
+    "Cormac Linthwaite",
+    "Anselm Drakeford",
+    "Vikram Elderfield",
+    "Leopold Varga-Nilsen",
 ]
 
 

@@ -6,8 +6,9 @@ from kickstream.ports.broadcaster import Broadcaster
 from kickstream.ports.store import MatchStore
 
 
-async def stream_items(store: MatchStore, broadcaster: Broadcaster, match_id: str, profile: ViewerProfile,
-                       after_id: int = 0) -> AsyncIterator[Envelope]:
+async def stream_items(
+    store: MatchStore, broadcaster: Broadcaster, match_id: str, profile: ViewerProfile, after_id: int = 0
+) -> AsyncIterator[Envelope]:
     """Replay the match log after `after_id`, then follow it live.
 
     The live feed is opened before the replay is read, so an item published in between is

@@ -2,8 +2,16 @@ import logging
 
 from pydantic import BaseModel
 
-from kickstream.contracts import (KeyMoment, MatchEvent, MatchStatus, Narrative, Overlay, PressureSnapshot, Recap,
-                                  StatsSnapshot)
+from kickstream.contracts import (
+    KeyMoment,
+    MatchEvent,
+    MatchStatus,
+    Narrative,
+    Overlay,
+    PressureSnapshot,
+    Recap,
+    StatsSnapshot,
+)
 from kickstream.ports.broadcaster import Broadcaster
 from kickstream.ports.bus import EVENTS, INSIGHTS, NARRATIVES, OVERLAYS, STATUS, EventBus
 from kickstream.ports.store import LogItem, MatchStore
@@ -11,8 +19,14 @@ from kickstream.ports.store import LogItem, MatchStore
 log = logging.getLogger(__name__)
 
 _TYPES: dict[type, str] = {
-    MatchStatus: "match_status", MatchEvent: "match_event", StatsSnapshot: "stats", PressureSnapshot: "pressure",
-    KeyMoment: "key_moment", Narrative: "narrative", Recap: "recap", Overlay: "overlay",
+    MatchStatus: "match_status",
+    MatchEvent: "match_event",
+    StatsSnapshot: "stats",
+    PressureSnapshot: "pressure",
+    KeyMoment: "key_moment",
+    Narrative: "narrative",
+    Recap: "recap",
+    Overlay: "overlay",
 }
 
 
@@ -34,9 +48,15 @@ class Recorder:
             self._team_ids[match_id] = {"home": payload.home.id, "away": payload.away.id}
         side = getattr(payload, "team", None)
         item = self._store.append(
-            match_id, item_type, payload.minute, payload,
-            language=getattr(payload, "language", None), mode=getattr(payload, "mode", None),
-            team_id=self._team_ids.get(match_id, {}).get(side), player_id=getattr(payload, "player_id", None))
+            match_id,
+            item_type,
+            payload.minute,
+            payload,
+            language=getattr(payload, "language", None),
+            mode=getattr(payload, "mode", None),
+            team_id=self._team_ids.get(match_id, {}).get(side),
+            player_id=getattr(payload, "player_id", None),
+        )
         self._broadcaster.publish(item)
         return item
 

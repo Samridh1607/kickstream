@@ -56,14 +56,26 @@ class NarrationStage:
         if isinstance(payload, KeyMoment):
             self._moments.setdefault(match_id, []).append(payload)
             player = find_player((home, away), payload.player_id)
-            ctx = MomentContext(moment=payload, home=home, away=away, player_name=player.name if player else None,
-                                stats=self._stats.get(match_id))
+            ctx = MomentContext(
+                moment=payload,
+                home=home,
+                away=away,
+                player_name=player.name if player else None,
+                stats=self._stats.get(match_id),
+            )
             await self._enqueue(_Job("moment", ctx))
         elif isinstance(payload, StatsSnapshot):
             self._stats[match_id] = payload
             if payload.period_end:
-                ctx = RecapContext(match_id=match_id, period=payload.period_end, minute=payload.minute, home=home,
-                                   away=away, stats=payload, moments=tuple(self._moments.get(match_id, ())))
+                ctx = RecapContext(
+                    match_id=match_id,
+                    period=payload.period_end,
+                    minute=payload.minute,
+                    home=home,
+                    away=away,
+                    stats=payload,
+                    moments=tuple(self._moments.get(match_id, ())),
+                )
                 await self._enqueue(_Job("recap", ctx))
 
     async def _enqueue(self, job: _Job) -> None:
@@ -86,7 +98,7 @@ class NarrationStage:
                         await self._publish(job.ctx.moment.match_id, await self._service.moment(job.ctx))
                     else:
                         await self._publish(job.ctx.match_id, await self._service.recap(job.ctx))
-                except Exception:  # noqa: BLE001 - one bad item must not stop narration
+                except Exception:
                     log.exception("narration failed for a %s", job.kind)
             self._wake.clear()
 

@@ -36,3 +36,8 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 110
 extend-exclude = ["kickstream/contracts.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC"]
+# Line length is the formatter's job; long template strings are left as they are.
+ignore = ["E501"]

@@ -8,7 +8,6 @@ from kickstream.analytics.state import AnalyticsConfig, MatchState, apply, attac
 from kickstream.contracts import KeyMoment, PressureSnapshot, StatsSnapshot
 from kickstream.domain.pitch import xg, zone_index
 from kickstream.ports.bus import EVENTS, INSIGHTS
-
 from tests.factories import MATCH, event
 
 CFG = AnalyticsConfig()
@@ -127,12 +126,21 @@ def test_momentum_swing_fires_when_control_changes_sides():
 
 
 def test_snapshots_are_emitted_once_per_minute_and_at_period_ends():
-    events = [event(1, "pass", "home", minute=0, completed=True), event(2, "pass", "home", minute=0, second=30, completed=True),
-              event(3, "pass", "home", minute=1, completed=True), event(4, "half_time", minute=45),
-              event(5, "full_time", minute=90)]
+    events = [
+        event(1, "pass", "home", minute=0, completed=True),
+        event(2, "pass", "home", minute=0, second=30, completed=True),
+        event(3, "pass", "home", minute=1, completed=True),
+        event(4, "half_time", minute=45),
+        event(5, "full_time", minute=90),
+    ]
     out = run(events)[1]
     snapshots = [o for o in out if isinstance(o, StatsSnapshot)]
-    assert [(s.minute, s.period_end) for s in snapshots] == [(0, None), (1, None), (45, "half_time"), (90, "full_time")]
+    assert [(s.minute, s.period_end) for s in snapshots] == [
+        (0, None),
+        (1, None),
+        (45, "half_time"),
+        (90, "full_time"),
+    ]
     assert [s.id for s in snapshots] == [f"{MATCH}-s1", f"{MATCH}-s3", f"{MATCH}-s4", f"{MATCH}-s5"]
     heat = [o for o in out if isinstance(o, PressureSnapshot)]
     assert len(heat) == 4 and len(heat[0].home) == heat[0].cols * heat[0].rows == 24
@@ -148,10 +156,16 @@ async def test_stage_publishes_insights_per_match():
     insights = bus.subscribe(INSIGHTS)
     task = asyncio.create_task(AnalyticsStage(bus).run())
     await bus.publish(EVENTS, MATCH, event(1, "goal", "home", minute=3))
-    await bus.publish(EVENTS, "m-2", event(1, "kickoff", "home").model_copy(update={"match_id": "m-2", "id": "m-2-e1"}))
+    await bus.publish(
+        EVENTS, "m-2", event(1, "kickoff", "home").model_copy(update={"match_id": "m-2", "id": "m-2-e1"})
+    )
     received = [await asyncio.wait_for(anext(aiter(insights)), 1) for _ in range(5)]
     task.cancel()
     assert [(m.match_id, type(m.payload).__name__) for m in received] == [
-        (MATCH, "KeyMoment"), (MATCH, "StatsSnapshot"), (MATCH, "PressureSnapshot"),
-        ("m-2", "StatsSnapshot"), ("m-2", "PressureSnapshot")]
+        (MATCH, "KeyMoment"),
+        (MATCH, "StatsSnapshot"),
+        (MATCH, "PressureSnapshot"),
+        ("m-2", "StatsSnapshot"),
+        ("m-2", "PressureSnapshot"),
+    ]
     assert received[3].payload.home.goals == 0

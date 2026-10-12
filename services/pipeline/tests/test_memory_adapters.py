@@ -6,7 +6,6 @@ from kickstream.adapters.memory_bus import InMemoryEventBus
 from kickstream.adapters.memory_store import InMemoryMatchStore
 from kickstream.adapters.sse_broadcaster import InProcessBroadcaster
 from kickstream.ports.bus import EVENTS, INSIGHTS
-
 from tests.factories import MATCH, event
 
 
@@ -27,7 +26,11 @@ async def test_bus_delivers_in_order_only_to_matching_topics():
     await bus.publish(INSIGHTS, MATCH, event(2, "pass"))
     await bus.publish(EVENTS, MATCH, event(3, "pass"))
     assert [m.payload.seq for m in await _take(events, 2)] == [1, 3]
-    assert [(m.topic, m.payload.seq) for m in await _take(both, 3)] == [(EVENTS, 1), (INSIGHTS, 2), (EVENTS, 3)]
+    assert [(m.topic, m.payload.seq) for m in await _take(both, 3)] == [
+        (EVENTS, 1),
+        (INSIGHTS, 2),
+        (EVENTS, 3),
+    ]
 
 
 async def test_bus_drops_and_logs_invalid_payloads(caplog):
@@ -76,7 +79,11 @@ def test_store_assigns_increasing_ids_per_match_and_reads_after_an_id():
 
 async def test_broadcaster_fans_out_per_match():
     store, broadcaster = InMemoryMatchStore(), InProcessBroadcaster()
-    one, two, elsewhere = broadcaster.subscribe(MATCH), broadcaster.subscribe(MATCH), broadcaster.subscribe("m-2")
+    one, two, elsewhere = (
+        broadcaster.subscribe(MATCH),
+        broadcaster.subscribe(MATCH),
+        broadcaster.subscribe("m-2"),
+    )
     item = store.append(MATCH, "match_event", 0, event(1, "kickoff"))
     broadcaster.publish(item)
     assert (await anext(aiter(one))).id == 1
