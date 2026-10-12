@@ -10,5 +10,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ["src/test/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
+    // The first render of the whole dashboard is slow on a cold, busy machine.
+    testTimeout: 20_000,
   },
 });

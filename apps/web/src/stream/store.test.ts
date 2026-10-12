@@ -80,3 +80,11 @@ test("the store applies envelopes, selects and resets", () => {
   store.reset();
   expect(useMatch.getState()).toMatchObject({ data: EMPTY, selectedId: null, connection: "connecting" });
 });
+
+test("the match clock follows the newest envelope and never runs backwards", () => {
+  let data = reduce(EMPTY, { ...envelope(1, "match_status", status()), minute: 0 });
+  data = reduce(data, { ...envelope(2, "match_event", matchEvent()), minute: 37 });
+  expect(data.minute).toBe(37);
+  data = reduce(data, { ...envelope(3, "narrative", narrative()), minute: 23 });
+  expect(data.minute).toBe(37);
+});

@@ -7,7 +7,8 @@ import {
 import { renderUi } from "./test/render";
 
 /** Answers the dashboard's HTTP calls. `current` is a queue; its last entry repeats. */
-function serve({ current, started = "m-9", failStart = false }: { current: (string | null)[]; started?: string; failStart?: boolean }) {
+function serve({ current, started = "m-9", failStart = false, currentFailures = 0 }: { current: (string | null)[]; started?: string; failStart?: boolean; currentFailures?: number }) {
+  let failures = currentFailures;
   const queue = [...current];
   const calls: { url: string; method: string; body: unknown }[] = [];
   const reply = (statusCode: number, body: unknown) =>
@@ -16,6 +17,10 @@ function serve({ current, started = "m-9", failStart = false }: { current: (stri
     calls.push({ url, method: init?.method ?? "GET", body: init?.body ? JSON.parse(init.body as string) : undefined });
     if (url === "/api/teams") return reply(200, { home: HOME, away: AWAY });
     if (url === "/api/matches/current") {
+      if (failures > 0) {
+        failures -= 1;
+        return reply(502, {});
+      }
       const id = queue.length > 1 ? queue.shift() : queue[0];
       return id ? reply(200, { match_id: id }) : reply(404, { detail: "no match has been started" });
     }
@@ -33,8 +38,8 @@ beforeEach(() => {
 });
 
 async function joined(matchId = "m-1", query = "mode=fan&lang=en") {
-  renderUi(<App eventSource={FakeEventSourceCtor} />);
-  await waitFor(() => expect(lastUrl()).toBe(`/api/matches/${matchId}/stream?${query}`));
+  renderUi(<App eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} />);
+  await waitFor(() => expect(lastUrl()).toBe(`/api/matches/${matchId}/stream?${query}`), { timeout: 10_000 });
   const source = FakeEventSource.last;
   act(() => {
     source.open();
@@ -142,4 +147,35 @@ test("the overlay tab shows broadcast JSON for the match", async () => {
   };
   act(() => source.emit(envelope(4, "overlay", lowerThird)));
   expect(screen.getByTestId("overlay-graphic").textContent).toContain("What a strike.");
+});
+
+test("the match clock advances between goals", async () => {
+  serve({ current: ["m-1"] });
+  const source = await joined();
+  act(() => source.emit({ ...envelope(4, "stats", { home: {}, away: {}, momentum: 0 }), minute: 37 }));
+  expect(screen.getByText("37'")).toBeTruthy();
+});
+
+test("if the server is not up yet, the dashboard keeps trying until it is", async () => {
+  serve({ current: ["m-1"], currentFailures: 2 });
+  renderUi(<App eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} />);
+  await screen.findByText("Reconnecting");
+  await waitFor(() => expect(lastUrl()).toBe("/api/matches/m-1/stream?mode=fan&lang=en"));
+});
+
+test("a stream the server refused is reopened once the same match is reachable again", async () => {
+  serve({ current: ["m-1"], currentFailures: 0 });
+  const first = await joined();
+  act(() => first.fail(2));
+  await waitFor(() => expect(FakeEventSource.instances).toHaveLength(2));
+  expect(lastUrl()).toBe("/api/matches/m-1/stream?mode=fan&lang=en");
+  expect(first.closed).toBe(true);
+});
+
+test("a viewer left on a finished match is moved when the next one starts", async () => {
+  serve({ current: ["m-1", "m-1", "m-2"] });
+  const first = await joined();
+  act(() => first.emit(envelope(4, "match_status", status({ state: "finished", minute: 90 }))));
+  await waitFor(() => expect(lastUrl()).toBe("/api/matches/m-2/stream?mode=fan&lang=en"));
+  expect(first.closed).toBe(true);
 });

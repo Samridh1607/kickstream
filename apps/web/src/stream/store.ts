@@ -14,6 +14,8 @@ export interface FeedMoment extends KeyMoment {
 
 export interface MatchData {
   lastId: number;
+  /** The latest match minute seen on any envelope. Drives the header clock. */
+  minute: number;
   status: MatchStatus | null;
   events: MatchEvent[];
   stats: StatsSnapshot | null;
@@ -28,13 +30,13 @@ const MAX_EVENTS = 40;
 const MAX_OVERLAYS = 300;
 
 export const EMPTY: MatchData = {
-  lastId: 0, status: null, events: [], stats: null, pressure: null, moments: [], narratives: [], recaps: [], overlays: [],
+  lastId: 0, minute: 0, status: null, events: [], stats: null, pressure: null, moments: [], narratives: [], recaps: [], overlays: [],
 };
 
 /** Folds one stream envelope into the match data. Pure; replays and duplicates are ignored by id. */
 export function reduce(data: MatchData, envelope: Envelope): MatchData {
   if (envelope.id <= data.lastId) return data;
-  const next = { ...data, lastId: envelope.id };
+  const next = { ...data, lastId: envelope.id, minute: Math.max(data.minute, envelope.minute ?? 0) };
   const payload = envelope.payload as unknown;
   const { highlighted } = envelope;
   switch (envelope.type) {

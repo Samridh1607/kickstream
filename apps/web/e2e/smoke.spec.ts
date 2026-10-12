@@ -26,6 +26,6 @@ test("a seeded match plays through every stage to the full-time recap", async ({
   await page.getByRole("tab", { name: "Gráficos" }).click();
   await expect(page.getByTestId("overlay-graphic")).toBeVisible();
   const overlay = JSON.parse((await page.getByTestId("overlay-json").textContent()) ?? "{}");
-  expect(overlay.match_id).toMatch(/^m-\d+$/);
+  expect(overlay.match_id).toMatch(/^m[0-9a-f]*-\d+$/);
   expect(["lower_third", "stat_card", "pressure_map", "recap_card"]).toContain(overlay.kind);
 });

@@ -1,5 +1,5 @@
 import { makeStyles, MessageBar, MessageBarBody, Switch, Tab, TabList, tokens } from "@fluentui/react-components";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchCurrentMatch, fetchTeams, speedFromLocation, startMatch, streamUrl, type Teams } from "./api";
 import { Header } from "./components/Header";
 import { NarrativeFeed } from "./components/NarrativeFeed";
@@ -34,9 +34,13 @@ const useStyles = makeStyles({
 interface AppProps {
   /** Injected by tests; the browser's EventSource is used otherwise. */
   eventSource?: new (url: string) => EventSource;
+  /** Delay before retrying when the server cannot be reached. */
+  retryMs?: number;
+  /** How often a viewer on a finished match checks whether a new one has started. */
+  pollMs?: number;
 }
 
-export function App({ eventSource }: AppProps) {
+export function App({ eventSource, retryMs = 2000, pollMs = 3000 }: AppProps) {
   const styles = useStyles();
   const [profile, setProfile] = useState<ViewerProfile>(loadProfile);
   const [matchId, setMatchId] = useState<string | null>(null);
@@ -46,6 +50,9 @@ export function App({ eventSource }: AppProps) {
   const [showPressure, setShowPressure] = useState(true);
   const [openRecap, setOpenRecap] = useState<Recap | null>(null);
   const [startFailed, setStartFailed] = useState(false);
+  // Bumped to reopen the stream for the same match after the server refused it.
+  const [attempt, setAttempt] = useState(0);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const data = useMatch((state) => state.data);
   const connection = useMatch((state) => state.connection);
@@ -53,16 +60,27 @@ export function App({ eventSource }: AppProps) {
   const select = useMatch((state) => state.select);
   const language = profile.language;
 
-  /** Follow whichever match the server considers current, or none. */
-  const joinCurrent = useCallback(async () => {
-    try {
-      const current = await fetchCurrentMatch();
-      setMatchId(current);
-      if (current === null) useMatch.getState().setConnection("idle");
-    } catch {
-      useMatch.getState().setConnection("reconnecting");
-    }
-  }, []);
+  /**
+   * Follow whichever match the server considers current, or none. While the server cannot be
+   * reached, keep trying. `reopen` also reopens the stream when the match is unchanged.
+   */
+  const joinCurrent = useCallback(
+    async (reopen = false) => {
+      clearTimeout(retryTimer.current);
+      try {
+        const current = await fetchCurrentMatch();
+        setMatchId(current);
+        if (current === null) useMatch.getState().setConnection("idle");
+        else if (reopen) setAttempt((count) => count + 1);
+      } catch {
+        useMatch.getState().setConnection("reconnecting");
+        retryTimer.current = setTimeout(() => void joinCurrent(reopen), retryMs);
+      }
+    },
+    [retryMs],
+  );
+
+  useEffect(() => () => clearTimeout(retryTimer.current), []);
 
   useEffect(() => {
     fetchTeams().then(setTeams).catch(() => setTeams(null));
@@ -76,13 +94,28 @@ export function App({ eventSource }: AppProps) {
     reset();
     setOpenRecap(null);
     return connect(streamUrl(matchId, profile), { onEnvelope: apply, onConnection: setConnection }, eventSource);
-  }, [matchId, profile, eventSource]);
+  }, [matchId, profile, eventSource, attempt]);
 
-  // A replaced match, or one the server no longer knows: move to the current match.
+  // A replaced match: move to the current one.
   const abandoned = data.status?.state === "abandoned";
   useEffect(() => {
-    if (abandoned || connection === "no_match") void joinCurrent();
-  }, [abandoned, connection, joinCurrent]);
+    if (abandoned) void joinCurrent();
+  }, [abandoned, joinCurrent]);
+
+  // A stream the server refused stays closed. After a pause, ask what is current and reopen.
+  useEffect(() => {
+    if (connection !== "no_match") return;
+    const timer = setTimeout(() => void joinCurrent(true), retryMs);
+    return () => clearTimeout(timer);
+  }, [connection, joinCurrent, retryMs]);
+
+  // A finished match gets no further messages, so check now and then for the next one.
+  const finished = data.status?.state === "finished";
+  useEffect(() => {
+    if (!finished) return;
+    const timer = setInterval(() => void joinCurrent(), pollMs);
+    return () => clearInterval(timer);
+  }, [finished, joinCurrent, pollMs]);
 
   const latestRecap = data.recaps[data.recaps.length - 1] ?? null;
   useEffect(() => {
@@ -112,7 +145,7 @@ export function App({ eventSource }: AppProps) {
   return (
     <div className={styles.app}>
       <Header
-        status={hasMatch ? data.status : null}
+        status={hasMatch && data.status ? { ...data.status, minute: Math.max(data.status.minute, data.minute) } : null}
         connection={connection}
         profile={profile}
         onModeChange={(mode) => updateProfile({ ...profile, mode })}

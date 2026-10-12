@@ -37,3 +37,19 @@ test("storage that throws is tolerated on read and write", () => {
   expect(loadProfile(broken)).toEqual(DEFAULT_PROFILE);
   expect(() => saveProfile(DEFAULT_PROFILE, broken)).not.toThrow();
 });
+
+test("a browser that refuses access to storage altogether still gets the defaults", () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage")!;
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    get() {
+      throw new DOMException("The operation is insecure.", "SecurityError");
+    },
+  });
+  try {
+    expect(loadProfile()).toEqual(DEFAULT_PROFILE);
+    expect(() => saveProfile(DEFAULT_PROFILE)).not.toThrow();
+  } finally {
+    Object.defineProperty(globalThis, "localStorage", original);
+  }
+});

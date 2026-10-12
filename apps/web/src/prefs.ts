@@ -8,9 +8,10 @@ export const DEFAULT_PROFILE: ViewerProfile = { mode: "fan", language: "en", clu
 const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
 
 /** Reads saved preferences. Anything missing, mistyped or unsupported falls back to its default. */
-export function loadProfile(storage: Pick<Storage, "getItem"> = localStorage): ViewerProfile {
+export function loadProfile(storage?: Pick<Storage, "getItem">): ViewerProfile {
   try {
-    const raw: unknown = JSON.parse(storage.getItem(KEY) ?? "null");
+    // Some browsers throw on any access to localStorage, so it is resolved inside the try.
+    const raw: unknown = JSON.parse((storage ?? localStorage).getItem(KEY) ?? "null");
     if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return DEFAULT_PROFILE;
     const saved = raw as Record<string, unknown>;
     return {
@@ -24,9 +25,9 @@ export function loadProfile(storage: Pick<Storage, "getItem"> = localStorage): V
   }
 }
 
-export function saveProfile(profile: ViewerProfile, storage: Pick<Storage, "setItem"> = localStorage): void {
+export function saveProfile(profile: ViewerProfile, storage?: Pick<Storage, "setItem">): void {
   try {
-    storage.setItem(KEY, JSON.stringify(profile));
+    (storage ?? localStorage).setItem(KEY, JSON.stringify(profile));
   } catch {
     // Preferences are a convenience; a full or blocked store must not break the app.
   }
