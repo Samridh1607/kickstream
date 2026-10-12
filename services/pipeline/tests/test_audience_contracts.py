@@ -116,7 +116,6 @@ def test_scenes_can_hold_poll_and_qa_elements():
 
 def test_a_studio_refusal_is_a_refusal():
     from kickstream.domain.errors import Refusal
-
     from kickstream.studio.rules import StudioError
 
     error = StudioError(409, "scene", "No.")
