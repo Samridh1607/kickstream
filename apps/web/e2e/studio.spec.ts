@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-const API = "http://127.0.0.1:8000";
+// The test pipeline; see playwright.config.ts.
+const API = "http://127.0.0.1:8010";
 
 test("a streamer builds a scene, goes live, and drives the program", async ({ browser, request }) => {
   // Work on a scene of our own, and put the studio back afterwards.

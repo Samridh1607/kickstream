@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Header, WebSocket
 from pydantic import BaseModel, ConfigDict, Field
 from sse_starlette.sse import EventSourceResponse
 
@@ -9,6 +9,7 @@ from kickstream.audience import rules
 from kickstream.audience.rules import AudienceError
 from kickstream.audience.service import AudienceService
 from kickstream.contracts import Audience
+from kickstream.domain.sockets import pump
 
 _TEXT = 2000  # generous bound on request text; the rules give each field its real limit and message
 
@@ -60,6 +61,13 @@ def build_audience_router(
 
         return EventSourceResponse(views())
 
+    async def socket(websocket: WebSocket, *, studio: bool) -> None:
+        async def views():
+            async for view in service.changes(studio=studio):
+                yield view.model_dump_json()
+
+        await pump(websocket, views())
+
     def fan() -> Audience:
         return service.view(studio=False)
 
@@ -75,6 +83,16 @@ def build_audience_router(
     @router.get("/api/audience/stream")
     async def get_audience_stream() -> EventSourceResponse:
         return stream(studio=False)
+
+    @router.websocket("/api/audience/socket")
+    async def audience_socket(websocket: WebSocket) -> None:
+        """The fan view, over a WebSocket."""
+        await socket(websocket, studio=False)
+
+    @router.websocket("/api/studio/audience/socket")
+    async def studio_audience_socket(websocket: WebSocket) -> None:
+        """The studio view, over a WebSocket."""
+        await socket(websocket, studio=True)
 
     @router.post("/api/audience/poll/vote")
     async def post_vote(body: Vote, voter: Voter = None) -> Audience:

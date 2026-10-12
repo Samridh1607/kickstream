@@ -1,11 +1,12 @@
 from collections.abc import AsyncIterator
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response, WebSocket
 from pydantic import BaseModel, ConfigDict, Field
 from sse_starlette.sse import EventSourceResponse
 
 from kickstream.contracts import KeyMoment, MatchEvent, SceneElement, Studio, StudioSettings, Ticker
+from kickstream.domain.sockets import pump
 from kickstream.ports.store import MatchStore
 from kickstream.studio import rules
 from kickstream.studio.rules import StudioError
@@ -102,6 +103,16 @@ def build_studio_router(*, service: StudioService, store: MatchStore) -> APIRout
                 yield {"id": str(doc.revision), "data": doc.model_dump_json()}
 
         return EventSourceResponse(documents())
+
+    @router.websocket("/api/studio/socket")
+    async def studio_socket(websocket: WebSocket) -> None:
+        """The same stream as `/api/studio/stream`, over a WebSocket."""
+
+        async def documents():
+            async for doc in service.changes():
+                yield doc.model_dump_json()
+
+        await pump(websocket, documents())
 
     @router.post("/api/studio/scenes")
     async def post_scene(body: NewScene) -> Studio:

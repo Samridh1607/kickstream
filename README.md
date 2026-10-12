@@ -53,6 +53,23 @@ Scenes, settings and uploaded images are kept in `.data/` (set `KICKSTREAM_DATA_
 
 Kickstream does not send video anywhere itself yet. To go live, capture `/program` with a streaming tool.
 
+## Audience
+
+Viewers take part at `/join`, a phone-friendly page you share in your stream description. The same panel is the **Join in** tab on the dashboard.
+
+| Page | Use |
+|---|---|
+| `http://127.0.0.1:5173/join` | Fans vote in the current poll, ask a question, and upvote other fans' questions |
+| `/studio`, **Audience** tab | Start and close polls, put results on the program, moderate questions, and answer one |
+
+- **Polls:** type a question and 2 to 6 options, or use a preset built from the match. Fans see results after they vote. Results reach the program only when you switch **Show poll on the program** on.
+- **AskExpert:** press **Ask the expert** on a fan question. With a model configured, a fifth agent, the Match Expert, drafts an answer from the live match data. You can edit it, or write your own; nothing airs until you press **Put on air**. Without a model you write the answer yourself.
+- **On the program:** add `poll` and `qa` elements to a scene to choose where they appear. A scene without them shows each in a default box while it is on air.
+
+Votes are counted once per browser, using a random ID the browser keeps. That stops accidental double votes, not deliberate ones.
+
+**Before sharing `/join` on a public address:** Kickstream has no sign-in, so anyone who can reach the server can also reach the studio's routes. Put the studio behind protection first, for example by exposing only `/join`, `/api/audience` and the match routes through a reverse proxy.
+
 ## Layout
 
 | Path | Contents |
