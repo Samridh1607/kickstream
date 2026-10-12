@@ -25,6 +25,8 @@ export function useCurrentMatch(
   // Bumped to reopen the stream for the same match after the server refused it.
   const [attempt, setAttempt] = useState(0);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // True once the server has answered what is current, so polling never races the first answer.
+  const [answered, setAnswered] = useState(false);
   const connection = useMatch((state) => state.connection);
   const matchState = useMatch((state) => state.data.status?.state);
 
@@ -33,6 +35,7 @@ export function useCurrentMatch(
       clearTimeout(retryTimer.current);
       try {
         const current = await fetchCurrentMatch();
+        setAnswered(true);
         setMatchId(current);
         if (current === null) useMatch.getState().setConnection("idle");
         else if (reopen) setAttempt((count) => count + 1);
@@ -71,7 +74,7 @@ export function useCurrentMatch(
   }, [connection, joinCurrent, retryMs]);
 
   // With no match, or a finished one, nothing more will arrive: check now and then for the next.
-  const waiting = matchId === null || matchState === "finished";
+  const waiting = answered && (matchId === null || matchState === "finished");
   useEffect(() => {
     if (!waiting) return;
     const timer = setInterval(() => void joinCurrent(), pollMs);
