@@ -3,11 +3,13 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { ProgramPage } from "./studio/ProgramPage";
+import { StudioPage } from "./studio/StudioPage";
 import { useSystemTheme } from "./theme";
 
-/** The three pages. `/studio` is added in the next task. */
+/** The three pages: the fan dashboard, the streamer's studio, and the clean program output. */
 function Page() {
   const path = window.location.pathname.replace(/\/+$/, "");
+  if (path === "/studio") return <StudioPage />;
   if (path === "/program") return <ProgramPage />;
   return <App />;
 }
