@@ -1,4 +1,5 @@
 import type {
+  Audience, Poll, Question,
   Envelope, KeyMoment, MatchEvent, MatchStatus, Narrative, Overlay, PressureSnapshot, Recap, StatsSnapshot,
   Scene, SceneElement, Studio, TeamSheet, TeamStats,
 } from "../contracts";
@@ -134,4 +135,22 @@ export const studio = (over: Partial<Studio> = {}): Studio => ({
   banner: null, banner_queue: [],
   ticker: { enabled: true, speed: 120, messages: [], show_score: true, show_stats: true },
   countdown: null, replay: null, ...over,
+});
+
+export const poll = (over: Partial<Poll> = {}): Poll => ({
+  id: "p1", question: "Who will win?", state: "open", closes_at: null,
+  options: [
+    { id: "o1", text: "Northbridge FC", votes: 3 },
+    { id: "o2", text: "Draw", votes: 0 },
+    { id: "o3", text: "Harbour City", votes: 1 },
+  ],
+  ...over,
+});
+
+export const fanQuestion = (over: Partial<Question> = {}): Question => ({
+  id: "q1", text: "Why the change?", nickname: "Ann", votes: 2, state: "open", answer: null, asked_at: 100, ...over,
+});
+
+export const audience = (over: Partial<Audience> = {}): Audience => ({
+  revision: 1, server_time: 1000, poll: null, poll_on_air: false, history: [], questions: [], draft: null, qa: null, ...over,
 });

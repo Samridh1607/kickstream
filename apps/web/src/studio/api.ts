@@ -31,9 +31,11 @@ async function toError(response: Response): Promise<StudioRequestError> {
   return new StudioRequestError(response.status, field, message);
 }
 
-async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function send<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
   const init: RequestInit =
-    body === undefined ? { method } : { method, headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
+    body === undefined
+      ? { method, headers }
+      : { method, headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) };
   const response = await fetch(path, init);
   if (!response.ok) throw await toError(response);
   return (await response.json()) as T;
