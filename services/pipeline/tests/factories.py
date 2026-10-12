@@ -44,3 +44,38 @@ def recap_ctx(period="half_time", minute=45) -> RecapContext:
                      away=team_stats(goals=1, shots=4, possession=42.0, xg=0.6))
     return RecapContext(match_id=MATCH, period=period, minute=minute, home=HOME, away=AWAY, stats=snapshot,
                         moments=(moment(1), moment(2, kind="big_chance", team="away", minute=30)))
+
+
+import asyncio  # noqa: E402
+
+from kickstream.domain.types import VARIANTS  # noqa: E402
+from kickstream.ports.writer import WrittenRecap, WrittenText  # noqa: E402
+
+
+class FakeWriter:
+    """Stands in for the agent writer. Can fail, stall, or return an incomplete result."""
+
+    model = "fake-model"
+
+    def __init__(self, fail=None, delay=0.0, drop=None, blank=None, gate=None):
+        self.fail, self.delay, self.drop, self.blank, self.gate = fail, delay, drop, blank, gate
+        self.calls = 0
+
+    async def _run(self, make):
+        self.calls += 1
+        if self.gate is not None:
+            await self.gate.wait()
+        if self.delay:
+            await asyncio.sleep(self.delay)
+        if self.fail is not None:
+            raise self.fail
+        written = {variant: make(variant, "" if variant == self.blank else f"{variant[0]}-{variant[1]} text")
+                   for variant in VARIANTS}
+        written.pop(self.drop, None)
+        return written
+
+    async def write_moment(self, ctx):
+        return await self._run(lambda v, text: WrittenText(text, "commentator" if v[0] == "fan" else "tactical_analyst"))
+
+    async def write_recap(self, ctx):
+        return await self._run(lambda v, text: WrittenRecap(text, (text, text, text), text, "recap_writer"))
