@@ -12,7 +12,6 @@ from kickstream.audience.stage import AudienceStage
 from kickstream.contracts import MatchStatus, Narrative
 from kickstream.domain.teams import AWAY, HOME
 from kickstream.ports.bus import INSIGHTS, NARRATIVES, STATUS
-
 from tests.factories import MATCH, moment, stats
 
 ANN, BEN = "voter-ann-0000001", "voter-ben-0000002"
@@ -42,9 +41,13 @@ class FakeExpert:
 
 def make(tmp_path, **kwargs):
     now = kwargs.pop("now", FakeNow())
-    service = AudienceService(JsonRecordStore(tmp_path / "audience.json"), now=now,
-                              push_interval_s=kwargs.pop("push_interval_s", 0.05),
-                              save_interval_s=kwargs.pop("save_interval_s", 0.05), **kwargs)
+    service = AudienceService(
+        JsonRecordStore(tmp_path / "audience.json"),
+        now=now,
+        push_interval_s=kwargs.pop("push_interval_s", 0.05),
+        save_interval_s=kwargs.pop("save_interval_s", 0.05),
+        **kwargs,
+    )
     return service, now
 
 
@@ -52,8 +55,8 @@ async def with_question(service, voter=ANN, text="Why the change?"):
     return await service.ask(voter, text, "Ann")
 
 
-async def settle(condition, timeout=2.0):
-    for _ in range(int(timeout / 0.01)):
+async def settle(condition, within=2.0):
+    for _ in range(int(within / 0.01)):
         if condition():
             return
         await asyncio.sleep(0.01)
@@ -61,6 +64,7 @@ async def settle(condition, timeout=2.0):
 
 
 # --- loading and saving ----------------------------------------------------------------------
+
 
 async def test_a_new_audience_is_empty_and_views_carry_the_server_time(tmp_path):
     service, now = make(tmp_path)
@@ -74,7 +78,9 @@ async def test_structural_changes_are_saved_before_the_call_returns(tmp_path):
     service, _ = make(tmp_path)
     await service.create_poll("Who will win?", ["A", "B"], None)
     again, _ = make(tmp_path)
-    assert again.view(studio=False).poll.question == "Who will win?" and again.view(studio=False).revision == 1
+    assert (
+        again.view(studio=False).poll.question == "Who will win?" and again.view(studio=False).revision == 1
+    )
 
 
 async def test_votes_are_held_in_memory_until_the_next_flush(tmp_path):
@@ -88,7 +94,9 @@ async def test_votes_are_held_in_memory_until_the_next_flush(tmp_path):
     restarted, _ = make(tmp_path)
     assert restarted.view(studio=False).poll.options[0].votes == 1
     await restarted.vote(ANN, option)
-    assert restarted.view(studio=False).poll.options[0].votes == 1, "the same browser is still remembered after a restart"
+    assert restarted.view(studio=False).poll.options[0].votes == 1, (
+        "the same browser is still remembered after a restart"
+    )
 
 
 async def test_the_run_loop_flushes_votes_within_the_save_interval(tmp_path):
@@ -140,6 +148,7 @@ async def test_a_refused_change_leaves_the_state_alone(tmp_path):
 
 # --- pushes ----------------------------------------------------------------------------------
 
+
 async def test_a_burst_of_votes_reaches_a_page_as_a_few_pushes_ending_with_the_final_counts(tmp_path):
     service, _ = make(tmp_path, push_interval_s=0.2)
     await service.create_poll("Who will win?", ["A", "B"], None)
@@ -174,6 +183,7 @@ async def test_fans_and_the_studio_get_their_own_views(tmp_path):
 
 # --- deadlines -------------------------------------------------------------------------------
 
+
 async def test_a_timed_poll_closes_when_its_time_comes(tmp_path):
     service, now = make(tmp_path)
     await service.create_poll("Who will win?", ["A", "B"], 60)
@@ -196,6 +206,7 @@ async def test_a_poll_that_ended_while_the_server_was_down_is_closed_on_start(tm
 
 # --- the expert ------------------------------------------------------------------------------
 
+
 async def test_asking_the_expert_fills_the_draft_in_the_program_language(tmp_path):
     expert = FakeExpert()
     service, _ = make(tmp_path, expert=expert, context=lambda: "match-context", language=lambda: "es")
@@ -213,14 +224,21 @@ async def test_with_no_expert_the_draft_is_left_for_the_streamer(tmp_path):
     service, _ = make(tmp_path)
     question = await with_question(service)
     await service.ask_expert(question)
-    assert service.view(studio=True).draft.model_dump() == {"question_id": question, "text": "", "state": "unavailable"}
+    assert service.view(studio=True).draft.model_dump() == {
+        "question_id": question,
+        "text": "",
+        "state": "unavailable",
+    }
     assert service.expert_available is False
 
 
-@pytest.mark.parametrize("expert, timeout", [(FakeExpert(fail=RuntimeError("rate limited")), 20.0), (FakeExpert(gate=asyncio.Event()), 0.05)],
-                         ids=["fails", "too-slow"])
-async def test_an_expert_that_fails_or_is_too_slow_leaves_the_draft_unavailable(tmp_path, expert, timeout):
-    service, _ = make(tmp_path, expert=expert, expert_timeout_s=timeout)
+@pytest.mark.parametrize(
+    "expert, limit",
+    [(FakeExpert(fail=RuntimeError("rate limited")), 20.0), (FakeExpert(gate=asyncio.Event()), 0.05)],
+    ids=["fails", "too-slow"],
+)
+async def test_an_expert_that_fails_or_is_too_slow_leaves_the_draft_unavailable(tmp_path, expert, limit):
+    service, _ = make(tmp_path, expert=expert, expert_timeout_s=limit)
     question = await with_question(service)
     await service.ask_expert(question)
     await settle(lambda: service.view(studio=True).draft.state == "unavailable")
@@ -252,10 +270,17 @@ async def test_an_answer_goes_on_air_and_fans_see_it_under_the_question(tmp_path
     await service.apply(lambda s: rules.set_draft_text(s, "Fresh legs."))
     await service.air(30)
     fan = service.view(studio=False)
-    assert (fan.qa.answer, fan.qa.ends_at, fan.questions[0].answer) == ("Fresh legs.", now.at + 30, "Fresh legs.")
+    assert (fan.qa.answer, fan.qa.ends_at, fan.questions[0].answer) == (
+        "Fresh legs.",
+        now.at + 30,
+        "Fresh legs.",
+    )
     now.at += 30
     await service.tick()
-    assert service.view(studio=False).qa is None and service.view(studio=False).questions[0].answer == "Fresh legs."
+    assert (
+        service.view(studio=False).qa is None
+        and service.view(studio=False).questions[0].answer == "Fresh legs."
+    )
 
 
 async def test_stopping_cancels_a_draft_in_progress_and_saves_pending_votes(tmp_path):
@@ -272,13 +297,34 @@ async def test_stopping_cancels_a_draft_in_progress_and_saves_pending_votes(tmp_
 
 # --- tracker and stage -----------------------------------------------------------------------
 
+
 def status(state="live", match_id=MATCH, minute=10, home_goals=0):
-    return MatchStatus(match_id=match_id, state=state, minute=minute, score_home=home_goals, score_away=0, speed=30, home=HOME, away=AWAY)
+    return MatchStatus(
+        match_id=match_id,
+        state=state,
+        minute=minute,
+        score_home=home_goals,
+        score_away=0,
+        speed=30,
+        home=HOME,
+        away=AWAY,
+    )
 
 
 def narrative(n=1, mode="analyst", language="en", text="They score because of the press."):
-    return Narrative(id=f"{MATCH}-k{n}-{mode}-{language}", match_id=MATCH, minute=23, moment_id=f"{MATCH}-k{n}", mode=mode,
-                     language=language, text=text, source="scripted", agent="scripted", evidence=[], team="home")
+    return Narrative(
+        id=f"{MATCH}-k{n}-{mode}-{language}",
+        match_id=MATCH,
+        minute=23,
+        moment_id=f"{MATCH}-k{n}",
+        mode=mode,
+        language=language,
+        text=text,
+        source="scripted",
+        agent="scripted",
+        evidence=[],
+        team="home",
+    )
 
 
 def test_the_tracker_has_no_context_before_a_match():
@@ -297,8 +343,17 @@ def test_the_tracker_builds_the_experts_context_from_match_messages():
     tracker.observe(MATCH, moment(2, kind="big_chance"))
     tracker.observe(MATCH, status(minute=30, home_goals=1))
     ctx = tracker.context()
-    assert (ctx.home, ctx.away, ctx.status.minute, ctx.status.score_home, ctx.stats.minute) == (HOME, AWAY, 30, 1, 20)
-    assert [(m.id, text) for m, text in ctx.moments] == [(f"{MATCH}-k1", "They score because of the press."), (f"{MATCH}-k2", None)]
+    assert (ctx.home, ctx.away, ctx.status.minute, ctx.status.score_home, ctx.stats.minute) == (
+        HOME,
+        AWAY,
+        30,
+        1,
+        20,
+    )
+    assert [(m.id, text) for m, text in ctx.moments] == [
+        (f"{MATCH}-k1", "They score because of the press."),
+        (f"{MATCH}-k2", None),
+    ]
     assert tracker.teams() == ("Northbridge FC", "Harbour City")
 
 

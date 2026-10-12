@@ -18,11 +18,18 @@ log = logging.getLogger(__name__)
 
 
 class AudienceService:
-    def __init__(self, store: AudienceStore, *, now: Callable[[], float] = time.time,
-                 expert: ExpertWriter | None = None,
-                 context: Callable[[], MatchContext | None] = lambda: None,
-                 language: Callable[[], str] = lambda: "en",
-                 push_interval_s: float = 0.5, save_interval_s: float = 1.0, expert_timeout_s: float = 20.0) -> None:
+    def __init__(
+        self,
+        store: AudienceStore,
+        *,
+        now: Callable[[], float] = time.time,
+        expert: ExpertWriter | None = None,
+        context: Callable[[], MatchContext | None] = lambda: None,
+        language: Callable[[], str] = lambda: "en",
+        push_interval_s: float = 0.5,
+        save_interval_s: float = 1.0,
+        expert_timeout_s: float = 20.0,
+    ) -> None:
         self._store = store
         self._now = now
         self._expert = expert
@@ -52,7 +59,11 @@ class AudienceService:
     # --- reading --------------------------------------------------------------------------------
 
     def view(self, *, studio: bool) -> Audience:
-        return rules.studio_view(self._state, self._now()) if studio else rules.fan_view(self._state, self._now())
+        return (
+            rules.studio_view(self._state, self._now())
+            if studio
+            else rules.fan_view(self._state, self._now())
+        )
 
     @property
     def expert_available(self) -> bool:
@@ -63,7 +74,9 @@ class AudienceService:
 
     # --- changing -------------------------------------------------------------------------------
 
-    async def apply(self, change: Callable[[AudienceState], AudienceState], *, structural: bool = True) -> None:
+    async def apply(
+        self, change: Callable[[AudienceState], AudienceState], *, structural: bool = True
+    ) -> None:
         async with self._lock:
             self._commit(change(self._state), structural)
 
@@ -71,7 +84,9 @@ class AudienceService:
         if changed is self._state:
             return
         try:
-            doc = Audience.model_validate(changed.doc.model_copy(update={"revision": self._state.doc.revision + 1}).model_dump())
+            doc = Audience.model_validate(
+                changed.doc.model_copy(update={"revision": self._state.doc.revision + 1}).model_dump()
+            )
         except ValidationError as exc:
             first = exc.errors()[0]
             raise AudienceError(422, ".".join(str(part) for part in first["loc"]), first["msg"]) from exc
@@ -80,7 +95,9 @@ class AudienceService:
             try:
                 self._store.save(rules.dump(candidate))
             except OSError as exc:
-                raise AudienceError(503, "audience", "The change could not be saved. Nothing was changed.") from exc
+                raise AudienceError(
+                    503, "audience", "The change could not be saved. Nothing was changed."
+                ) from exc
             self._unsaved_since = None
         elif self._unsaved_since is None:
             self._unsaved_since = asyncio.get_running_loop().time()
@@ -107,7 +124,11 @@ class AudienceService:
         await self.apply(lambda state: rules.create_poll(state, question, options, duration_s, self._now()))
 
     async def preset_poll(self, kind: str, home: str, away: str, duration_s: int | None) -> None:
-        await self.apply(lambda state: rules.preset_poll(state, kind, home, away, self._language(), duration_s, self._now()))
+        await self.apply(
+            lambda state: rules.preset_poll(
+                state, kind, home, away, self._language(), duration_s, self._now()
+            )
+        )
 
     async def air(self, duration_s: int) -> None:
         await self.apply(lambda state: rules.air(state, duration_s, self._now()))
@@ -125,7 +146,9 @@ class AudienceService:
 
     async def _write_answer(self, question_id: str, text: str) -> None:
         try:
-            answer = await asyncio.wait_for(self._expert.answer(text, self._context(), self._language()), self._expert_timeout_s)
+            answer = await asyncio.wait_for(
+                self._expert.answer(text, self._context(), self._language()), self._expert_timeout_s
+            )
         except Exception as exc:  # noqa: BLE001 - any failure leaves the draft for the streamer to write
             log.warning("the match expert could not answer (%s)", type(exc).__name__)
             answer = None

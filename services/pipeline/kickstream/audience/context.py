@@ -33,8 +33,13 @@ class MatchTracker:
         if self._status is None:
             return None
         moments = tuple((moment, self._narratives.get(moment.id)) for moment in self._moments.values())
-        return MatchContext(home=self._status.home, away=self._status.away, status=self._status, stats=self._stats,
-                            moments=moments)
+        return MatchContext(
+            home=self._status.home,
+            away=self._status.away,
+            status=self._status,
+            stats=self._stats,
+            moments=moments,
+        )
 
     def teams(self) -> tuple[str, str] | None:
         return None if self._status is None else (self._status.home.name, self._status.away.name)

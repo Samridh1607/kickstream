@@ -327,12 +327,15 @@ def test_an_upload_is_cut_off_at_the_limit_instead_of_being_read_whole():
 
 
 def test_an_oversized_upload_without_a_declared_length_is_refused(client):
-    def chunks():
-        for _ in range(5):
-            yield PNG + bytes(1024 * 1024)
+    def chunks(megabytes):
+        for _ in range(megabytes * 2):
+            yield PNG + bytes(512 * 1024)
 
-    refused = client.post("/api/studio/images", content=chunks())
+    # Over the 2 MB image limit but under the server's 3 MB request limit: the image rule refuses it.
+    refused = client.post("/api/studio/images", content=chunks(2))
     assert (refused.status_code, field(refused)) == (422, "image")
+    # Over the request limit: refused before the image rule ever sees it.
+    assert client.post("/api/studio/images", content=chunks(5)).status_code == 413
 
 
 def test_oversized_ids_are_refused(client):

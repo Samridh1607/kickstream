@@ -27,7 +27,11 @@ def _match_lines(ctx: MatchContext | None) -> list[str]:
     if ctx is None:
         return ["No match has been played yet."]
     status = ctx.status
-    state = f"{status.state.replace('_', ' ')}, minute {status.minute}" if status.state != "finished" else "finished"
+    state = (
+        f"{status.state.replace('_', ' ')}, minute {status.minute}"
+        if status.state != "finished"
+        else "finished"
+    )
     lines = [
         f"Match: {ctx.home.name} vs {ctx.away.name}",
         f"State: {state}",
@@ -38,7 +42,8 @@ def _match_lines(ctx: MatchContext | None) -> list[str]:
         lines.append(
             f"Numbers ({ctx.home.name} first): shots {home.shots}-{away.shots}, shots on target "
             f"{home.shots_on_target}-{away.shots_on_target}, possession {home.possession}%-{away.possession}%, "
-            f"expected goals {home.xg}-{away.xg}")
+            f"expected goals {home.xg}-{away.xg}"
+        )
     if ctx.moments:
         lines.append("Key moments so far:")
     for moment, narrative in ctx.moments[-_MAX_MOMENTS:]:

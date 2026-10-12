@@ -13,15 +13,21 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from kickstream.adapters.agent_expert import AgentExpertWriter
 from kickstream.adapters.agent_writer import AgentNarrativeWriter
 from kickstream.adapters.clocks import RealClock
 from kickstream.adapters.dir_image_store import DirImageStore
+from kickstream.adapters.json_record_store import JsonRecordStore
 from kickstream.adapters.json_studio_store import JsonStudioStore
 from kickstream.adapters.memory_bus import InMemoryEventBus
 from kickstream.adapters.memory_store import InMemoryMatchStore
 from kickstream.adapters.scripted_writer import ScriptedNarrativeWriter
 from kickstream.adapters.sse_broadcaster import InProcessBroadcaster
 from kickstream.analytics.stage import AnalyticsStage
+from kickstream.audience.api import build_audience_router
+from kickstream.audience.context import MatchTracker
+from kickstream.audience.service import AudienceService
+from kickstream.audience.stage import AudienceStage
 from kickstream.control import MatchController
 from kickstream.domain.demo import DEMO_SEED
 from kickstream.domain.errors import Refusal
@@ -34,6 +40,7 @@ from kickstream.narration.service import NarrationService
 from kickstream.narration.stage import NarrationStage
 from kickstream.overlay.stage import OverlayStage
 from kickstream.ports.clock import Clock
+from kickstream.ports.expert import ExpertWriter
 from kickstream.ports.writer import NarrativeWriter
 from kickstream.studio.api import build_studio_router, find_moment
 from kickstream.studio.rules import sanitize_raw
@@ -77,6 +84,61 @@ class SameOriginWrites:
         return urlsplit(origin.decode("latin-1")).netloc != headers.get(b"host", b"").decode("latin-1")
 
 
+MAX_BODY_BYTES = 3 * 1024 * 1024  # above the 2 MB image limit, with room for its framing
+
+
+class BodyLimit:
+    """Refuses a request body over the limit without taking it into memory.
+
+    Nothing here needs a large body, and with no sign-in anyone who can reach the port could
+    otherwise make the server buffer as much as they care to send.
+    """
+
+    def __init__(self, app) -> None:
+        self._app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+        declared = dict(scope["headers"]).get(b"content-length", b"")
+        if declared.isdigit() and int(declared) > MAX_BODY_BYTES:
+            await self._refuse(scope, receive, send)
+            return
+        received = 0
+        too_large = False
+
+        async def counted():
+            nonlocal received, too_large
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > MAX_BODY_BYTES:
+                    too_large = True
+                    # Tell the application the client went away, so it stops reading.
+                    return {"type": "http.disconnect"}
+            return message
+
+        answered = False
+
+        async def guarded(message):
+            nonlocal answered
+            if too_large and not answered:
+                answered = True
+                await self._refuse(scope, receive, send)
+            elif not too_large:
+                await send(message)
+
+        await self._app(scope, counted, guarded)
+        if too_large and not answered:
+            await self._refuse(scope, receive, send)
+
+    @staticmethod
+    async def _refuse(scope, receive, send) -> None:
+        refusal = JSONResponse(status_code=413, content={"detail": "The request is too large."})
+        await refusal(scope, receive, send)
+
+
 @dataclass(frozen=True)
 class Settings:
     llm_base_url: str | None
@@ -111,12 +173,15 @@ class Pipeline:
     broadcaster: InProcessBroadcaster
     controller: MatchController
     studio: StudioService
+    audience: AudienceService
+    tracker: MatchTracker
     stages: list
     tasks: list[asyncio.Task] = field(default_factory=list)
 
     def start(self) -> None:
         self.tasks = [asyncio.create_task(stage.run()) for stage in self.stages]
         self.tasks.append(asyncio.create_task(self.studio.run()))
+        self.tasks.append(asyncio.create_task(self.audience.run()))
 
     async def stop(self) -> None:
         await self.controller.stop()
@@ -124,6 +189,7 @@ class Pipeline:
             task.cancel()
         await asyncio.gather(*self.tasks, return_exceptions=True)
         self.tasks = []
+        await self.audience.stop()
 
 
 def build_pipeline(
@@ -133,6 +199,7 @@ def build_pipeline(
     writer: NarrativeWriter | None = None,
     match_prefix: str = "m",
     now: Callable[[], float] = time.time,
+    expert: ExpertWriter | None = None,
 ) -> Pipeline:
     bus, store, broadcaster = InMemoryEventBus(), InMemoryMatchStore(), InProcessBroadcaster()
     primary = writer
@@ -152,6 +219,16 @@ def build_pipeline(
         start_match=lambda: controller.start(DEMO_SEED, STUDIO_MATCH_SPEED),
         find_moment=lambda match_id, moment_id: find_moment(store, match_id, moment_id),
     )
+    tracker = MatchTracker()
+    if expert is None and settings.llm_configured:
+        expert = AgentExpertWriter(settings.llm_base_url, settings.llm_model, settings.llm_api_key)
+    audience = AudienceService(
+        JsonRecordStore(settings.data_dir / "audience.json"),
+        now=now,
+        expert=expert,
+        context=tracker.context,
+        language=lambda: studio.settings.language,
+    )
     # Every stage subscribes in its constructor, so nothing published after this point is missed.
     stages = [
         AnalyticsStage(bus),
@@ -159,8 +236,9 @@ def build_pipeline(
         OverlayStage(bus),
         Recorder(bus, store, broadcaster),
         StudioStage(bus, studio),
+        AudienceStage(bus, tracker),
     ]
-    return Pipeline(bus, store, broadcaster, controller, studio, stages)
+    return Pipeline(bus, store, broadcaster, controller, studio, audience, tracker, stages)
 
 
 def create_app(
@@ -170,6 +248,7 @@ def create_app(
     writer: NarrativeWriter | None = None,
     match_prefix: str | None = None,
     now: Callable[[], float] = time.time,
+    expert: ExpertWriter | None = None,
 ) -> FastAPI:
     # Match IDs are unique to this process, so an ID a browser kept from before a restart is
     # reported as unknown instead of silently naming a different match.
@@ -179,6 +258,7 @@ def create_app(
         writer=writer,
         match_prefix=match_prefix or f"m{secrets.token_hex(3)}",
         now=now,
+        expert=expert,
     )
 
     @asynccontextmanager
@@ -190,6 +270,7 @@ def create_app(
     app = FastAPI(title="Kickstream", lifespan=lifespan)
     app.state.pipeline = pipeline
     app.add_middleware(SameOriginWrites)
+    app.add_middleware(BodyLimit)
 
     @app.exception_handler(Refusal)
     async def refused(_: Request, exc: Refusal) -> JSONResponse:
@@ -209,4 +290,5 @@ def create_app(
         )
     )
     app.include_router(build_studio_router(service=pipeline.studio, store=pipeline.store))
+    app.include_router(build_audience_router(service=pipeline.audience, teams=pipeline.tracker.teams))
     return app

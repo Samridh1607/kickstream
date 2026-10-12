@@ -67,7 +67,9 @@ class FakeLLM:
         blob = " ".join(_text(m.get("content")) for m in messages)
         role = next((r for r in ROLES if f"[role:{r}]" in blob), "unknown")
         user = next((_text(m.get("content")) for m in reversed(messages) if m.get("role") == "user"), "")
-        system = " ".join(_text(m.get("content")) for m in messages if m.get("role") in ("system", "developer"))
+        system = " ".join(
+            _text(m.get("content")) for m in messages if m.get("role") in ("system", "developer")
+        )
         self.calls.append({"role": role, "user": user, "system": system})
         reply = self._reply(role, user)
         if body.get("stream"):
