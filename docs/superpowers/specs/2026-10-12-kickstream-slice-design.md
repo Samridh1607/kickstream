@@ -58,7 +58,7 @@ Cycle 1 runs one Python process. Each stage is a separate module that communicat
 | Port | Responsibility | Cycle 1 adapter | Later adapter |
 |---|---|---|---|
 | `EventBus` | Publish and subscribe by topic, ordered per `match_id` | in-memory asyncio queues | Azure Event Hubs |
-| `NarrativeWriter` | Write a key-moment narrative, write a recap, localize text | Agent Framework agents; scripted templates | Foundry-hosted agents |
+| `NarrativeWriter` | Write a key-moment narrative and a recap, each in every mode and language (localization happens inside the writer) | Agent Framework agents; scripted templates | Foundry-hosted agents |
 | `MatchStore` | Append-only log of everything published for a match | in-memory | Fabric Eventhouse or Cosmos DB |
 | `Broadcaster` | Fan a match's stream out to connected viewers | in-process SSE | Azure Web PubSub |
 
@@ -117,7 +117,7 @@ A key moment costs three model calls: Commentator, Tactical Analyst, then Locali
 
 Every narrative records `source` (`agent` or `scripted`), the agent that wrote it, and the IDs of the insights it was built from.
 
-If a key moment is still waiting when a newer one arrives and the queue is full, the oldest waiting moment is written by the scripted adapter so narration stays current.
+If a key moment is still waiting when a newer one arrives and the queue is full, the oldest waiting moment is written by the scripted adapter so narration stays current. A waiting goal is spared while any other kind of moment is waiting.
 
 Publishes `Narrative` and `Recap` on topic `narratives`.
 
@@ -143,7 +143,8 @@ The HTTP surface, and the only stage the browser talks to.
 | Endpoint | Purpose |
 |---|---|
 | `GET /api/teams` | Team sheets, for the preferences drawer |
-| `POST /api/matches` | Start a match with `{seed, speed}`. Returns `match_id`. Starting a new match ends the current one. |
+| `POST /api/matches` | Start a match with `{seed, speed}`. Returns `match_id`. Starting a new match ends the current one; its viewers receive a final status with state `abandoned`. |
+| `GET /api/matches/current` | The running or most recent match, so a browser can join it. 404 before any match. |
 | `GET /api/matches/{id}/stream` | SSE stream. Query: `mode`, `lang`, `club`, `player` |
 | `GET /api/matches/{id}/overlays/latest` | Latest overlay of each kind, as JSON, for external consumers |
 
@@ -153,7 +154,7 @@ For each viewer the gateway:
 - sends only the narrative, recap and overlay variants matching the viewer's mode and language;
 - sets `highlighted: true` on items involving the viewer's favorite club or player.
 
-Changing mode, language or favorites reconnects the stream with new parameters. On connect the gateway replays the match so far from `MatchStore` in the new variant, so the feed is complete and consistent after a switch. A reconnect after a dropped connection sends `Last-Event-ID` and receives only what it missed.
+A browser opening the dashboard asks for the current match and joins it. When its match is abandoned, it asks again and moves to the new one. Changing mode, language or favorites reconnects the stream with new parameters. On connect the gateway replays the match so far from `MatchStore` in the new variant, so the feed is complete and consistent after a switch. A reconnect after a dropped connection sends `Last-Event-ID` and receives only what it missed.
 
 ## Contracts
 
