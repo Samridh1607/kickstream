@@ -2,10 +2,13 @@ import { FluentProvider } from "@fluentui/react-components";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { ProgramPage } from "./studio/ProgramPage";
 import { useSystemTheme } from "./theme";
 
-/** The three pages. `/studio` and `/program` are added in the studio tasks. */
+/** The three pages. `/studio` is added in the next task. */
 function Page() {
+  const path = window.location.pathname.replace(/\/+$/, "");
+  if (path === "/program") return <ProgramPage />;
   return <App />;
 }
 

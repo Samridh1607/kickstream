@@ -49,15 +49,18 @@ interface PitchProps {
   status: MatchStatus | null;
   showPressure: boolean;
   language: Language;
+  /** Fit the height of the containing box as well as its width. Used on the studio canvas. */
+  fill?: boolean;
 }
 
-export function Pitch({ events, pressure, status, showPressure, language }: PitchProps) {
+export function Pitch({ events, pressure, status, showPressure, language, fill = false }: PitchProps) {
   const styles = useStyles();
   const colors = status ? { home: status.home.color, away: status.away.color } : DEFAULT_COLORS;
   const markers = events.filter((event) => event.team).slice(-MAX_MARKERS);
   const cells = showPressure && pressure ? heatCells(pressure) : [];
   return (
-    <svg className={styles.root} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label={t(language, "pitch")}>
+    <svg className={styles.root} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label={t(language, "pitch")}
+      style={fill ? { height: "100%" } : undefined}>
       <rect width={WIDTH} height={HEIGHT} fill="#2E7D32" />
       <g fill="none" stroke="#FFFFFF" strokeWidth={0.4} opacity={0.75}>
         <rect x={1} y={1} width={WIDTH - 2} height={HEIGHT - 2} />
