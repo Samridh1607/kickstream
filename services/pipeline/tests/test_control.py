@@ -84,3 +84,27 @@ async def test_stop_is_safe_to_call_with_nothing_running():
     control, _ = controller(InstantClock)
     await control.stop()
     await control.wait()
+
+
+def _playing():
+    return [t for t in asyncio.all_tasks() if "Simulator.play" in repr(t.get_coro()) and not t.done()]
+
+
+async def test_two_starts_at_once_leave_exactly_one_match_playing():
+    control, _ = controller(StuckClock)
+    await control.start(11, 30)
+    await asyncio.sleep(0.05)
+    ids = await asyncio.gather(control.start(11, 30), control.start(11, 30))
+    await asyncio.sleep(0.05)
+    assert sorted(ids) == ["m-2", "m-3"]
+    assert len(_playing()) == 1
+    await control.stop()
+    assert _playing() == [], "no match is left running that nothing can stop"
+
+
+async def test_match_ids_carry_the_given_prefix():
+    bus = InMemoryEventBus()
+    control = MatchController(bus, lambda speed: InstantClock(), HOME, AWAY, prefix="mab12")
+    assert await control.start(11, 30) == "mab12-1"
+    assert control.exists("mab12-1") and control.current == "mab12-1"
+    await control.stop()

@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import secrets
 from collections.abc import Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -79,6 +80,7 @@ def build_pipeline(
     *,
     clock_factory: Callable[[float], Clock] = RealClock,
     writer: NarrativeWriter | None = None,
+    match_prefix: str = "m",
 ) -> Pipeline:
     bus, store, broadcaster = InMemoryEventBus(), InMemoryMatchStore(), InProcessBroadcaster()
     primary = writer
@@ -97,7 +99,9 @@ def build_pipeline(
         OverlayStage(bus),
         Recorder(bus, store, broadcaster),
     ]
-    return Pipeline(bus, store, broadcaster, MatchController(bus, clock_factory, HOME, AWAY), stages)
+    return Pipeline(
+        bus, store, broadcaster, MatchController(bus, clock_factory, HOME, AWAY, prefix=match_prefix), stages
+    )
 
 
 def create_app(
@@ -105,8 +109,16 @@ def create_app(
     *,
     clock_factory: Callable[[float], Clock] = RealClock,
     writer: NarrativeWriter | None = None,
+    match_prefix: str | None = None,
 ) -> FastAPI:
-    pipeline = build_pipeline(settings or Settings.from_env(), clock_factory=clock_factory, writer=writer)
+    # Match IDs are unique to this process, so an ID a browser kept from before a restart is
+    # reported as unknown instead of silently naming a different match.
+    pipeline = build_pipeline(
+        settings or Settings.from_env(),
+        clock_factory=clock_factory,
+        writer=writer,
+        match_prefix=match_prefix or f"m{secrets.token_hex(3)}",
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):

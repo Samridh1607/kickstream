@@ -16,6 +16,10 @@ async def stream_items(
     """
     feed = broadcaster.subscribe(match_id)
     try:
+        if after_id > len(store.read(match_id)):
+            # An ID this log has not reached cannot have come from it. Replay everything
+            # rather than stay silent until the log catches up.
+            after_id = 0
         last = after_id
         for item in store.read(match_id, after_id):
             last = item.id

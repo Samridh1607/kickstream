@@ -1,3 +1,5 @@
+import dataclasses
+
 import pytest
 
 from kickstream.adapters.scripted_writer import ScriptedNarrativeWriter
@@ -148,3 +150,40 @@ def test_disk_cache_round_trips_and_tolerates_missing_or_corrupt_files(tmp_path)
     assert cache.get("k") == {"fan:hi": {"text": "गोल!", "agent": "commentator"}}
     (tmp_path / "nested" / "k.json").write_text("{not json", encoding="utf-8")
     assert cache.get("k") is None
+
+
+async def test_replaying_the_same_seeded_match_under_a_new_match_id_hits_the_cache(tmp_path):
+    primary = FakeWriter()
+    cached = service(primary, cache=DiskCache(tmp_path))
+    first = moment_ctx()
+    replayed = dataclasses.replace(
+        first,
+        moment=first.moment.model_copy(update={"id": "m-2-k1", "match_id": "m-2", "event_id": "m-2-e40"}),
+        stats=first.stats.model_copy(update={"id": "m-2-s10", "match_id": "m-2"}),
+    )
+    await cached.moment(first)
+    narratives = await cached.moment(replayed)
+    assert primary.calls == 1, "same moment, same prompt: no second model call"
+    assert {n.source for n in narratives} == {"agent"}
+    assert {n.match_id for n in narratives} == {"m-2"} and narratives[0].id.startswith("m-2-k1-")
+
+    await cached.moment(moment_ctx(minute=55))
+    assert primary.calls == 2, "a different moment is a different prompt"
+
+
+async def test_replayed_recaps_hit_the_cache_too(tmp_path):
+    primary = FakeWriter()
+    cached = service(primary, cache=DiskCache(tmp_path))
+    first = recap_ctx()
+    replayed = dataclasses.replace(
+        first,
+        match_id="m-2",
+        stats=first.stats.model_copy(update={"id": "m-2-s45", "match_id": "m-2"}),
+        moments=tuple(
+            m.model_copy(update={"id": f"m-2-k{i}", "match_id": "m-2"}) for i, m in enumerate(first.moments)
+        ),
+    )
+    await cached.recap(first)
+    recaps = await cached.recap(replayed)
+    assert primary.calls == 1
+    assert {r.match_id for r in recaps} == {"m-2"}

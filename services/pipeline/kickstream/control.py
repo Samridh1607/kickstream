@@ -13,7 +13,12 @@ from kickstream.simulator.stage import Simulator
 
 class MatchController:
     def __init__(
-        self, bus: EventBus, clock_factory: Callable[[float], Clock], home: TeamSheet, away: TeamSheet
+        self,
+        bus: EventBus,
+        clock_factory: Callable[[float], Clock],
+        home: TeamSheet,
+        away: TeamSheet,
+        prefix: str = "m",
     ) -> None:
         self._bus = bus
         self._clock_factory = clock_factory
@@ -22,6 +27,9 @@ class MatchController:
         self._started: list[str] = []
         self._simulator: Simulator | None = None
         self._task: asyncio.Task | None = None
+        self._prefix = prefix
+        # Starting and stopping each span several awaits; overlapping calls must not interleave.
+        self._lock = asyncio.Lock()
 
     @property
     def current(self) -> str | None:
@@ -31,21 +39,23 @@ class MatchController:
         return match_id in self._started
 
     async def start(self, seed: int, speed: float) -> str:
-        interrupted = await self._cancel_running()
-        match_id = f"m-{len(self._started) + 1}"
-        events = generate(match_id, seed, self._home, self._away)
-        self._simulator = Simulator(self._bus, self._clock_factory(speed))
-        self._task = asyncio.create_task(
-            self._simulator.play(match_id, events, self._home, self._away, speed)
-        )
-        self._started.append(match_id)
-        # Announce the abandonment only once the new match is current, so a viewer who
-        # reacts by asking for the current match is sent to the new one.
-        await self._announce_abandoned(interrupted)
-        return match_id
+        async with self._lock:
+            interrupted = await self._cancel_running()
+            match_id = f"{self._prefix}-{len(self._started) + 1}"
+            events = generate(match_id, seed, self._home, self._away)
+            self._simulator = Simulator(self._bus, self._clock_factory(speed))
+            self._task = asyncio.create_task(
+                self._simulator.play(match_id, events, self._home, self._away, speed)
+            )
+            self._started.append(match_id)
+            # Announce the abandonment only once the new match is current, so a viewer who
+            # reacts by asking for the current match is sent to the new one.
+            await self._announce_abandoned(interrupted)
+            return match_id
 
     async def stop(self) -> None:
-        await self._announce_abandoned(await self._cancel_running())
+        async with self._lock:
+            await self._announce_abandoned(await self._cancel_running())
 
     async def _cancel_running(self) -> MatchStatus | None:
         """Cancel the running match. Returns its last status if it was cut short."""

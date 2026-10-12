@@ -30,18 +30,27 @@ MOMENT_COST = 3  # commentator + tactical analyst + localizer
 RECAP_COST = 2  # recap writer + localizer
 
 
+# Identifiers that name a particular run of a match. They never reach a prompt, and leaving
+# them in the key would make every replay of the same seeded match a cache miss.
+_RUN_IDS = frozenset({"id", "match_id", "event_id"})
+
+
 def _plain(value):
+    """The context as plain data, without run identifiers."""
     if isinstance(value, BaseModel):
-        return value.model_dump()
+        return _plain(value.model_dump())
     if dataclasses.is_dataclass(value):
-        return {f.name: _plain(getattr(value, f.name)) for f in dataclasses.fields(value)}
+        return _plain({f.name: getattr(value, f.name) for f in dataclasses.fields(value)})
+    if isinstance(value, dict):
+        return {key: _plain(item) for key, item in value.items() if key not in _RUN_IDS}
     if isinstance(value, (list, tuple)):
         return [_plain(item) for item in value]
     return value
 
 
 def _cache_key(model: str, kind: str, ctx) -> str:
-    # The prompt is a pure function of the context, so hashing the context is hashing the prompt.
+    # A prompt is a pure function of the context's content, so hashing that content stands in
+    # for hashing the prompt.
     canonical = json.dumps(_plain(ctx), sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(f"{model}\n{kind}\n{canonical}".encode()).hexdigest()
 

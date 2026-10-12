@@ -165,11 +165,25 @@ async def test_stream_resumes_after_a_given_id():
     assert [(await anext(stream)).id, (await anext(stream)).id] == [3, 4]
     await stream.aclose()
 
-    beyond = stream_items(store, broadcaster, MATCH, FAN_EN, after_id=99)
-    pending = asyncio.create_task(anext(beyond))
+    caught_up = stream_items(store, broadcaster, MATCH, FAN_EN, after_id=4)
+    pending = asyncio.create_task(anext(caught_up))
     await asyncio.sleep(0.01)
     assert not pending.done(), "nothing to replay; waits for live items"
     pending.cancel()
+
+
+async def test_an_id_from_beyond_this_log_replays_from_the_start():
+    """A browser reconnecting with an ID from an older, longer log must not get silence."""
+    _, store, broadcaster, recorder = wired()
+    recorder.record(MATCH, STATUS_LIVE)
+    recorder.record(MATCH, event(1, "kickoff", "home", player_id="nbr-8"))
+    stream = stream_items(store, broadcaster, MATCH, FAN_EN, after_id=5000)
+    first = await asyncio.wait_for(anext(stream), 1)
+    second = await asyncio.wait_for(anext(stream), 1)
+    assert [first.id, second.id] == [1, 2]
+    recorder.record(MATCH, event(2, "pass", "home", player_id="nbr-8", completed=True))
+    assert (await asyncio.wait_for(anext(stream), 1)).id == 3
+    await stream.aclose()
 
 
 async def test_a_viewer_that_falls_behind_is_ended_and_can_resume_with_nothing_lost():

@@ -11,7 +11,8 @@ from kickstream.gateway.api import parse_last_event_id
 @pytest.fixture
 def client(tmp_path):
     settings = Settings(None, None, None, cache_dir=tmp_path)
-    with TestClient(create_app(settings, clock_factory=lambda speed: InstantClock())) as test_client:
+    app = create_app(settings, clock_factory=lambda speed: InstantClock(), match_prefix="m")
+    with TestClient(app) as test_client:
         yield test_client
 
 
@@ -104,3 +105,16 @@ def test_latest_overlays_errors(client):
     assert client.get("/api/matches/m-99/overlays/latest").status_code == 404
     client.post("/api/matches")
     assert client.get("/api/matches/m-1/overlays/latest?lang=de").status_code == 422
+
+
+def test_each_server_process_numbers_its_matches_under_its_own_prefix(tmp_path):
+    """A match ID from before a restart must never name a different match afterwards."""
+    ids = []
+    for _ in range(2):
+        app = create_app(
+            Settings(None, None, None, cache_dir=tmp_path), clock_factory=lambda speed: InstantClock()
+        )
+        with TestClient(app) as test_client:
+            ids.append(test_client.post("/api/matches").json()["match_id"])
+    assert ids[0] != ids[1]
+    assert all(match_id.startswith("m") and match_id.endswith("-1") for match_id in ids)
