@@ -301,7 +301,7 @@
       "properties": {
         "enabled": { "type": "boolean" },
         "speed": { "type": "integer", "minimum": 40, "maximum": 400 },
-        "messages": { "type": "array", "items": { "type": "string", "maxLength": 120 }, "maxItems": 20 },
+        "messages": { "type": "array", "items": { "type": "string" }, "maxItems": 20 },
         "show_score": { "type": "boolean" },
         "show_stats": { "type": "boolean" }
       }

@@ -298,17 +298,13 @@ class Banner(BaseModel):
     source_id: str | None = None
 
 
-class Message(RootModel[constr(max_length=120)]):
-    root: constr(max_length=120)
-
-
 class Ticker(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
     enabled: bool
     speed: conint(ge=40, le=400)
-    messages: list[Message] = Field(..., max_length=20)
+    messages: list[str] = Field(..., max_length=20)
     show_score: bool
     show_stats: bool
 

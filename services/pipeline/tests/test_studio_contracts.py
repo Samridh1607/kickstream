@@ -50,11 +50,11 @@ def test_optional_parts_default_to_nothing_on_screen():
     {"banner": {"id": "b", "text": "x", "kind": "goal", "duration_s": 2}},
     {"banner": {"id": "b", "text": "x", "kind": "shout", "duration_s": 8}},
     {"ticker": {"enabled": True, "speed": 10, "messages": [], "show_score": True, "show_stats": True}},
-    {"ticker": {"enabled": True, "speed": 120, "messages": ["x" * 121], "show_score": True, "show_stats": True}},
+    {"ticker": {"enabled": True, "speed": 120, "messages": ["x"] * 21, "show_score": True, "show_stats": True}},
     {"countdown": {"kind": "nap", "ends_at": 1.0, "label": ""}},
     {"surprise": 1},
 ], ids=["no-scenes", "blank-name", "long-name", "unknown-element", "fractional-position", "blank-banner",
-        "short-banner", "unknown-banner-kind", "slow-ticker", "long-ticker-message", "unknown-countdown", "extra-field"])
+        "short-banner", "unknown-banner-kind", "slow-ticker", "too-many-ticker-messages", "unknown-countdown", "extra-field"])
 def test_documents_outside_the_limits_are_rejected(bad):
     from kickstream.contracts import Studio
 
