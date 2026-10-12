@@ -88,7 +88,8 @@ def test_scenes_can_be_made_from_a_template_a_saved_template_or_another_scene():
     assert (doc.scenes[-1].name, doc.scenes[-1].template) == ("My live", LIVE_MATCH)
     doc = rules.create_scene(doc, "scene", made.id)
     assert doc.scenes[-1].name == "Second half copy"
-    assert doc.scenes[-1].elements == made.elements and doc.scenes[-1].id != made.id
+    copied = [e.model_copy(update={"id": ""}) for e in doc.scenes[-1].elements]
+    assert copied == [e.model_copy(update={"id": ""}) for e in made.elements] and doc.scenes[-1].id != made.id
 
 
 def test_creating_from_something_that_does_not_exist_is_refused():
@@ -444,3 +445,39 @@ def test_elements_of_an_unknown_type_are_dropped_from_a_loaded_file():
 )
 def test_an_image_is_recognised_by_its_content_not_its_name(content, expected):
     assert rules.sniff_image(content) == expected
+
+
+def test_a_break_taken_after_switching_scenes_by_hand_during_a_break_still_returns():
+    """The first break's return point was cleared by the manual switch; the second must set its own."""
+    doc = default_studio()
+    live, desk = scene_id(doc, LIVE_MATCH), scene_id(doc, ANALYST_DESK)
+    doc = rules.start_break(rules.activate_scene(doc, live), 5, NOW)
+    doc = rules.activate_scene(doc, desk)
+    doc = rules.start_break(doc, 2, NOW + 60)
+    assert (doc.active_scene_id, doc.previous_scene_id) == (scene_id(doc, BREAK), desk)
+    ended, _ = rules.expire(doc, NOW + 60 + 121)
+    assert (ended.active_scene_id, ended.countdown) == (desk, None), "not left on the Break scene"
+
+
+def test_every_new_scene_gets_element_ids_of_its_own():
+    """Shared IDs let a selection or drag in one scene land on another scene's element."""
+    doc = default_studio()
+    doc = rules.create_scene(doc, "builtin", LIVE_MATCH)
+    doc = rules.create_scene(doc, "scene", doc.scenes[-1].id)
+    doc = rules.save_template(doc, doc.scenes[-1].id)
+    doc = rules.create_scene(doc, "template", doc.templates[0].id)
+    made = doc.scenes[5:]
+    ids = [e.id for scene in made for e in scene.elements]
+    assert len(ids) == len(set(ids)) == 15
+    builtin = {e.id for e in builtin_templates()[1].elements}
+    assert not builtin & set(ids)
+    assert [e.type for e in made[0].elements] == [e.type for e in builtin_templates()[1].elements]
+
+
+def test_ids_have_a_length_limit():
+    doc = default_studio()
+    long_scene = doc.scenes[0].model_copy(update={"id": "x" * 65})
+    with pytest.raises(Exception, match="at most 64"):
+        Studio.model_validate(doc.model_copy(update={"scenes": [long_scene]}).model_dump())
+    with pytest.raises(Exception, match="at most 64"):
+        element(id="x" * 65)

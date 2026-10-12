@@ -6,7 +6,7 @@ import pytest
 from kickstream.adapters.dir_image_store import DirImageStore
 from kickstream.adapters.json_studio_store import JsonStudioStore
 from kickstream.adapters.memory_bus import InMemoryEventBus
-from kickstream.contracts import MatchStatus, Narrative
+from kickstream.contracts import MatchStatus, Narrative, SceneElement
 from kickstream.domain.teams import AWAY, HOME
 from kickstream.ports.bus import INSIGHTS, NARRATIVES, STATUS
 from kickstream.studio import rules
@@ -200,7 +200,7 @@ async def test_replaying_a_known_moment_sets_the_replay_and_an_unknown_one_is_no
             await harness.service.replay(match_id, moment_id)
 
 
-async def test_uploads_are_checked_by_content_size_and_count(tmp_path):
+async def test_uploads_are_checked_by_content_and_size(tmp_path):
     harness = Harness(tmp_path)
     image_id = harness.service.upload(PNG)
     assert harness.service.image(image_id) == (PNG, "image/png")
@@ -210,10 +210,6 @@ async def test_uploads_are_checked_by_content_size_and_count(tmp_path):
             harness.service.upload(content)
     with pytest.raises(StudioError, check=lambda e: "2 MB" in e.message):
         harness.service.upload(PNG + b"\x00" * rules.MAX_IMAGE_BYTES)
-    harness.service.upload(PNG)
-    harness.service.upload(PNG)
-    with pytest.raises(StudioError, check=lambda e: e.status == 422 and "already holds" in e.message):
-        harness.service.upload(PNG)
 
 
 # --- stage ------------------------------------------------------------------------------------
@@ -328,3 +324,45 @@ async def test_half_time_does_nothing_unless_enabled(tmp_path):
     await publish(STATUS, status("half_time"))
     task.cancel()
     assert harness.service.doc.countdown is None
+
+
+def logo(n, image_id):
+    return SceneElement(
+        id=f"logo{n}",
+        type="image",
+        x=0,
+        y=0,
+        width=200,
+        height=200,
+        layer=9 + n,
+        visible=True,
+        props={"image_id": image_id, "fit": "contain"},
+    )
+
+
+async def test_a_full_image_store_drops_images_no_scene_uses_to_make_room(tmp_path):
+    harness = Harness(tmp_path)
+    used, unused_one, unused_two = (harness.service.upload(PNG) for _ in range(3))
+    scene = harness.service.doc.scenes[0]
+    await harness.service.apply(
+        lambda d: rules.replace_scene(d, scene.id, scene.name, [*scene.elements, logo(0, used)])
+    )
+
+    newest = harness.service.upload(PNG)
+    assert harness.service.image(newest) is not None
+    assert harness.service.image(used) is not None, "an image a scene shows is never dropped"
+    assert harness.service.image(unused_one) is None and harness.service.image(unused_two) is None
+
+
+async def test_when_every_stored_image_is_in_use_a_new_upload_is_refused(tmp_path):
+    harness = Harness(tmp_path)
+    scene = harness.service.doc.scenes[0]
+    logos = [logo(n, harness.service.upload(PNG)) for n in range(3)]
+    await harness.service.apply(lambda d: rules.replace_scene(d, scene.id, scene.name, logos))
+    await harness.service.apply(lambda d: rules.save_template(d, scene.id))
+    await harness.service.apply(lambda d: rules.replace_scene(d, scene.id, scene.name, []))
+    with pytest.raises(StudioError, check=lambda e: e.status == 422 and "already holds" in e.message):
+        harness.service.upload(PNG)
+    assert all(harness.service.image(item.props["image_id"]) for item in logos), (
+        "a saved template still uses them"
+    )

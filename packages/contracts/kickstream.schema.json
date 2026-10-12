@@ -251,7 +251,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["id", "type", "x", "y", "width", "height", "layer", "visible", "props"],
       "properties": {
-        "id": { "type": "string" },
+        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
         "type": { "enum": ["scoreboard", "pitch", "narration", "stats", "banner", "ticker", "timeline", "recap", "replay", "countdown", "text", "image"] },
         "x": { "type": "integer" },
         "y": { "type": "integer" },
@@ -266,7 +266,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["id", "name", "elements"],
       "properties": {
-        "id": { "type": "string" },
+        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
         "name": { "type": "string", "minLength": 1, "maxLength": 60 },
         "template": { "type": ["string", "null"], "default": null },
         "elements": { "type": "array", "items": { "$ref": "#/$defs/SceneElement" }, "maxItems": 40 }

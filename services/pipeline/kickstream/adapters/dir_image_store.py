@@ -33,3 +33,12 @@ class DirImageStore:
             return (self._directory / image_id).read_bytes(), _MEDIA_TYPES[match.group(1)]
         except OSError:
             return None
+
+    def ids(self) -> list[str]:
+        if not self._directory.exists():
+            return []
+        return [path.name for path in self._directory.iterdir() if _ID.fullmatch(path.name)]
+
+    def delete(self, image_id: str) -> None:
+        if _ID.fullmatch(image_id):
+            (self._directory / image_id).unlink(missing_ok=True)

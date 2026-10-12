@@ -124,3 +124,15 @@ def test_the_store_refuses_images_past_its_limit(tmp_path):
     with pytest.raises(ImageStoreFull):
         store.save(PNG, "image/png")
     assert len(list(tmp_path.iterdir())) == 2
+
+
+def test_images_can_be_listed_and_deleted(tmp_path):
+    store = DirImageStore(tmp_path / "images", max_images=2)
+    assert store.ids() == []
+    first, second = store.save(PNG, "image/png"), store.save(PNG, "image/png")
+    assert sorted(store.ids()) == sorted([first, second])
+    store.delete(first)
+    assert store.ids() == [second] and store.get(first) is None
+    store.delete(first)  # deleting what is gone is not an error
+    store.delete("../studio.json")  # nor is an ID that could never have been saved
+    assert store.save(PNG, "image/png") != second, "space was freed"

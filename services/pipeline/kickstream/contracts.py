@@ -254,7 +254,7 @@ class SceneElement(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    id: str
+    id: constr(min_length=1, max_length=64)
     type: Literal['scoreboard', 'pitch', 'narration', 'stats', 'banner', 'ticker', 'timeline', 'recap', 'replay', 'countdown', 'text', 'image']
     x: int
     y: int
@@ -269,7 +269,7 @@ class Scene(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    id: str
+    id: constr(min_length=1, max_length=64)
     name: constr(min_length=1, max_length=60)
     template: str | None = None
     elements: list[SceneElement] = Field(..., max_length=40)

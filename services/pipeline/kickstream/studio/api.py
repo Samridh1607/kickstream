@@ -1,7 +1,8 @@
+from collections.abc import AsyncIterator
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sse_starlette.sse import EventSourceResponse
 
 from kickstream.contracts import KeyMoment, MatchEvent, SceneElement, Studio, StudioSettings, Ticker
@@ -17,7 +18,7 @@ class _Body(BaseModel):
 
 class NewScene(_Body):
     source: Literal["builtin", "template", "scene"]
-    ref: str
+    ref: str = Field(max_length=100)
     name: str | None = None
 
 
@@ -27,7 +28,7 @@ class SceneBody(_Body):
 
 
 class NewTemplate(_Body):
-    scene_id: str
+    scene_id: str = Field(max_length=64)
     name: str | None = None
 
 
@@ -35,7 +36,7 @@ class NewBanner(_Body):
     text: str
     kind: Literal["custom", "info", "goal", "card"] = "custom"
     duration_s: int = rules.DEFAULT_BANNER_SECONDS
-    source_id: str | None = None
+    source_id: str | None = Field(default=None, max_length=200)
 
 
 class NewCountdown(_Body):
@@ -46,8 +47,22 @@ class NewCountdown(_Body):
 
 
 class NewReplay(_Body):
-    match_id: str
-    moment_id: str
+    match_id: str = Field(max_length=100)
+    moment_id: str = Field(max_length=100)
+
+
+async def read_limited(chunks: AsyncIterator[bytes], limit: int) -> bytes | None:
+    """The whole body, or None as soon as it is known to be over the limit.
+
+    A request need not declare its length, so the limit is enforced while reading and the
+    rest of an oversized body is never taken into memory.
+    """
+    received = bytearray()
+    async for chunk in chunks:
+        received += chunk
+        if len(received) > limit:
+            return None
+    return bytes(received)
 
 
 def find_moment(store: MatchStore, match_id: str, moment_id: str) -> KeyMoment | None:
@@ -155,7 +170,10 @@ def build_studio_router(*, service: StudioService, store: MatchStore) -> APIRout
         declared = request.headers.get("content-length", "0")
         if declared.isdigit() and int(declared) > rules.MAX_IMAGE_BYTES:
             raise StudioError(422, "image", "An image can be at most 2 MB.")
-        return {"id": service.upload(await request.body())}
+        content = await read_limited(request.stream(), rules.MAX_IMAGE_BYTES)
+        if content is None:
+            raise StudioError(422, "image", "An image can be at most 2 MB.")
+        return {"id": service.upload(content)}
 
     @router.get("/api/studio/images/{image_id}")
     def get_image(image_id: str) -> Response:

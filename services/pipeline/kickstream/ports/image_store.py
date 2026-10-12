@@ -11,3 +11,9 @@ class ImageStore(Protocol):
 
     def get(self, image_id: str) -> tuple[bytes, str] | None:
         """The image's bytes and media type, or None when there is no such image."""
+
+    def ids(self) -> list[str]:
+        """The IDs of every stored image."""
+
+    def delete(self, image_id: str) -> None:
+        """Remove an image. Removing one that does not exist is not an error."""

@@ -153,7 +153,9 @@ def create_scene(doc: Studio, source: str, ref: str, name: str | None = None) ->
         id=new_id(),
         name=_checked_name(name or default_name),
         template=origin.template,
-        elements=list(origin.elements),
+        # Fresh element IDs: a selection or drag is keyed by element ID, and IDs shared between
+        # scenes would let it land on another scene's element.
+        elements=[element.model_copy(update={"id": new_id()}) for element in origin.elements],
     )
     return _with(doc, scenes=[*doc.scenes, scene])
 
@@ -271,7 +273,11 @@ def start_break(doc: Studio, minutes: int, now: float, label: str = "") -> Studi
     return _with(
         doc,
         countdown=Countdown(kind="break", ends_at=now + minutes * 60, label=label[:60]),
-        previous_scene_id=doc.previous_scene_id if on_break else doc.active_scene_id,
+        # A break keeps the return point of the break it replaces, unless the streamer cleared
+        # that by switching scenes by hand; then this break returns to where they are now.
+        previous_scene_id=doc.previous_scene_id
+        if on_break and doc.previous_scene_id
+        else doc.active_scene_id,
         active_scene_id=_first_from(doc, BREAK) or doc.active_scene_id,
     )
 

@@ -8,6 +8,7 @@ from collections.abc import Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -39,6 +40,33 @@ from kickstream.studio.service import StudioService
 from kickstream.studio.stage import StudioStage
 
 STUDIO_MATCH_SPEED = 30.0  # playback speed of a match the studio starts at the end of a countdown
+_READ_ONLY_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+class SameOriginWrites:
+    """Refuses a changing request that a browser sent on behalf of another web site.
+
+    Kickstream has no sign-in, and browsers let any page send a simple POST to a local port.
+    Without this, a page open in the streamer's browser could switch scenes or start matches.
+    Browsers always send Origin on such requests; tools like curl send none and are let through.
+    """
+
+    def __init__(self, app) -> None:
+        self._app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] == "http" and scope["method"] not in _READ_ONLY_METHODS:
+            headers = dict(scope["headers"])
+            origin = headers.get(b"origin")
+            if origin is not None and urlsplit(origin.decode("latin-1")).netloc != headers.get(
+                b"host", b""
+            ).decode("latin-1"):
+                refusal = JSONResponse(
+                    status_code=403, content={"detail": "Requests from other sites cannot change Kickstream."}
+                )
+                await refusal(scope, receive, send)
+                return
+        await self._app(scope, receive, send)
 
 
 @dataclass(frozen=True)
@@ -153,6 +181,7 @@ def create_app(
 
     app = FastAPI(title="Kickstream", lifespan=lifespan)
     app.state.pipeline = pipeline
+    app.add_middleware(SameOriginWrites)
 
     @app.exception_handler(StudioError)
     async def refused(_: Request, exc: StudioError) -> JSONResponse:

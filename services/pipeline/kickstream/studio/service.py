@@ -103,11 +103,28 @@ class StudioService:
         if media_type is None:
             raise StudioError(422, "image", "Only PNG, JPEG and WebP images can be uploaded.")
         try:
-            return self._images.save(content, media_type)
+            try:
+                return self._images.save(content, media_type)
+            except ImageStoreFull:
+                # Images whose element was removed or replaced still take up room. Drop those first.
+                self._drop_unused_images()
+                return self._images.save(content, media_type)
         except ImageStoreFull as exc:
-            raise StudioError(422, "image", "The studio already holds as many images as it allows.") from exc
+            message = "The studio already holds as many images as it allows, and every one is in use."
+            raise StudioError(422, "image", message) from exc
         except OSError as exc:
             raise StudioError(503, "image", "The image could not be saved.") from exc
+
+    def _drop_unused_images(self) -> None:
+        in_use = {
+            element.props.get("image_id")
+            for scene in (*self._doc.scenes, *self._doc.templates)
+            for element in scene.elements
+            if element.type == "image"
+        }
+        for image_id in self._images.ids():
+            if image_id not in in_use:
+                self._images.delete(image_id)
 
     def image(self, image_id: str) -> tuple[bytes, str] | None:
         return self._images.get(image_id)

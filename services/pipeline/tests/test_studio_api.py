@@ -302,3 +302,76 @@ def test_a_corrupt_studio_file_does_not_stop_the_server(tmp_path, now):
     with TestClient(make_app(tmp_path, now)) as test_client:
         assert len(test_client.get("/api/studio").json()["scenes"]) == 5
     assert (tmp_path / "data" / "studio.json.corrupt").exists()
+
+
+def test_an_upload_is_cut_off_at_the_limit_instead_of_being_read_whole():
+    import asyncio
+
+    from kickstream.studio.api import read_limited
+
+    consumed = []
+
+    async def body():
+        for n in range(40):
+            consumed.append(n)
+            yield bytes(1024 * 1024)
+
+    assert asyncio.run(read_limited(body(), 2 * 1024 * 1024)) is None
+    assert len(consumed) <= 3, "stopped reading once past the limit"
+
+    async def small():
+        yield b"ab"
+        yield b"cd"
+
+    assert asyncio.run(read_limited(small(), 4)) == b"abcd"
+
+
+def test_an_oversized_upload_without_a_declared_length_is_refused(client):
+    def chunks():
+        for _ in range(5):
+            yield PNG + bytes(1024 * 1024)
+
+    refused = client.post("/api/studio/images", content=chunks())
+    assert (refused.status_code, field(refused)) == (422, "image")
+
+
+def test_oversized_ids_are_refused(client):
+    first = client.get("/api/studio").json()["scenes"][0]
+    huge = [{**first["elements"][0], "id": "x" * 100_000}]
+    assert (
+        client.put(f"/api/studio/scenes/{first['id']}", json={"name": "x", "elements": huge}).status_code
+        == 422
+    )
+    assert (
+        client.post("/api/studio/scenes", json={"source": "builtin", "ref": "x" * 100_000}).status_code == 422
+    )
+    assert (
+        client.post("/api/studio/banner", json={"text": "ok", "source_id": "x" * 100_000}).status_code == 422
+    )
+    assert client.get("/api/studio").json()["revision"] == 0
+
+
+@pytest.mark.parametrize(
+    "method, path",
+    [
+        ("post", "/api/studio/scenes/scene-2/activate"),
+        ("delete", "/api/studio/banner"),
+        ("post", "/api/studio/images"),
+        ("post", "/api/matches"),
+        ("put", "/api/studio/ticker"),
+    ],
+)
+def test_a_request_from_another_web_site_cannot_change_anything(client, method, path):
+    """A page open in the streamer's browser must not be able to drive the studio."""
+    response = getattr(client, method)(path, headers={"origin": "https://evil.example"})
+    assert response.status_code == 403
+    assert client.get("/api/studio").json()["revision"] == 0
+    assert client.get("/api/matches/current").status_code == 404
+
+
+def test_same_origin_requests_and_tools_without_an_origin_still_work(client):
+    same = client.post("/api/studio/scenes/scene-2/activate", headers={"origin": "http://testserver"})
+    assert same.status_code == 200
+    assert client.post("/api/studio/scenes/scene-1/activate").status_code == 200
+    blocked_read = client.get("/api/studio", headers={"origin": "https://evil.example"})
+    assert blocked_read.status_code == 200, "reads are not blocked"
