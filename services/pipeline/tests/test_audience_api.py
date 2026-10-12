@@ -345,3 +345,38 @@ def test_a_request_body_over_the_limit_is_refused_before_it_is_read(client):
 def test_a_fan_route_cannot_be_driven_from_another_site(client):
     cross = {**ANN, "origin": "https://evil.example", "sec-fetch-site": "cross-site"}
     assert client.post("/api/audience/questions", headers=cross, json={"text": "Spam?"}).status_code == 403
+
+
+# --- review fixes ------------------------------------------------------------------------------
+
+
+def test_one_address_cannot_flood_the_list_by_rotating_browser_ids(client, now):
+    for n in range(5):
+        assert ask(client, {"x-voter": f"voter-rotating-{n:05d}"}, f"Spam {n}?").status_code == 201
+    blocked = ask(client, {"x-voter": "voter-rotating-99999"}, "Spam again?")
+    assert (blocked.status_code, field(blocked)) == (429, "text")
+    assert int(blocked.headers["retry-after"]) == 30
+    assert len(client.get("/api/audience").json()["questions"]) == 5
+    now.at += 31
+    assert ask(client, {"x-voter": "voter-rotating-99999"}, "After the wait?").status_code == 201
+
+
+def test_an_upvote_can_be_sent_as_on_or_off_and_a_repeat_changes_nothing(client):
+    question = ask(client).json()["id"]
+    url = f"/api/audience/questions/{question}/vote"
+    assert client.post(url, headers=BEN, json={"on": True}).json()["questions"][0]["votes"] == 2
+    assert client.post(url, headers=BEN, json={"on": True}).json()["questions"][0]["votes"] == 2
+    assert client.post(url, headers=BEN, json={"on": False}).json()["questions"][0]["votes"] == 1
+    assert client.post(url, headers=BEN, json={"on": False}).json()["questions"][0]["votes"] == 1
+
+
+def test_an_answered_question_can_be_hidden_from_fans(client):
+    question = ask(client).json()["id"]
+    client.post(f"{BASE}/questions/{question}/ask")
+    client.put(f"{BASE}/draft", json={"text": "Aired by mistake."})
+    client.post(f"{BASE}/draft/air", json={})
+    assert "Aired by mistake." in client.get("/api/audience").text
+    hidden = client.post(f"{BASE}/questions/{question}/hide")
+    assert hidden.status_code == 200 and hidden.json()["qa"] is None
+    assert "Aired by mistake." not in client.get("/api/audience").text
+    assert client.post(f"{BASE}/questions/{question}/unhide").json()["questions"][0]["state"] == "answered"

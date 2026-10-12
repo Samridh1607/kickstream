@@ -15,6 +15,8 @@ function serve(doc: Audience) {
   const server = { calls, refuse: null as null | { status: number; msg: string } };
   const reply = (statusCode: number, body: unknown) => new Response(JSON.stringify(body), { status: statusCode });
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    // The page reads the view once by itself; only what the fan does is counted.
+    if ((init?.method ?? "GET") === "GET") return reply(200, doc);
     calls.push({ url, voter: new Headers(init?.headers).get("x-voter"), body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined });
     if (server.refuse) return reply(server.refuse.status, { detail: [{ loc: ["body", "text"], msg: server.refuse.msg, type: "refusal" }] });
     const next = { ...doc, revision: doc.revision + calls.length };
@@ -77,6 +79,8 @@ test("an upvote is remembered, and pressing again is sent to remove it", async (
   fireEvent.click(upvote());
   await waitFor(() => expect(upvote().getAttribute("aria-pressed")).toBe("false"));
   expect(server.calls).toHaveLength(2);
+  // Each press says which way it goes, so a request sent twice cannot undo itself.
+  expect(server.calls.map((call) => call.body)).toEqual([{ on: true }, { on: false }]);
 });
 
 test("a question the fan asks is marked as theirs", async () => {
@@ -113,4 +117,32 @@ test("the language picker changes the page and is remembered", () => {
   fireEvent.change(screen.getByLabelText("Language"), { target: { value: "hi" } });
   expect(screen.getByRole("button", { name: "भेजें" })).toBeTruthy();
   expect(JSON.parse(localStorage.getItem("kickstream.profile") ?? "{}").language).toBe("hi");
+});
+
+const stored = () => JSON.parse(localStorage.getItem("kickstream.choices") ?? "{}");
+
+test("the first view is fetched, so the page does not wait for the live connection", async () => {
+  serve(doc());
+  renderUi(<JoinPage eventSource={FakeEventSourceCtor} retryMs={10} />);
+  expect(await screen.findByText("Who will win?")).toBeTruthy();
+});
+
+test("what another tab remembered is kept when this one votes", async () => {
+  const { server } = opened(doc());
+  localStorage.setItem("kickstream.choices", JSON.stringify({ polls: {}, upvoted: ["q-other"], asked: ["q-mine"] }));
+  fireEvent.click(screen.getByRole("button", { name: "Harbour City" }));
+  await waitFor(() => expect(server.calls).toHaveLength(1));
+  await waitFor(() => expect(stored().polls).toEqual({ [poll().id]: "o3" }));
+  expect(stored().upvoted).toEqual(["q-other"]);
+  expect(stored().asked).toEqual(["q-mine"]);
+});
+
+test("a vote made in another tab shows here", () => {
+  opened(doc());
+  expect(screen.getByText("Vote to see the results.")).toBeTruthy();
+  localStorage.setItem("kickstream.choices", JSON.stringify({ polls: { [poll().id]: "o3" }, upvoted: [], asked: [] }));
+  act(() => {
+    window.dispatchEvent(new StorageEvent("storage", { key: "kickstream.choices" }));
+  });
+  expect(within(screen.getByTestId("poll-option-o3")).getByText("Your vote")).toBeTruthy();
 });

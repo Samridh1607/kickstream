@@ -21,6 +21,8 @@ MAX_ANSWERED = 50
 MAX_HISTORY = 20
 MAX_ANSWER = 400
 DEFAULT_QA_SECONDS = 30
+MAX_POLL_VOTERS = 20_000  # browsers counted in one poll; bounds what a flood of made-up IDs can store
+MAX_UPVOTERS = 5_000  # the same bound, per question
 _VOTER = re.compile(r"[A-Za-z0-9-]{16,64}")
 
 _PRESETS: dict[Language, dict[str, str]] = {
@@ -174,6 +176,8 @@ def vote(state: AudienceState, voter: str, option_id: str) -> AudienceState:
     previous = state.poll_votes.get(voter)
     if previous == option_id:
         return state
+    if previous is None and len(state.poll_votes) >= MAX_POLL_VOTERS:
+        raise AudienceError(429, "poll", "This poll has taken as many votes as it can count.", retry_after=60)
 
     def recount(option: PollOption) -> PollOption:
         change = (option.id == option_id) - (option.id == previous)
@@ -219,37 +223,51 @@ def ask(state: AudienceState, voter: str, text: str, nickname: str, now: float) 
         _doc(state, questions=[*state.doc.questions, question]),
         upvotes={**state.upvotes, question.id: frozenset({voter})},
         authors={**state.authors, question.id: voter},
-        last_asked={**state.last_asked, voter: now},
+        # Only timers still running are kept, so made-up IDs cannot pile up here.
+        last_asked={**{v: at for v, at in state.last_asked.items() if now - at < ASK_INTERVAL_S}, voter: now},
     )
 
 
-def upvote(state: AudienceState, voter: str, question_id: str) -> AudienceState:
+def upvote(state: AudienceState, voter: str, question_id: str, on: bool | None = None) -> AudienceState:
+    """Add or remove a fan's upvote. `on` says which; None toggles.
+
+    Pages send `on` explicitly, so a repeated or replayed request cannot undo itself.
+    """
     question = _question(state, question_id)
     if question.state != "open":
         raise AudienceError(409, "question", "That question is no longer open for votes.")
     if state.authors.get(question_id) == voter:
         return state
     voters = state.upvotes.get(question_id, frozenset())
-    voters = voters - {voter} if voter in voters else voters | {voter}
+    wanted = voter not in voters if on is None else on
+    if wanted == (voter in voters):
+        return state
+    if wanted and len(voters) >= MAX_UPVOTERS:
+        raise AudienceError(
+            429, "question", "This question has taken as many votes as it can count.", retry_after=60
+        )
+    voters = voters | {voter} if wanted else voters - {voter}
     return replace(
         _swap(state, question.model_copy(update={"votes": len(voters)})),
         upvotes={**state.upvotes, question_id: voters},
     )
 
 
-def _set_state(state: AudienceState, question_id: str, wanted: str, allowed_from: str) -> AudienceState:
-    question = _question(state, question_id)
-    if question.state != allowed_from:
-        raise AudienceError(409, "question", f"Only a question that is {allowed_from} can be made {wanted}.")
-    return _swap(state, question.model_copy(update={"state": wanted}))
-
-
 def hide(state: AudienceState, question_id: str) -> AudienceState:
-    return _set_state(state, question_id, "hidden", "open")
+    """Take a question out of the fan view. Works on answered questions too, answer and all."""
+    question = _question(state, question_id)
+    if question.state == "hidden":
+        raise AudienceError(409, "question", "That question is already hidden.")
+    state = _swap(state, question.model_copy(update={"state": "hidden"}))
+    on_air = state.doc.qa
+    return clear_qa(state) if on_air is not None and on_air.question_id == question_id else state
 
 
 def unhide(state: AudienceState, question_id: str) -> AudienceState:
-    return _set_state(state, question_id, "open", "hidden")
+    question = _question(state, question_id)
+    if question.state != "hidden":
+        raise AudienceError(409, "question", "Only a hidden question can be shown again.")
+    return _swap(state, question.model_copy(update={"state": "answered" if question.answer else "open"}))
 
 
 # --- the expert draft and going on air -----------------------------------------------------------
@@ -297,7 +315,10 @@ def air(state: AudienceState, duration_s: int, now: float) -> AudienceState:
     if not 10 <= duration_s <= 120:
         raise AudienceError(422, "duration_s", "An answer stays on air for 10 to 120 seconds.")
     question = _question(state, draft.question_id)
-    state = _swap(state, question.model_copy(update={"state": "answered", "answer": answer}))
+    answered_now = question.model_copy(update={"state": "answered", "answer": answer})
+    # Moved to the end, so answered questions sit in the order they were answered and the
+    # pruning below drops the one answered longest ago, never the one just answered.
+    state = _doc(state, questions=[*(q for q in state.doc.questions if q.id != question.id), answered_now])
     answered = [q for q in state.doc.questions if q.state == "answered"]
     for surplus in answered[: max(0, len(answered) - MAX_ANSWERED)]:
         state = _without(state, surplus.id)

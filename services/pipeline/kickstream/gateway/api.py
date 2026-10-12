@@ -1,4 +1,4 @@
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, WebSocket
@@ -7,7 +7,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from kickstream.contracts import TeamSheet, ViewerProfile
 from kickstream.domain.demo import DEMO_SEED
-from kickstream.domain.sockets import NOT_FOUND, REFUSED, pump
+from kickstream.domain.sockets import NOT_FOUND, REFUSED, pump, refuse
 from kickstream.domain.types import Language, Mode
 from kickstream.gateway.stream import stream_items
 from kickstream.ports.broadcaster import Broadcaster
@@ -39,6 +39,7 @@ def build_router(
     start_match: Callable[[int, float], Awaitable[str]],
     current_match: Callable[[], str | None],
     match_exists: Callable[[str], bool],
+    socket_hosts: Collection[str] = (),
 ) -> APIRouter:
     router = APIRouter(prefix="/api")
 
@@ -94,10 +95,10 @@ def build_router(
     ) -> None:
         """The same stream as `/stream`, over a WebSocket. `after` plays the part of Last-Event-ID."""
         if not match_exists(match_id):
-            await websocket.close(code=NOT_FOUND)
+            await refuse(websocket, NOT_FOUND)
             return
         if mode not in ("fan", "analyst") or lang not in ("en", "es", "hi"):
-            await websocket.close(code=REFUSED)
+            await refuse(websocket, REFUSED)
             return
         profile = ViewerProfile(mode=mode, language=lang, club=club or None, player=player or None)
 
@@ -107,7 +108,7 @@ def build_router(
             ):
                 yield envelope.model_dump_json()
 
-        await pump(websocket, envelopes())
+        await pump(websocket, envelopes(), socket_hosts)
 
     @router.get("/matches/{match_id}/overlays/latest")
     def get_latest_overlays(match_id: str, lang: Language = "en") -> dict[str, dict]:

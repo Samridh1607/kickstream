@@ -1,12 +1,12 @@
 import { makeStyles, Select, Text, tokens } from "@fluentui/react-components";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Audience } from "../contracts";
 import { LANGUAGE_NAMES, LANGUAGES, type Language, t } from "../i18n";
 import { loadProfile, saveProfile } from "../prefs";
 import { useLiveDocument } from "../stream/useLiveDocument";
-import { askQuestion, AUDIENCE_STREAM, upvoteQuestion, votePoll } from "./api";
+import { askQuestion, AUDIENCE_STREAM, getAudience, upvoteQuestion, votePoll } from "./api";
 import { JoinPanel } from "./JoinPanel";
-import { type Choices, getVoter, loadChoices, saveChoices, withAsked, withPollVote, withUpvoteToggled } from "./voter";
+import { CHOICES_KEY, type Choices, getVoter, loadChoices, saveChoices, withAsked, withPollVote, withUpvote } from "./voter";
 
 const useStyles = makeStyles({
   page: { minHeight: "100vh", display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL, padding: tokens.spacingHorizontalL, backgroundColor: tokens.colorNeutralBackground2 },
@@ -27,14 +27,35 @@ export function JoinLive({ language, eventSource, retryMs }: LiveProps) {
   const [choices, setChoices] = useState(loadChoices);
   const [problem, setProblem] = useState<string | null>(null);
 
+  // The first view is asked for directly, so the page fills even while the live connection is
+  // still being made. A newer one from the connection wins.
+  useEffect(() => {
+    let wanted = true;
+    getAudience().then((view) => wanted && accept(view), () => undefined);
+    return () => {
+      wanted = false;
+    };
+  }, [accept]);
+
+  // Another tab of this browser voted or asked: show it here too.
+  useEffect(() => {
+    if (!voter.remembered) return;
+    const sync = (event: StorageEvent) => {
+      if (event.key === null || event.key === CHOICES_KEY) setChoices(loadChoices());
+    };
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
+  }, [voter.remembered]);
+
   /** Runs one request. On success records the choice; on failure shows why and records nothing. */
   const attempt = async <T,>(request: () => Promise<T>, record: (current: Choices, result: T) => Choices, view: (result: T) => Audience) => {
     try {
       const result = await request();
       accept(view(result));
-      // Built from the latest choices, not the ones captured when the button was pressed.
+      // Built on what is stored now, which another tab may have added to, not on the choices
+      // captured when the button was pressed.
       setChoices((current) => {
-        const next = record(current, result);
+        const next = record(voter.remembered ? loadChoices() : current, result);
         saveChoices(next);
         return next;
       });
@@ -56,7 +77,10 @@ export function JoinLive({ language, eventSource, retryMs }: LiveProps) {
       language={language}
       problem={problem}
       onVote={(optionId) => poll && void attempt(() => votePoll(voter.id, optionId), (current) => withPollVote(current, poll.id, optionId), (view) => view)}
-      onUpvote={(questionId) => void attempt(() => upvoteQuestion(voter.id, questionId), (current) => withUpvoteToggled(current, questionId), (view) => view)}
+      onUpvote={(questionId) => {
+        const on = !choices.upvoted.includes(questionId);
+        void attempt(() => upvoteQuestion(voter.id, questionId, on), (current) => withUpvote(current, questionId, on), (view) => view);
+      }}
       onAsk={(text, nickname) => attempt(() => askQuestion(voter.id, text, nickname), (current, asked) => withAsked(current, asked.id), (asked) => asked.audience)}
     />
   );

@@ -17,8 +17,9 @@ export function withReplayFallback(scene: Scene, studio: Studio): Scene {
   return { ...scene, elements: [...scene.elements, fallback] };
 }
 
-const POLL_BOX = { x: 1240, y: 200, width: 640, height: 560 };
-const QA_BOX = { x: 260, y: 700, width: 1400, height: 300 };
+// Side by side in height, so both can be on air at once without one covering the other.
+const POLL_BOX = { x: 1240, y: 40, width: 640, height: 560 };
+const QA_BOX = { x: 260, y: 620, width: 1400, height: 400 };
 
 /** Whatever is on air must be visible: add a default box for each thing the scene has no element for. */
 export function withFallbacks(scene: Scene, studio: Studio, audience: Audience | null | undefined): Scene {

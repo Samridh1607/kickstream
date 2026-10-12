@@ -1,4 +1,4 @@
-import { type Choices, getVoter, loadChoices, saveChoices, withAsked, withPollVote, withUpvoteToggled } from "./voter";
+import { type Choices, getVoter, loadChoices, saveChoices, withAsked, withPollVote, withUpvote } from "./voter";
 
 const VALID = /^[A-Za-z0-9-]{16,64}$/;
 
@@ -46,9 +46,11 @@ test("recording a vote, an upvote and a question returns new choices", () => {
   const empty = { polls: {}, upvoted: [], asked: [] };
   expect(withPollVote(empty, "p1", "o1")).toEqual({ polls: { p1: "o1" }, upvoted: [], asked: [] });
   expect(withPollVote(withPollVote(empty, "p1", "o1"), "p1", "o3").polls).toEqual({ p1: "o3" });
-  const up = withUpvoteToggled(empty, "q1");
+  const up = withUpvote(empty, "q1", true);
   expect(up.upvoted).toEqual(["q1"]);
-  expect(withUpvoteToggled(up, "q1").upvoted).toEqual([]);
+  expect(withUpvote(up, "q1", true).upvoted).toEqual(["q1"]);
+  expect(withUpvote(up, "q1", false).upvoted).toEqual([]);
+  expect(withUpvote(empty, "q1", false).upvoted).toEqual([]);
   expect(withAsked(withAsked(empty, "q9"), "q9").asked).toEqual(["q9"]);
   expect(empty).toEqual({ polls: {}, upvoted: [], asked: [] });
 });

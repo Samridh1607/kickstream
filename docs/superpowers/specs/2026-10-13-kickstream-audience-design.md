@@ -29,7 +29,7 @@ The studio lets a streamer compose a picture. This sub-project lets the audience
 | State | A separate audience document, not part of the studio document |
 | Updates to fans | Pushed at most twice a second, however many votes arrive |
 | Transport | Pages follow every live stream (match, studio, audience) over a WebSocket. Browsers allow six HTTP connections to one server and each Server-Sent Events stream holds one, so the studio and program pages together would leave none for a button press. The Server-Sent Events routes remain for tools |
-| Other sites | A WebSocket is refused unless the page that opens it was served from the same host, because the browser's same-origin rule does not cover WebSockets |
+| Other sites | A WebSocket is refused unless the page that opens it was served from the same host, because the browser's same-origin rule does not cover WebSockets. Behind a proxy that rewrites the host, the public hostnames are listed in `KICKSTREAM_ALLOWED_HOSTS` |
 
 ## Definition of done
 
@@ -88,11 +88,12 @@ There are two views of the document. The **fan view** leaves out hidden question
 
 ### Questions
 
-- A browser can submit one question every 30 seconds. A question identical to one that browser already has open is refused.
+- A browser can submit one question every 30 seconds, and one network address five in 30 seconds, since a browser chooses its own ID. A question identical to one that browser already has open is refused.
 - When 200 open or hidden questions exist, the open question with the fewest votes (oldest first among ties) is dropped to make room.
-- An upvote is a toggle: pressing again removes it. A fan cannot upvote their own question; it starts with their one vote.
+- An upvote is a toggle: pressing again removes it. The page says which way each press goes, so a request sent twice cannot undo itself. A fan cannot upvote their own question; it starts with their one vote.
 - The list is ordered by votes, then oldest first.
-- Hiding a question removes it from the fan view and keeps its votes. It can be unhidden.
+- Hiding a question removes it from the fan view and keeps its votes. It can be unhidden. An answered question can be hidden too, with its answer; if it is on the program it comes off.
+- One poll counts at most 20,000 browsers and one question 5,000 upvotes, so made-up IDs cannot fill the server's memory.
 
 ### AskExpert
 

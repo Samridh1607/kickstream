@@ -150,10 +150,10 @@ export function AudienceTab({ audience, onRun }: AudienceTabProps) {
               {item.answer && <Text size={200} block className={styles.wrap}>{item.answer}</Text>}
               <div className={styles.row}>
                 {item.state === "open" && (
-                  <>
-                    <Button size="small" appearance="primary" aria-label={`Ask the expert: ${item.text}`} onClick={() => void onRun(() => askExpert(item.id))}>Ask the expert</Button>
-                    <Button size="small" aria-label={`Hide: ${item.text}`} onClick={() => void onRun(() => hideQuestion(item.id))}>Hide</Button>
-                  </>
+                  <Button size="small" appearance="primary" aria-label={`Ask the expert: ${item.text}`} onClick={() => void onRun(() => askExpert(item.id))}>Ask the expert</Button>
+                )}
+                {item.state !== "hidden" && (
+                  <Button size="small" aria-label={`Hide: ${item.text}`} onClick={() => void onRun(() => hideQuestion(item.id))}>Hide</Button>
                 )}
                 {item.state === "hidden" && (
                   <Button size="small" aria-label={`Unhide: ${item.text}`} onClick={() => void onRun(() => unhideQuestion(item.id))}>Unhide</Button>

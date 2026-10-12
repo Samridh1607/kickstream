@@ -94,11 +94,13 @@ test("questions can be hidden, unhidden and sent to the expert", async () => {
   expect(screen.queryByRole("button", { name: "Ask the expert: Something rude" })).toBeNull();
 });
 
-test("answered questions are listed with their answer and no actions", () => {
-  setup(audience({ questions: [fanQuestion({ state: "answered", answer: "Fresh legs." })] }));
+test("an answered question is listed with its answer and can still be hidden", async () => {
+  const { calls } = setup(audience({ questions: [fanQuestion({ state: "answered", answer: "Fresh legs." })] }));
   const answered = within(screen.getByTestId("studio-question-q1"));
   expect(answered.getByText("Fresh legs.")).toBeTruthy();
-  expect(answered.queryByRole("button")).toBeNull();
+  expect(answered.getAllByRole("button")).toHaveLength(1);
+  fireEvent.click(answered.getByRole("button", { name: "Hide: Why the change?" }));
+  await waitFor(() => expect(last(calls).url).toBe("/api/studio/audience/questions/q1/hide"));
 });
 
 test.each([

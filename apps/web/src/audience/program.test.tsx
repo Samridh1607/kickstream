@@ -75,3 +75,30 @@ test("a scene that already shows the element is left alone, and a hidden one doe
   const hidden = scene({ elements: [element({ id: "p", type: "poll", visible: false, props: {} })] });
   expect(withFallbacks(hidden, studio(), live).elements).toHaveLength(2);
 });
+
+const size = (text: string) => Number.parseFloat((screen.getByText(text) as HTMLElement).style.fontSize);
+
+test("a long question and answer are set smaller, so the whole answer fits its box", () => {
+  const { unmount } = show("qa", { audience: audience({ qa: QA }) });
+  const short = { question: size(QA.question), answer: size(QA.answer) };
+  unmount();
+  const long = { ...QA, question: "Q".repeat(200), answer: "A".repeat(400) };
+  show("qa", { audience: audience({ qa: long }) });
+  expect(size(long.question)).toBeLessThan(short.question);
+  expect(size(long.answer)).toBeLessThan(short.answer);
+  expect(size(long.answer)).toBeGreaterThanOrEqual(22);
+});
+
+test("the default poll and Q&A boxes fit the frame without covering each other", () => {
+  const live = audience({ poll: poll(), poll_on_air: true, qa: QA });
+  const [first, second] = withFallbacks(scene({ elements: [] }), studio(), live).elements;
+  for (const box of [first, second]) {
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(1920);
+    expect(box.y + box.height).toBeLessThanOrEqual(1080);
+  }
+  const apart = first.x + first.width <= second.x || second.x + second.width <= first.x
+    || first.y + first.height <= second.y || second.y + second.height <= first.y;
+  expect(apart).toBe(true);
+});

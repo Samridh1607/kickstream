@@ -501,3 +501,80 @@ def test_a_bad_record_cannot_be_loaded(raw):
 
 def test_an_empty_state_is_a_valid_document():
     assert Audience.model_validate(empty_state().doc.model_dump()) == empty_state().doc
+
+
+# --- review fixes ------------------------------------------------------------------------------
+
+
+def answered(state, text, at):
+    question = qid(state, text)
+    return rules.air(rules.set_draft_text(rules.start_draft(state, question, False), "Answer."), 30, at)
+
+
+def test_the_answered_list_keeps_the_most_recently_answered_not_the_most_recently_asked():
+    state = asked(empty_state(), "voter-early-00000001", "Asked first, answered last?", at=NOW)
+    for n in range(rules.MAX_ANSWERED):
+        state = asked(state, f"voter-number-{n:07d}", f"Question {n}?", at=NOW + 1 + n)
+        state = answered(state, f"Question {n}?", NOW + 1 + n)
+    state = answered(state, "Asked first, answered last?", NOW + 500)
+    kept = {q.text for q in state.doc.questions if q.state == "answered"}
+    assert len(kept) == rules.MAX_ANSWERED
+    assert "Asked first, answered last?" in kept, "the answer just given must not be the one pruned"
+    assert "Question 0?" not in kept, "the one answered longest ago goes"
+    assert state.doc.qa.question == "Asked first, answered last?"
+
+
+def test_an_answered_question_can_be_hidden_and_comes_back_answered():
+    state = asked(empty_state(), ANN, "Why?")
+    question = state.doc.questions[0].id
+    state = answered(state, "Why?", NOW)
+    hidden = rules.hide(state, question)
+    assert (hidden.doc.questions[0].state, hidden.doc.questions[0].answer) == ("hidden", "Answer.")
+    assert hidden.doc.qa is None, "hiding what is on air takes it off the program"
+    assert rules.fan_view(hidden, NOW).questions == []
+    assert rules.unhide(hidden, question).doc.questions[0].state == "answered"
+
+
+def test_hiding_another_question_leaves_the_one_on_air_alone():
+    state = asked(empty_state(), ANN, "Why?")
+    state = asked(state, BEN, "Other?", at=NOW + 1)
+    state = answered(state, "Why?", NOW + 2)
+    assert rules.hide(state, qid(state, "Other?")).doc.qa is not None
+
+
+def test_upvotes_can_be_set_explicitly_and_repeating_one_changes_nothing():
+    state = asked(empty_state(), ANN, "Why?")
+    question = state.doc.questions[0].id
+    on = rules.upvote(state, BEN, question, on=True)
+    assert on.doc.questions[0].votes == 2
+    assert rules.upvote(on, BEN, question, on=True) is on, "a repeated or replayed request adds nothing"
+    off = rules.upvote(on, BEN, question, on=False)
+    assert off.doc.questions[0].votes == 1
+    assert rules.upvote(off, BEN, question, on=False) is off
+    assert rules.upvote(state, ANN, question, on=False) is state, "an author's own vote stays"
+
+
+def test_ask_timers_older_than_the_interval_are_forgotten():
+    state = asked(empty_state(), ANN, "First?", at=NOW)
+    state = asked(state, BEN, "Second?", at=NOW + rules.ASK_INTERVAL_S + 1)
+    assert set(state.last_asked) == {BEN}
+
+
+def test_a_poll_stops_taking_new_browsers_at_its_cap_but_lets_voters_change_their_mind(monkeypatch):
+    monkeypatch.setattr(rules, "MAX_POLL_VOTERS", 2)
+    state = with_poll()
+    home, _, away = (o.id for o in state.doc.poll.options)
+    state = rules.vote(rules.vote(state, ANN, home), BEN, home)
+    with refused(429, "poll"):
+        rules.vote(state, CAT, home)
+    assert counts(rules.vote(state, ANN, away)) == [1, 0, 1]
+
+
+def test_a_question_stops_taking_new_upvoters_at_its_cap(monkeypatch):
+    monkeypatch.setattr(rules, "MAX_UPVOTERS", 2)
+    state = asked(empty_state(), ANN, "Why?")
+    question = state.doc.questions[0].id
+    state = rules.upvote(state, BEN, question, on=True)
+    with refused(429, "question"):
+        rules.upvote(state, CAT, question, on=True)
+    assert rules.upvote(state, BEN, question, on=False).doc.questions[0].votes == 1

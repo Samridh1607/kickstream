@@ -11,8 +11,10 @@ const studio = (method: string, path: string, body?: unknown) => send<Audience>(
 
 // --- fans ----------------------------------------------------------------------------------------
 
+export const getAudience = () => send<Audience>("GET", "/api/audience");
 export const votePoll = (voterId: string, optionId: string) => fan(voterId, "/poll/vote", { option_id: optionId });
-export const upvoteQuestion = (voterId: string, questionId: string) => fan(voterId, `/questions/${id(questionId)}/vote`, {});
+/** `on` says which way the vote goes, so a request sent twice cannot undo itself. */
+export const upvoteQuestion = (voterId: string, questionId: string, on: boolean) => fan(voterId, `/questions/${id(questionId)}/vote`, { on });
 export const askQuestion = (voterId: string, text: string, nickname: string) =>
   send<{ id: string; audience: Audience }>("POST", "/api/audience/questions", { text, nickname }, asFan(voterId));
 

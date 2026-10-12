@@ -1,5 +1,5 @@
 const ID_KEY = "kickstream.voter";
-const CHOICES_KEY = "kickstream.choices";
+export const CHOICES_KEY = "kickstream.choices";
 const VALID_ID = /^[A-Za-z0-9-]{16,64}$/;
 const REMEMBERED_POLLS = 40;
 
@@ -72,11 +72,9 @@ export function withPollVote(choices: Choices, pollId: string, optionId: string)
   return { ...choices, polls: Object.fromEntries(kept) };
 }
 
-export function withUpvoteToggled(choices: Choices, questionId: string): Choices {
-  const upvoted = choices.upvoted.includes(questionId)
-    ? choices.upvoted.filter((id) => id !== questionId)
-    : [...choices.upvoted, questionId];
-  return { ...choices, upvoted };
+export function withUpvote(choices: Choices, questionId: string, on: boolean): Choices {
+  const others = choices.upvoted.filter((id) => id !== questionId);
+  return { ...choices, upvoted: on ? [...others, questionId] : others };
 }
 
 export function withAsked(choices: Choices, questionId: string): Choices {

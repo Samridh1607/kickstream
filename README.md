@@ -53,6 +53,8 @@ Scenes, settings and uploaded images are kept in `.data/` (set `KICKSTREAM_DATA_
 
 Kickstream does not send video anywhere itself yet. To go live, capture `/program` with a streaming tool.
 
+Pages follow live data over WebSockets, which the pipeline accepts only from pages on the host it was reached at. Behind a reverse proxy that rewrites the `Host` header, list the public hostnames in `KICKSTREAM_ALLOWED_HOSTS` (comma-separated, for example `kick.example,www.kick.example`).
+
 ## Audience
 
 Viewers take part at `/join`, a phone-friendly page you share in your stream description. The same panel is the **Join in** tab on the dashboard.

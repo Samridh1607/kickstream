@@ -1,6 +1,6 @@
 import { audience } from "../test/fixtures";
 import { StudioRequestError } from "../studio/api";
-import { airDraft, askQuestion, createPoll, presetPoll, saveDraft, setPollOnAir, upvoteQuestion, votePoll } from "./api";
+import { airDraft, askQuestion, createPoll, getAudience, presetPoll, saveDraft, setPollOnAir, upvoteQuestion, votePoll } from "./api";
 
 function serve(statusCode: number, body: unknown, headers: Record<string, string> = {}) {
   const mock = vi.fn(async () => new Response(JSON.stringify(body), { status: statusCode, headers }));
@@ -15,8 +15,10 @@ test("fan calls carry the browser's id", async () => {
   const last = serve(200, audience({ revision: 5 }));
   expect((await votePoll("voter-ann-0000001", "o2")).revision).toBe(5);
   expect(last()).toEqual({ url: "/api/audience/poll/vote", method: "POST", voter: "voter-ann-0000001", body: { option_id: "o2" } });
-  await upvoteQuestion("voter-ann-0000001", "q 1");
-  expect(last()).toMatchObject({ url: "/api/audience/questions/q%201/vote", voter: "voter-ann-0000001" });
+  await upvoteQuestion("voter-ann-0000001", "q 1", true);
+  expect(last()).toMatchObject({ url: "/api/audience/questions/q%201/vote", voter: "voter-ann-0000001", body: { on: true } });
+  await upvoteQuestion("voter-ann-0000001", "q 1", false);
+  expect(last().body).toEqual({ on: false });
 });
 
 test("asking returns the new question's id with the audience", async () => {
@@ -47,4 +49,10 @@ test("a refusal carries the server's message", async () => {
   const error = await askQuestion("voter-ann-0000001", "Again?", "").catch((caught) => caught);
   expect(error).toBeInstanceOf(StudioRequestError);
   expect([error.status, error.field, error.message]).toEqual([429, "text", "You can ask again in 18 seconds."]);
+});
+
+test("the fan view can be read without a live connection", async () => {
+  const last = serve(200, audience({ revision: 9 }));
+  expect((await getAudience()).revision).toBe(9);
+  expect(last()).toMatchObject({ url: "/api/audience", method: "GET", voter: null });
 });

@@ -155,6 +155,8 @@ class Settings:
     llm_min_gap_s: float = 2.0  # between non-priority model calls
     cache_dir: Path = Path(".cache/narration")
     data_dir: Path = Path(".data")  # the studio document and uploaded images
+    # Public hostnames pages are served from, when a reverse proxy rewrites Host. See domain/sockets.py.
+    allowed_hosts: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ) -> "Settings":
@@ -165,6 +167,11 @@ class Settings:
             llm_max_calls=int(env.get("KICKSTREAM_LLM_MAX_CALLS", "60")),
             cache_dir=Path(env.get("KICKSTREAM_CACHE_DIR", ".cache/narration")),
             data_dir=Path(env.get("KICKSTREAM_DATA_DIR", ".data")),
+            allowed_hosts=tuple(
+                host.strip().lower()
+                for host in env.get("KICKSTREAM_ALLOWED_HOSTS", "").split(",")
+                if host.strip()
+            ),
         )
 
     @property
@@ -258,8 +265,9 @@ def create_app(
 ) -> FastAPI:
     # Match IDs are unique to this process, so an ID a browser kept from before a restart is
     # reported as unknown instead of silently naming a different match.
+    settings = settings or Settings.from_env()
     pipeline = build_pipeline(
-        settings or Settings.from_env(),
+        settings,
         clock_factory=clock_factory,
         writer=writer,
         match_prefix=match_prefix or f"m{secrets.token_hex(3)}",
@@ -293,8 +301,17 @@ def create_app(
             start_match=pipeline.controller.start,
             current_match=lambda: pipeline.controller.current,
             match_exists=pipeline.controller.exists,
+            socket_hosts=settings.allowed_hosts,
         )
     )
-    app.include_router(build_studio_router(service=pipeline.studio, store=pipeline.store))
-    app.include_router(build_audience_router(service=pipeline.audience, teams=pipeline.tracker.teams))
+    app.include_router(
+        build_studio_router(
+            service=pipeline.studio, store=pipeline.store, socket_hosts=settings.allowed_hosts
+        )
+    )
+    app.include_router(
+        build_audience_router(
+            service=pipeline.audience, teams=pipeline.tracker.teams, socket_hosts=settings.allowed_hosts
+        )
+    )
     return app

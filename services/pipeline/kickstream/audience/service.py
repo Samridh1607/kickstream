@@ -109,8 +109,8 @@ class AudienceService:
     async def vote(self, voter: str, option_id: str) -> None:
         await self.apply(lambda state: rules.vote(state, voter, option_id), structural=False)
 
-    async def upvote(self, voter: str, question_id: str) -> None:
-        await self.apply(lambda state: rules.upvote(state, voter, question_id), structural=False)
+    async def upvote(self, voter: str, question_id: str, on: bool | None = None) -> None:
+        await self.apply(lambda state: rules.upvote(state, voter, question_id, on), structural=False)
 
     async def ask(self, voter: str, text: str, nickname: str) -> str:
         """Add a fan's question and return its ID."""

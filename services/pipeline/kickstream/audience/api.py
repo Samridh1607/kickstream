@@ -1,16 +1,18 @@
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Header, WebSocket
+from fastapi import APIRouter, Header, Request, WebSocket
 from pydantic import BaseModel, ConfigDict, Field
 from sse_starlette.sse import EventSourceResponse
 
 from kickstream.audience import rules
+from kickstream.audience.limits import RateWindow
 from kickstream.audience.rules import AudienceError
 from kickstream.audience.service import AudienceService
 from kickstream.contracts import Audience
 from kickstream.domain.sockets import pump
 
+ASKS_PER_ADDRESS = 5  # questions one network address may add per ask interval
 _TEXT = 2000  # generous bound on request text; the rules give each field its real limit and message
 
 
@@ -34,6 +36,10 @@ class NewPoll(_Body):
     preset: Literal["winner", "next_goal"] | None = None
 
 
+class Upvote(_Body):
+    on: bool | None = None
+
+
 class OnAir(_Body):
     on: bool
 
@@ -50,9 +56,13 @@ Voter = Annotated[str | None, Header(alias="X-Voter")]
 
 
 def build_audience_router(
-    *, service: AudienceService, teams: Callable[[], tuple[str, str] | None]
+    *,
+    service: AudienceService,
+    teams: Callable[[], tuple[str, str] | None],
+    socket_hosts: Collection[str] = (),
 ) -> APIRouter:
     router = APIRouter()
+    asks = RateWindow(ASKS_PER_ADDRESS, rules.ASK_INTERVAL_S)
 
     def stream(*, studio: bool) -> EventSourceResponse:
         async def views():
@@ -66,7 +76,7 @@ def build_audience_router(
             async for view in service.changes(studio=studio):
                 yield view.model_dump_json()
 
-        await pump(websocket, views())
+        await pump(websocket, views(), socket_hosts)
 
     def fan() -> Audience:
         return service.view(studio=False)
@@ -100,13 +110,24 @@ def build_audience_router(
         return fan()
 
     @router.post("/api/audience/questions", status_code=201)
-    async def post_question(body: NewQuestion, voter: Voter = None) -> dict:
-        question_id = await service.ask(rules.check_voter(voter), body.text, body.nickname)
+    async def post_question(request: Request, body: NewQuestion, voter: Voter = None) -> dict:
+        voter_id = rules.check_voter(voter)
+        # A second limit by network address: a browser's ID is its own to choose, an address is not.
+        address = request.client.host if request.client else "unknown"
+        wait = asks.take(address, service.now())
+        if wait is not None:
+            message = f"Too many questions from this network. Try again in {wait} seconds."
+            raise AudienceError(429, "text", message, retry_after=wait)
+        try:
+            question_id = await service.ask(voter_id, body.text, body.nickname)
+        except AudienceError:
+            asks.give_back(address)
+            raise
         return {"id": question_id, "audience": fan().model_dump(mode="json")}
 
     @router.post("/api/audience/questions/{question_id}/vote")
-    async def post_upvote(question_id: str, voter: Voter = None) -> Audience:
-        await service.upvote(rules.check_voter(voter), question_id)
+    async def post_upvote(question_id: str, body: Upvote | None = None, voter: Voter = None) -> Audience:
+        await service.upvote(rules.check_voter(voter), question_id, body.on if body else None)
         return fan()
 
     # --- studio routes ------------------------------------------------------------------------

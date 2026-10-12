@@ -1,4 +1,4 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Collection
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request, Response, WebSocket
@@ -89,7 +89,9 @@ def replay_events(store: MatchStore, match_id: str, moment: KeyMoment) -> list[M
     ]
 
 
-def build_studio_router(*, service: StudioService, store: MatchStore) -> APIRouter:
+def build_studio_router(
+    *, service: StudioService, store: MatchStore, socket_hosts: Collection[str] = ()
+) -> APIRouter:
     router = APIRouter()
 
     @router.get("/api/studio")
@@ -112,7 +114,7 @@ def build_studio_router(*, service: StudioService, store: MatchStore) -> APIRout
             async for doc in service.changes():
                 yield doc.model_dump_json()
 
-        await pump(websocket, documents())
+        await pump(websocket, documents(), socket_hosts)
 
     @router.post("/api/studio/scenes")
     async def post_scene(body: NewScene) -> Studio:

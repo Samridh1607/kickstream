@@ -200,14 +200,22 @@ function PollView({ data }: { data: ProgramData }) {
   );
 }
 
+/** Type sizes for a Q&A by how much text it carries, so the longest allowed still fits the default box. */
+function qaSizes(characters: number): { name: number; question: number; answer: number } {
+  if (characters <= 160) return { name: 26, question: 36, answer: 32 };
+  if (characters <= 360) return { name: 24, question: 32, answer: 28 };
+  return { name: 22, question: 30, answer: 26 };
+}
+
 function QaView({ data }: { data: ProgramData }) {
   const qa = data.audience?.qa;
   if (!qa) return null;
+  const sizes = qaSizes(qa.question.length + qa.answer.length);
   return (
     <div data-testid="program-qa" style={{ ...PANEL, display: "flex", flexDirection: "column", gap: 12, backgroundColor: "#101828" }}>
-      <span style={{ fontSize: 26, opacity: 0.8 }}>{`${qa.nickname} ${t(data.language, "asks")}`}</span>
-      <span style={{ fontSize: 36, fontWeight: 700 }}>{qa.question}</span>
-      <span>{qa.answer}</span>
+      <span style={{ fontSize: sizes.name, opacity: 0.8 }}>{`${qa.nickname} ${t(data.language, "asks")}`}</span>
+      <span style={{ fontSize: sizes.question, fontWeight: 700, overflowWrap: "anywhere" }}>{qa.question}</span>
+      <span style={{ fontSize: sizes.answer, overflowWrap: "anywhere" }}>{qa.answer}</span>
     </div>
   );
 }

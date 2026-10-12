@@ -9,7 +9,7 @@ for tools that want them.
 
 import asyncio
 import contextlib
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Collection
 from urllib.parse import urlsplit
 
 from starlette.websockets import WebSocket, WebSocketDisconnect
@@ -18,18 +18,34 @@ REFUSED = 1008  # policy violation: the page asking is not one of ours
 NOT_FOUND = 4404  # the thing to follow does not exist; the page should not retry
 
 
-def same_host(websocket: WebSocket) -> bool:
-    """Whether the page that opened the socket was served from this host.
+def same_host(websocket: WebSocket, allowed_hosts: Collection[str] = ()) -> bool:
+    """Whether the page that opened the socket is one of ours.
 
     The browser's same-origin rule does not cover WebSockets, so any site could otherwise
-    read these streams from a streamer's browser. Ports are ignored: the dev server and the
-    pipeline share a host but not a port. A client that sends no Origin is not a browser page.
+    read these streams from a streamer's browser. A page is ours when its origin's hostname is
+    the host this request was sent to, or one of `allowed_hosts`. Ports are ignored: the dev
+    server and the pipeline share a host but not a port. `allowed_hosts` is for a reverse proxy
+    that rewrites Host, where the page's origin never matches it. A client that sends no Origin
+    is not a browser page.
     """
     origin = websocket.headers.get("origin")
     if origin is None:
         return True
-    host = websocket.headers.get("host", "")
-    return urlsplit(origin).hostname == urlsplit(f"//{host}").hostname
+    asked = urlsplit(origin).hostname
+    if asked is None:
+        return False
+    served = urlsplit(f"//{websocket.headers.get('host', '')}").hostname
+    return asked == served or asked in allowed_hosts
+
+
+async def refuse(websocket: WebSocket, code: int) -> None:
+    """Tell the page why it is turned away.
+
+    The handshake is completed first. Closing before that reaches a browser as a bare failed
+    connection with no code, and the page could not tell "never" from "try again".
+    """
+    await websocket.accept()
+    await websocket.close(code=code)
 
 
 async def _send_all(websocket: WebSocket, messages: AsyncIterator[str]) -> None:
@@ -40,10 +56,12 @@ async def _send_all(websocket: WebSocket, messages: AsyncIterator[str]) -> None:
     await websocket.close()
 
 
-async def pump(websocket: WebSocket, messages: AsyncIterator[str]) -> None:
+async def pump(
+    websocket: WebSocket, messages: AsyncIterator[str], allowed_hosts: Collection[str] = ()
+) -> None:
     """Accept the socket and send each message until the stream ends or the page goes away."""
-    if not same_host(websocket):
-        await websocket.close(code=REFUSED)
+    if not same_host(websocket, allowed_hosts):
+        await refuse(websocket, REFUSED)
         return
     await websocket.accept()
     sender = asyncio.create_task(_send_all(websocket, messages))
