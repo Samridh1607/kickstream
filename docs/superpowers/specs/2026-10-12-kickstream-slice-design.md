@@ -12,7 +12,7 @@ Cycle 1 delivers one match running through all five stages on a developer machin
 ## Constraints
 
 - No Azure subscription is available yet. Everything runs locally, and each Azure service sits behind a port so the cloud adapter can be added without touching stage code.
-- The language model is GitHub Models, reached through its OpenAI-compatible endpoint. Its free tier has low rate limits, so the design bounds model calls per match and never depends on the model being reachable.
+- The language model is any OpenAI-compatible chat endpoint, set by three environment variables: `KICKSTREAM_LLM_BASE_URL`, `KICKSTREAM_LLM_MODEL` and `KICKSTREAM_LLM_API_KEY`. No provider is chosen yet. Until those are set, the system runs on scripted narratives. The design bounds model calls per match and never depends on the model being reachable. (GitHub Models, the original choice, was retired on 2026-07-30.)
 - Toolchain on the build machine: Node 24, Python 3.13. No .NET.
 - Clubs and players are fictional. No real club names, crests or player names are used.
 
@@ -42,7 +42,7 @@ A viewer opens the dashboard and starts a match. A seeded 90-minute match, compr
 7. The overlay tab shows broadcast-ready JSON beside its rendered graphic.
 8. The pipeline panel shows which stage and agent produced each item and the insights it cited.
 
-The same run completes with no GitHub token set, using scripted narratives.
+The same run completes with no model endpoint configured, using scripted narratives.
 
 ## Architecture
 
@@ -62,7 +62,7 @@ Cycle 1 runs one Python process. Each stage is a separate module that communicat
 | `MatchStore` | Append-only log of everything published for a match | in-memory | Fabric Eventhouse or Cosmos DB |
 | `Broadcaster` | Fan a match's stream out to connected viewers | in-process SSE | Azure Web PubSub |
 
-The model endpoint used by the agent adapter is configuration: base URL, model name and key. GitHub Models and Azure OpenAI differ only in those values.
+The model endpoint used by the agent adapter is configuration: base URL, model name and key. OpenAI, a local Ollama server and Azure OpenAI differ only in those values.
 
 ### Scale principle
 
@@ -220,7 +220,7 @@ Development is test-first.
 
 - **pytest:** simulator determinism, the analytics fold, each key-moment rule, overlay schema validity, the narration stage's budget, cache and fallback against a fake writer, the agent adapter against a fake model client, gateway variant selection, highlighting and replay.
 - **Vitest and React Testing Library:** the stream store and each component against fixture streams.
-- **Playwright:** one smoke test with no GitHub token. It starts the seeded match and asserts a goal narrative, a mode switch, a language switch and the full-time recap.
+- **Playwright:** one smoke test with no model endpoint configured. It starts the seeded match and asserts a goal narrative, a mode switch, a language switch and the full-time recap.
 - **Contract test:** generated Python and TypeScript types match the schemas.
 
 No test calls a live model.
