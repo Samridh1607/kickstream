@@ -29,6 +29,9 @@ It is the first of four studio sub-projects. The others are video output to YouT
 | Breaks | The match does not pause during a break |
 | Persistence | One JSON file behind a storage port |
 | Timers | Run on the server, so they fire with no control page open |
+| Languages | The control page is in English; everything on the program page follows the program language |
+| Start time | Entered as "start in N minutes" (1 to 1440) and converted to a time on the server's clock |
+| Reconnecting | The first document a page receives after reconnecting replaces what it holds, even with a lower revision, because the server may have restarted from a reset file |
 
 ## Definition of done
 

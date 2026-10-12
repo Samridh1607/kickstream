@@ -136,7 +136,7 @@ export function StudioPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions
           </section>
         </div>
         <div className={styles.card}>
-          <TabList selectedValue={tab} onTabSelect={(_, selection) => setTab(selection.value as TabName)}>
+          <TabList size="small" style={{ flexWrap: "wrap" }} selectedValue={tab} onTabSelect={(_, selection) => setTab(selection.value as TabName)}>
             {TABS.map((name) => (
               <Tab key={name} value={name}>{name}</Tab>
             ))}

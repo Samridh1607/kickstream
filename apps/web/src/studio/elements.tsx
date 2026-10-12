@@ -144,8 +144,10 @@ function ReplayView({ replay, data }: { replay: Replay; data: ProgramData }) {
 
   const progress = Math.max(0, Math.min(1, (data.now - replay.started_at) / replay.duration_s));
   const revealed = events.slice(0, Math.max(1, Math.ceil(events.length * progress)));
+  // Opaque: a replay often sits on top of other elements, which must not show through it.
   return (
-    <div data-testid="program-replay" style={{ ...PANEL, display: "flex", flexDirection: "column", gap: 12, border: "6px solid #FFB900" }}>
+    <div data-testid="program-replay"
+      style={{ ...PANEL, display: "flex", flexDirection: "column", gap: 12, border: "6px solid #FFB900", backgroundColor: "#101828" }}>
       <span style={{ alignSelf: "flex-start", padding: "4px 16px", borderRadius: 8, color: "#1B1B1B", backgroundColor: "#FFB900", fontWeight: 700 }}>
         {t(data.language, "replay")} · {replay.minute}'
       </span>

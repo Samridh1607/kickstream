@@ -10,3 +10,4 @@ playwright-report/
 .env
 .superpowers/
 .data/
+.data-e2e/

@@ -35,6 +35,24 @@ With no configuration, narratives come from templates and are marked **Scripted*
 
 Four Microsoft Agent Framework agents do the writing: a Commentator and a Tactical Analyst work on each key moment concurrently, a Recap Writer covers half-time and full-time, and a Localizer translates into Spanish and Hindi. Each item is written once per mode and language and sent to every viewer on that variant, so model cost does not grow with the audience. Output is cached, so replaying the same match costs no model calls. If the model is slow, rate-limited or returns something unusable, that item falls back to a template.
 
+## Studio
+
+A streamer composes the picture at `/studio` and captures `/program`.
+
+| Page | Use |
+|---|---|
+| `http://127.0.0.1:5173/studio` | Arrange scenes on a 16:9 canvas, switch them, and control banners, the ticker, replays and countdowns |
+| `http://127.0.0.1:5173/program` | The scene that is on air, with no controls. Point a capture tool such as an OBS browser source at this page, at 1920 × 1080 |
+
+- **Scenes** are saved canvases. Five templates are built in: Starting soon, Live match, Analyst desk, Break and Full-time. Drag and resize elements, or select one and use the arrow keys (Shift with the arrow keys resizes).
+- **Banners** appear by themselves for goals and red cards. Any narration line can be sent to the banner from the Highlights tab, and the Banner tab takes your own text.
+- **Replays** animate the 20 seconds of play before a key moment on the pitch.
+- **Countdowns**: a start countdown starts the match and cuts to the Live scene at zero; a break cuts to the Break scene and returns to where you were.
+
+Scenes, settings and uploaded images are kept in `.data/` (set `KICKSTREAM_DATA_DIR` to move it). The program page shows the match in the mode and language chosen in the studio's Settings tab.
+
+Kickstream does not send video anywhere itself yet. To go live, capture `/program` with a streaming tool.
+
 ## Layout
 
 | Path | Contents |
