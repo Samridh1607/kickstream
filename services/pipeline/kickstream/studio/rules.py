@@ -18,6 +18,7 @@ from kickstream.contracts import (
     StudioSettings,
     Ticker,
 )
+from kickstream.domain.errors import Refusal
 from kickstream.studio.templates import (
     BREAK,
     CANVAS_H,
@@ -42,14 +43,8 @@ HALF_TIME_BREAK_MINUTES = 2
 ELEMENT_TYPES = frozenset(typing.get_args(SceneElement.model_fields["type"].annotation))
 
 
-class StudioError(Exception):
-    """A change the studio refuses. `status` is the HTTP status it maps to."""
-
-    def __init__(self, status: int, field: str, message: str) -> None:
-        super().__init__(message)
-        self.status = status
-        self.field = field
-        self.message = message
+class StudioError(Refusal):
+    """A change the studio refuses."""
 
 
 def new_id() -> str:

@@ -24,6 +24,7 @@ from kickstream.adapters.sse_broadcaster import InProcessBroadcaster
 from kickstream.analytics.stage import AnalyticsStage
 from kickstream.control import MatchController
 from kickstream.domain.demo import DEMO_SEED
+from kickstream.domain.errors import Refusal
 from kickstream.domain.teams import AWAY, HOME
 from kickstream.gateway.api import build_router
 from kickstream.gateway.recorder import Recorder
@@ -35,7 +36,7 @@ from kickstream.overlay.stage import OverlayStage
 from kickstream.ports.clock import Clock
 from kickstream.ports.writer import NarrativeWriter
 from kickstream.studio.api import build_studio_router, find_moment
-from kickstream.studio.rules import StudioError, sanitize_raw
+from kickstream.studio.rules import sanitize_raw
 from kickstream.studio.service import StudioService
 from kickstream.studio.stage import StudioStage
 
@@ -190,11 +191,12 @@ def create_app(
     app.state.pipeline = pipeline
     app.add_middleware(SameOriginWrites)
 
-    @app.exception_handler(StudioError)
-    async def refused(_: Request, exc: StudioError) -> JSONResponse:
+    @app.exception_handler(Refusal)
+    async def refused(_: Request, exc: Refusal) -> JSONResponse:
         # The same shape FastAPI uses for its own validation errors, so clients read one format.
-        detail = [{"loc": ["body", exc.field], "msg": exc.message, "type": "studio"}]
-        return JSONResponse(status_code=exc.status, content={"detail": detail})
+        detail = [{"loc": ["body", exc.field], "msg": exc.message, "type": "refusal"}]
+        headers = {"Retry-After": str(exc.retry_after)} if exc.retry_after is not None else None
+        return JSONResponse(status_code=exc.status, content={"detail": detail}, headers=headers)
 
     app.include_router(
         build_router(

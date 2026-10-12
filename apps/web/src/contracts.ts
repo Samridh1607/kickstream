@@ -284,7 +284,9 @@ export interface SceneElement {
     | "replay"
     | "countdown"
     | "text"
-    | "image";
+    | "image"
+    | "poll"
+    | "qa";
   x: number;
   y: number;
   width: number;
@@ -392,4 +394,81 @@ export interface Studio {
   ticker: Ticker;
   countdown?: Countdown | null;
   replay?: Replay | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "PollOption".
+ */
+export interface PollOption {
+  id: string;
+  text: string;
+  votes: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Poll".
+ */
+export interface Poll {
+  id: string;
+  question: string;
+  /**
+   * @minItems 2
+   * @maxItems 6
+   */
+  options: [PollOption, PollOption, ...PollOption[]];
+  state: "open" | "closed";
+  closes_at?: number | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Question".
+ */
+export interface Question {
+  id: string;
+  text: string;
+  nickname: string;
+  votes: number;
+  state: "open" | "hidden" | "answered";
+  answer?: string | null;
+  asked_at: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Draft".
+ */
+export interface Draft {
+  question_id: string;
+  text: string;
+  state: "writing" | "ready" | "unavailable";
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "QaOnAir".
+ */
+export interface QaOnAir {
+  question_id: string;
+  question: string;
+  nickname: string;
+  answer: string;
+  ends_at: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Audience".
+ */
+export interface Audience {
+  revision: number;
+  server_time: number;
+  poll?: Poll | null;
+  poll_on_air: boolean;
+  /**
+   * @maxItems 20
+   */
+  history: Poll[];
+  /**
+   * @maxItems 250
+   */
+  questions: Question[];
+  draft?: Draft | null;
+  qa?: QaOnAir | null;
 }

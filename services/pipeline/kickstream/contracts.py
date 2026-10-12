@@ -255,7 +255,7 @@ class SceneElement(BaseModel):
         extra='forbid',
     )
     id: constr(min_length=1, max_length=64)
-    type: Literal['scoreboard', 'pitch', 'narration', 'stats', 'banner', 'ticker', 'timeline', 'recap', 'replay', 'countdown', 'text', 'image']
+    type: Literal['scoreboard', 'pitch', 'narration', 'stats', 'banner', 'ticker', 'timeline', 'recap', 'replay', 'countdown', 'text', 'image', 'poll', 'qa']
     x: int
     y: int
     width: int
@@ -345,3 +345,70 @@ class Studio(BaseModel):
     ticker: Ticker
     countdown: Countdown | None = None
     replay: Replay | None = None
+
+
+class PollOption(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: constr(min_length=1, max_length=64)
+    text: constr(min_length=1, max_length=60)
+    votes: conint(ge=0)
+
+
+class Poll(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: constr(min_length=1, max_length=64)
+    question: constr(min_length=1, max_length=140)
+    options: list[PollOption] = Field(..., max_length=6, min_length=2)
+    state: Literal['open', 'closed']
+    closes_at: float | None = None
+
+
+class Question(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: constr(min_length=1, max_length=64)
+    text: constr(min_length=1, max_length=200)
+    nickname: constr(min_length=1, max_length=24)
+    votes: conint(ge=0)
+    state: Literal['open', 'hidden', 'answered']
+    answer: str | None = None
+    asked_at: float
+
+
+class Draft(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    question_id: str
+    text: constr(max_length=400)
+    state: Literal['writing', 'ready', 'unavailable']
+
+
+class QaOnAir(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    question_id: str
+    question: str
+    nickname: str
+    answer: str
+    ends_at: float
+
+
+class Audience(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    revision: int
+    server_time: float
+    poll: Poll | None = None
+    poll_on_air: bool
+    history: list[Poll] = Field(..., max_length=20)
+    questions: list[Question] = Field(..., max_length=250)
+    draft: Draft | None = None
+    qa: QaOnAir | None = None
