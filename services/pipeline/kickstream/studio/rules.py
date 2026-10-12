@@ -19,6 +19,8 @@ MIN_SIZE = 40
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
 MAX_START_AHEAD_S = 24 * 3600
 REPLAY_SECONDS = 8.0
+REPLAY_WINDOW_SECONDS = 20  # match time shown by a replay, ending at the moment
+DEFAULT_BANNER_SECONDS = 8
 HALF_TIME_BREAK_MINUTES = 2
 ELEMENT_TYPES = frozenset(typing.get_args(SceneElement.model_fields["type"].annotation))
 
