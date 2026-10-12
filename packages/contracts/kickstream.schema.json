@@ -246,6 +246,103 @@
         "highlighted": { "type": "boolean" },
         "payload": { "type": "object" }
       }
+    },
+    "SceneElement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "type", "x", "y", "width", "height", "layer", "visible", "props"],
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "enum": ["scoreboard", "pitch", "narration", "stats", "banner", "ticker", "timeline", "recap", "replay", "countdown", "text", "image"] },
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "width": { "type": "integer" },
+        "height": { "type": "integer" },
+        "layer": { "type": "integer" },
+        "visible": { "type": "boolean" },
+        "props": { "type": "object" }
+      }
+    },
+    "Scene": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "elements"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "template": { "type": ["string", "null"], "default": null },
+        "elements": { "type": "array", "items": { "$ref": "#/$defs/SceneElement" }, "maxItems": 40 }
+      }
+    },
+    "StudioSettings": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mode", "language", "auto_banner", "auto_start", "auto_half_time_break"],
+      "properties": {
+        "mode": { "enum": ["fan", "analyst"] },
+        "language": { "enum": ["en", "es", "hi"] },
+        "auto_banner": { "type": "boolean" },
+        "auto_start": { "type": "boolean" },
+        "auto_half_time_break": { "type": "boolean" }
+      }
+    },
+    "Banner": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "text", "kind", "duration_s"],
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "kind": { "enum": ["goal", "card", "info", "custom"] },
+        "duration_s": { "type": "integer", "minimum": 3, "maximum": 30 },
+        "ends_at": { "type": ["number", "null"], "default": null },
+        "source_id": { "type": ["string", "null"], "default": null }
+      }
+    },
+    "Ticker": {
+      "type": "object", "additionalProperties": false,
+      "required": ["enabled", "speed", "messages", "show_score", "show_stats"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "speed": { "type": "integer", "minimum": 40, "maximum": 400 },
+        "messages": { "type": "array", "items": { "type": "string", "maxLength": 120 }, "maxItems": 20 },
+        "show_score": { "type": "boolean" },
+        "show_stats": { "type": "boolean" }
+      }
+    },
+    "Countdown": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "ends_at", "label"],
+      "properties": {
+        "kind": { "enum": ["start", "break"] },
+        "ends_at": { "type": "number" },
+        "label": { "type": "string", "maxLength": 60 }
+      }
+    },
+    "Replay": {
+      "type": "object", "additionalProperties": false,
+      "required": ["match_id", "moment_id", "minute", "started_at", "duration_s"],
+      "properties": {
+        "match_id": { "type": "string" },
+        "moment_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "started_at": { "type": "number" },
+        "duration_s": { "type": "number" }
+      }
+    },
+    "Studio": {
+      "type": "object", "additionalProperties": false,
+      "required": ["revision", "server_time", "scenes", "active_scene_id", "templates", "settings", "banner_queue", "ticker"],
+      "properties": {
+        "revision": { "type": "integer" },
+        "server_time": { "type": "number" },
+        "scenes": { "type": "array", "items": { "$ref": "#/$defs/Scene" }, "minItems": 1, "maxItems": 20 },
+        "active_scene_id": { "type": "string" },
+        "previous_scene_id": { "type": ["string", "null"], "default": null },
+        "templates": { "type": "array", "items": { "$ref": "#/$defs/Scene" }, "maxItems": 20 },
+        "settings": { "$ref": "#/$defs/StudioSettings" },
+        "banner": { "anyOf": [{ "$ref": "#/$defs/Banner" }, { "type": "null" }], "default": null },
+        "banner_queue": { "type": "array", "items": { "$ref": "#/$defs/Banner" }, "maxItems": 10 },
+        "ticker": { "$ref": "#/$defs/Ticker" },
+        "countdown": { "anyOf": [{ "$ref": "#/$defs/Countdown" }, { "type": "null" }], "default": null },
+        "replay": { "anyOf": [{ "$ref": "#/$defs/Replay" }, { "type": "null" }], "default": null }
+      }
     }
   }
 }

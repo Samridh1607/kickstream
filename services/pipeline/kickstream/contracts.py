@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel, constr
+from pydantic import BaseModel, ConfigDict, Field, RootModel, conint, constr
 
 
 class KickstreamContracts(RootModel[Any]):
@@ -248,3 +248,104 @@ class Envelope(BaseModel):
     minute: int
     highlighted: bool
     payload: dict[str, Any]
+
+
+class SceneElement(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    type: Literal['scoreboard', 'pitch', 'narration', 'stats', 'banner', 'ticker', 'timeline', 'recap', 'replay', 'countdown', 'text', 'image']
+    x: int
+    y: int
+    width: int
+    height: int
+    layer: int
+    visible: bool
+    props: dict[str, Any]
+
+
+class Scene(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    name: constr(min_length=1, max_length=60)
+    template: str | None = None
+    elements: list[SceneElement] = Field(..., max_length=40)
+
+
+class StudioSettings(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    mode: Literal['fan', 'analyst']
+    language: Literal['en', 'es', 'hi']
+    auto_banner: bool
+    auto_start: bool
+    auto_half_time_break: bool
+
+
+class Banner(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    text: constr(min_length=1, max_length=200)
+    kind: Literal['goal', 'card', 'info', 'custom']
+    duration_s: conint(ge=3, le=30)
+    ends_at: float | None = None
+    source_id: str | None = None
+
+
+class Message(RootModel[constr(max_length=120)]):
+    root: constr(max_length=120)
+
+
+class Ticker(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    enabled: bool
+    speed: conint(ge=40, le=400)
+    messages: list[Message] = Field(..., max_length=20)
+    show_score: bool
+    show_stats: bool
+
+
+class Countdown(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['start', 'break']
+    ends_at: float
+    label: constr(max_length=60)
+
+
+class Replay(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    match_id: str
+    moment_id: str
+    minute: int
+    started_at: float
+    duration_s: float
+
+
+class Studio(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    revision: int
+    server_time: float
+    scenes: list[Scene] = Field(..., max_length=20, min_length=1)
+    active_scene_id: str
+    previous_scene_id: str | None = None
+    templates: list[Scene] = Field(..., max_length=20)
+    settings: StudioSettings
+    banner: Banner | None = None
+    banner_queue: list[Banner] = Field(..., max_length=10)
+    ticker: Ticker
+    countdown: Countdown | None = None
+    replay: Replay | None = None

@@ -266,3 +266,470 @@ export interface Envelope {
     [k: string]: unknown;
   };
 }
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "SceneElement".
+ */
+export interface SceneElement {
+  id: string;
+  type:
+    | "scoreboard"
+    | "pitch"
+    | "narration"
+    | "stats"
+    | "banner"
+    | "ticker"
+    | "timeline"
+    | "recap"
+    | "replay"
+    | "countdown"
+    | "text"
+    | "image";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  layer: number;
+  visible: boolean;
+  props: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Scene".
+ */
+export interface Scene {
+  id: string;
+  name: string;
+  template?: string | null;
+  /**
+   * @maxItems 40
+   */
+  elements: SceneElement[];
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "StudioSettings".
+ */
+export interface StudioSettings {
+  mode: "fan" | "analyst";
+  language: "en" | "es" | "hi";
+  auto_banner: boolean;
+  auto_start: boolean;
+  auto_half_time_break: boolean;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Banner".
+ */
+export interface Banner {
+  id: string;
+  text: string;
+  kind: "goal" | "card" | "info" | "custom";
+  duration_s: number;
+  ends_at?: number | null;
+  source_id?: string | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Ticker".
+ */
+export interface Ticker {
+  enabled: boolean;
+  speed: number;
+  /**
+   * @maxItems 20
+   */
+  messages:
+    | []
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string
+      ];
+  show_score: boolean;
+  show_stats: boolean;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Countdown".
+ */
+export interface Countdown {
+  kind: "start" | "break";
+  ends_at: number;
+  label: string;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Replay".
+ */
+export interface Replay {
+  match_id: string;
+  moment_id: string;
+  minute: number;
+  started_at: number;
+  duration_s: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Studio".
+ */
+export interface Studio {
+  revision: number;
+  server_time: number;
+  /**
+   * @minItems 1
+   * @maxItems 20
+   */
+  scenes:
+    | [Scene]
+    | [Scene, Scene]
+    | [Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene
+      ]
+    | [
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene
+      ]
+    | [
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene
+      ]
+    | [
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene
+      ];
+  active_scene_id: string;
+  previous_scene_id?: string | null;
+  /**
+   * @maxItems 20
+   */
+  templates:
+    | []
+    | [Scene]
+    | [Scene, Scene]
+    | [Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
+    | [
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene
+      ]
+    | [
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene
+      ]
+    | [
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene
+      ]
+    | [
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene,
+        Scene
+      ];
+  settings: StudioSettings;
+  banner?: Banner | null;
+  /**
+   * @maxItems 10
+   */
+  banner_queue:
+    | []
+    | [Banner]
+    | [Banner, Banner]
+    | [Banner, Banner, Banner]
+    | [Banner, Banner, Banner, Banner]
+    | [Banner, Banner, Banner, Banner, Banner]
+    | [Banner, Banner, Banner, Banner, Banner, Banner]
+    | [Banner, Banner, Banner, Banner, Banner, Banner, Banner]
+    | [Banner, Banner, Banner, Banner, Banner, Banner, Banner, Banner]
+    | [Banner, Banner, Banner, Banner, Banner, Banner, Banner, Banner, Banner]
+    | [Banner, Banner, Banner, Banner, Banner, Banner, Banner, Banner, Banner, Banner];
+  ticker: Ticker;
+  countdown?: Countdown | null;
+  replay?: Replay | null;
+}
