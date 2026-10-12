@@ -247,3 +247,68 @@ test("a document pushed by another control page replaces what is shown", async (
   act(() => stream("/api/studio/stream").emitRaw(JSON.stringify(renamed)));
   expect(screen.getByRole("button", { name: "Edit Half-time show" })).toBeTruthy();
 });
+
+test("the editor stays on the scene being edited when the scene on air changes", async () => {
+  await opened();
+  const editor = within(screen.getByRole("region", { name: "Editor" }));
+  expect(editor.getByRole("button", { name: "scoreboard element" })).toBeTruthy();
+  // A countdown ends, a break ends, or another control page goes live with a different scene.
+  act(() => stream("/api/studio/stream").emitRaw(JSON.stringify(studio({ revision: 7, active_scene_id: "s2" }))));
+  expect(screen.getByText("On air: Break")).toBeTruthy();
+  expect(editor.getByRole("button", { name: "scoreboard element" })).toBeTruthy();
+  expect(editor.queryByRole("button", { name: "countdown element" })).toBeNull();
+  expect(screen.getByText("Editing: Live match")).toBeTruthy();
+});
+
+test("a selection does not carry over to an element with the same id in another scene", async () => {
+  const doc = studio();
+  doc.scenes[1] = { ...doc.scenes[1], elements: [{ ...doc.scenes[1].elements[0], id: "score" }] };
+  const server = await opened(doc);
+  const editor = within(screen.getByRole("region", { name: "Editor" }));
+  const handle = editor.getByRole("button", { name: "scoreboard element" });
+  fireEvent.pointerDown(handle, { clientX: 100, clientY: 100, pointerId: 1 });
+  fireEvent.pointerUp(handle, { clientX: 100, clientY: 100, pointerId: 1 });
+  expect(handle.getAttribute("aria-pressed")).toBe("true");
+
+  fireEvent.click(screen.getByRole("button", { name: "Edit Break" }));
+  const other = editor.getByRole("button", { name: "countdown element" });
+  expect(other.getAttribute("aria-pressed")).toBe("false");
+  expect(editor.queryByRole("button", { name: "Resize countdown element" })).toBeNull();
+  expect(server.calls).toHaveLength(0);
+});
+
+test("if the scene being edited is deleted elsewhere, the editor moves to the scene on air with nothing selected", async () => {
+  await opened();
+  fireEvent.click(screen.getByRole("button", { name: "Edit Break" }));
+  const onlyLive = studio({ revision: 7 });
+  onlyLive.scenes = [onlyLive.scenes[0]];
+  act(() => stream("/api/studio/stream").emitRaw(JSON.stringify(onlyLive)));
+  expect(screen.getByText("Editing: Live match")).toBeTruthy();
+  const editor = within(screen.getByRole("region", { name: "Editor" }));
+  expect(editor.getByRole("button", { name: "scoreboard element" }).getAttribute("aria-pressed")).toBe("false");
+});
+
+test("a second edit made before the first is answered is not lost when the first answer arrives", async () => {
+  await opened();
+  // From here every studio request waits until the test releases it.
+  const waiting: (() => void)[] = [];
+  const doc = studio({ revision: 2 });
+  vi.stubGlobal("fetch", vi.fn((url: string) =>
+    new Promise<Response>((resolve) => {
+      const answer = () => resolve(new Response(JSON.stringify(url === "/api/matches/current" ? { match_id: "m-1" } : doc), { status: 200 }));
+      if (url.startsWith("/api/studio")) waiting.push(answer);
+      else answer();
+    })));
+  const panel = within(screen.getByRole("tabpanel"));
+  const shown = (name: string) => (panel.getByRole("checkbox", { name }) as HTMLInputElement).checked;
+
+  fireEvent.click(panel.getByRole("checkbox", { name: "Show banner" }));
+  fireEvent.click(panel.getByRole("checkbox", { name: "Show scoreboard" }));
+  expect([shown("Show banner"), shown("Show scoreboard")]).toEqual([false, false]);
+  await waitFor(() => expect(waiting).toHaveLength(2));
+
+  await act(async () => waiting[0]());
+  expect([shown("Show banner"), shown("Show scoreboard")]).toEqual([false, false]);
+  await act(async () => waiting[1]());
+  await waitFor(() => expect([shown("Show banner"), shown("Show scoreboard")]).toEqual([true, true]));
+});

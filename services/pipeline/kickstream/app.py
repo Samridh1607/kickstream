@@ -48,7 +48,7 @@ class SameOriginWrites:
 
     Kickstream has no sign-in, and browsers let any page send a simple POST to a local port.
     Without this, a page open in the streamer's browser could switch scenes or start matches.
-    Browsers always send Origin on such requests; tools like curl send none and are let through.
+    Tools like curl send neither header and are let through.
     """
 
     def __init__(self, app) -> None:
@@ -56,17 +56,24 @@ class SameOriginWrites:
 
     async def __call__(self, scope, receive, send) -> None:
         if scope["type"] == "http" and scope["method"] not in _READ_ONLY_METHODS:
-            headers = dict(scope["headers"])
-            origin = headers.get(b"origin")
-            if origin is not None and urlsplit(origin.decode("latin-1")).netloc != headers.get(
-                b"host", b""
-            ).decode("latin-1"):
-                refusal = JSONResponse(
-                    status_code=403, content={"detail": "Requests from other sites cannot change Kickstream."}
-                )
-                await refusal(scope, receive, send)
+            if self._from_another_site(dict(scope["headers"])):
+                detail = "Requests from other sites cannot change Kickstream."
+                await JSONResponse(status_code=403, content={"detail": detail})(scope, receive, send)
                 return
         await self._app(scope, receive, send)
+
+    @staticmethod
+    def _from_another_site(headers: dict[bytes, bytes]) -> bool:
+        # Browsers state the relationship themselves, and a page cannot forge this header.
+        # It also survives a proxy, where Host no longer matches the page's origin.
+        relation = headers.get(b"sec-fetch-site")
+        if relation is not None:
+            return relation == b"cross-site"
+        # Older browsers: fall back to comparing the page's origin with the host it called.
+        origin = headers.get(b"origin")
+        if origin is None:
+            return False
+        return urlsplit(origin.decode("latin-1")).netloc != headers.get(b"host", b"").decode("latin-1")
 
 
 @dataclass(frozen=True)

@@ -1,5 +1,5 @@
 import { Badge, Link, makeStyles, MessageBar, MessageBarBody, Tab, TabList, Text, tokens } from "@fluentui/react-components";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Scene, SceneElement, Studio, ViewerProfile } from "../contracts";
 import { useMatch } from "../stream/store";
 import { type CurrentMatchOptions, useCurrentMatch } from "../stream/useCurrentMatch";
@@ -50,6 +50,21 @@ export function StudioPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions
   const [pending, setPending] = useState<Scene | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
 
+  // The editor is pinned to one scene. It opens on the scene on air and then stays put when the
+  // program cuts elsewhere, so an edit never lands on a scene the streamer was not looking at.
+  const activeId = studio?.active_scene_id ?? null;
+  const editingExists = studio?.scenes.some((scene) => scene.id === editingId) ?? false;
+  useEffect(() => {
+    if (activeId !== null && !editingExists) setEditingId(activeId);
+  }, [activeId, editingExists]);
+
+  // A selection or half-finished edit belongs to one scene; never carry it into another.
+  const editingSceneId = editingExists ? editingId : activeId;
+  useEffect(() => {
+    setSelectedId(null);
+    setPending(null);
+  }, [editingSceneId]);
+
   if (!studio) {
     return (
       <main className={styles.page}>
@@ -81,7 +96,8 @@ export function StudioPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions
     const edited = { ...editing, elements };
     setPending(edited);
     await run(() => saveScene(edited));
-    setPending(null);
+    // Clear only this edit's copy: a later edit may already be showing and waiting for its answer.
+    setPending((current) => (current === edited ? null : current));
   };
 
   const upload = async (file: File) => {
@@ -127,7 +143,7 @@ export function StudioPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions
         <div className={styles.column}>
           <section className={styles.card} aria-label="Editor">
             <Text as="h2" weight="semibold" block>Editing: {editing.name}</Text>
-            <SceneCanvas scene={editing} data={data} scale={EDITOR_SCALE} editable selectedId={selectedId}
+            <SceneCanvas key={editing.id} scene={editing} data={data} scale={EDITOR_SCALE} editable selectedId={selectedId}
               onSelect={setSelectedId} onChange={(elements) => void changeElements(elements)} />
           </section>
           <section className={styles.card} aria-label="Program preview">

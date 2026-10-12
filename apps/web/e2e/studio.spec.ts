@@ -9,6 +9,8 @@ test("a streamer builds a scene, goes live, and drives the program", async ({ br
   for (const leftover of before.scenes.filter((scene: { name: string }) => scene.name === "E2E scene")) {
     await request.delete(`${API}/api/studio/scenes/${leftover.id}`);
   }
+  // An earlier match may have left goal banners queued; ours would wait behind them. Each clear shows the next.
+  for (let waiting = 0; waiting <= 10; waiting += 1) await request.delete(`${API}/api/studio/banner`);
   const made = await (await request.post(`${API}/api/studio/scenes`, { data: { source: "builtin", ref: "Live match", name: "E2E scene" } })).json();
   const sceneId = made.scenes.at(-1).id;
 

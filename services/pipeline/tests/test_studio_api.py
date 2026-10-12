@@ -375,3 +375,17 @@ def test_same_origin_requests_and_tools_without_an_origin_still_work(client):
     assert client.post("/api/studio/scenes/scene-1/activate").status_code == 200
     blocked_read = client.get("/api/studio", headers={"origin": "https://evil.example"})
     assert blocked_read.status_code == 200, "reads are not blocked"
+
+
+def test_the_apps_own_requests_through_a_proxy_are_not_mistaken_for_another_site(client):
+    """Behind the dev proxy the server's Host differs from the page's origin; the browser still says same-origin."""
+    proxied = {"origin": "http://127.0.0.1:5173", "sec-fetch-site": "same-origin"}
+    assert client.post("/api/studio/scenes/scene-2/activate", headers=proxied).status_code == 200
+    same_site = {"origin": "http://127.0.0.1:5173", "sec-fetch-site": "same-site"}
+    assert client.post("/api/studio/scenes/scene-1/activate", headers=same_site).status_code == 200
+
+
+def test_a_browser_that_reports_a_cross_site_request_is_refused_whatever_its_origin_header(client):
+    forged = {"origin": "http://testserver", "sec-fetch-site": "cross-site"}
+    assert client.post("/api/studio/scenes/scene-2/activate", headers=forged).status_code == 403
+    assert client.get("/api/studio").json()["revision"] == 0
