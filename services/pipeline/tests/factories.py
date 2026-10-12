@@ -25,3 +25,22 @@ def team_stats(**overrides) -> TeamStats:
 def stats(minute=10, period_end=None, home=None, away=None) -> StatsSnapshot:
     return StatsSnapshot(id=f"{MATCH}-s{minute}", match_id=MATCH, minute=minute, momentum=0.0,
                          home=home or team_stats(), away=away or team_stats(), period_end=period_end)
+
+
+from kickstream.domain.teams import AWAY, HOME, find_player  # noqa: E402
+from kickstream.ports.writer import MomentContext, RecapContext  # noqa: E402
+
+
+def moment_ctx(**moment_fields) -> MomentContext:
+    key_moment = moment(**{"player_id": "nbr-9", "event_id": f"{MATCH}-e40", **moment_fields})
+    player = find_player((HOME, AWAY), key_moment.player_id)
+    return MomentContext(moment=key_moment, home=HOME, away=AWAY, player_name=player.name if player else None,
+                         stats=stats(minute=key_moment.minute))
+
+
+def recap_ctx(period="half_time", minute=45) -> RecapContext:
+    snapshot = stats(minute=minute, period_end=period,
+                     home=team_stats(goals=2, shots=9, possession=58.0, xg=1.7),
+                     away=team_stats(goals=1, shots=4, possession=42.0, xg=0.6))
+    return RecapContext(match_id=MATCH, period=period, minute=minute, home=HOME, away=AWAY, stats=snapshot,
+                        moments=(moment(1), moment(2, kind="big_chance", team="away", minute=30)))
