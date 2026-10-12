@@ -11,7 +11,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
 from starlette.routing import Route
 
-ROLES = ("commentator", "tactical_analyst", "recap_writer", "localizer")
+ROLES = ("commentator", "tactical_analyst", "recap_writer", "localizer", "match_expert")
 RECAP_JSON = json.dumps(
     {
         "fan": {"title": "Fan title", "bullets": ["f1", "f2", "f3"], "text": "Fan recap."},
@@ -50,6 +50,8 @@ class FakeLLM:
     def _reply(self, role: str, user: str) -> str:
         if role in self.replies:
             return self.replies[role]
+        if role == "match_expert":
+            return "The press came from fresh legs after the substitution."
         if role == "commentator":
             return "Fan line."
         if role == "tactical_analyst":
@@ -65,7 +67,8 @@ class FakeLLM:
         blob = " ".join(_text(m.get("content")) for m in messages)
         role = next((r for r in ROLES if f"[role:{r}]" in blob), "unknown")
         user = next((_text(m.get("content")) for m in reversed(messages) if m.get("role") == "user"), "")
-        self.calls.append({"role": role, "user": user})
+        system = " ".join(_text(m.get("content")) for m in messages if m.get("role") in ("system", "developer"))
+        self.calls.append({"role": role, "user": user, "system": system})
         reply = self._reply(role, user)
         if body.get("stream"):
             return StreamingResponse(self._chunks(reply), media_type="text/event-stream")
