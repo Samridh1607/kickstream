@@ -1,0 +1,251 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "KickstreamContracts",
+  "$defs": {
+    "Player": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "number", "position"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "number": { "type": "integer" },
+        "position": { "enum": ["GK", "DF", "MF", "FW"] }
+      }
+    },
+    "TeamSheet": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "short_name", "color", "players"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "short_name": { "type": "string" },
+        "color": { "type": "string" },
+        "players": { "type": "array", "items": { "$ref": "#/$defs/Player" } }
+      }
+    },
+    "MatchStatus": {
+      "type": "object", "additionalProperties": false,
+      "required": ["match_id", "state", "minute", "score_home", "score_away", "speed", "home", "away"],
+      "properties": {
+        "match_id": { "type": "string" },
+        "state": { "enum": ["live", "half_time", "finished", "abandoned"] },
+        "minute": { "type": "integer" },
+        "score_home": { "type": "integer" },
+        "score_away": { "type": "integer" },
+        "speed": { "type": "number" },
+        "home": { "$ref": "#/$defs/TeamSheet" },
+        "away": { "$ref": "#/$defs/TeamSheet" }
+      }
+    },
+    "MatchEvent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "match_id", "seq", "minute", "second", "type", "x", "y"],
+      "properties": {
+        "id": { "type": "string" },
+        "match_id": { "type": "string" },
+        "seq": { "type": "integer" },
+        "minute": { "type": "integer" },
+        "second": { "type": "integer" },
+        "type": { "enum": ["kickoff", "pass", "shot", "goal", "save", "foul", "yellow_card", "red_card", "corner", "substitution", "half_time", "full_time"] },
+        "team": { "enum": ["home", "away", null], "default": null },
+        "player_id": { "type": ["string", "null"], "default": null },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "outcome": { "enum": ["goal", "saved", "off_target", "blocked", null], "default": null },
+        "completed": { "type": ["boolean", "null"], "default": null },
+        "player_in_id": { "type": ["string", "null"], "default": null }
+      }
+    },
+    "TeamStats": {
+      "type": "object", "additionalProperties": false,
+      "required": ["goals", "possession", "shots", "shots_on_target", "passes", "pass_accuracy", "fouls", "yellow_cards", "red_cards", "xg"],
+      "properties": {
+        "goals": { "type": "integer" },
+        "possession": { "type": "number" },
+        "shots": { "type": "integer" },
+        "shots_on_target": { "type": "integer" },
+        "passes": { "type": "integer" },
+        "pass_accuracy": { "type": "number" },
+        "fouls": { "type": "integer" },
+        "yellow_cards": { "type": "integer" },
+        "red_cards": { "type": "integer" },
+        "xg": { "type": "number" }
+      }
+    },
+    "StatsSnapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "match_id", "minute", "home", "away", "momentum"],
+      "properties": {
+        "id": { "type": "string" },
+        "match_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "home": { "$ref": "#/$defs/TeamStats" },
+        "away": { "$ref": "#/$defs/TeamStats" },
+        "momentum": { "type": "number" },
+        "period_end": { "enum": ["half_time", "full_time", null], "default": null }
+      }
+    },
+    "PressureSnapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "match_id", "minute", "cols", "rows", "home", "away"],
+      "properties": {
+        "id": { "type": "string" },
+        "match_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "cols": { "type": "integer" },
+        "rows": { "type": "integer" },
+        "home": { "type": "array", "items": { "type": "number" } },
+        "away": { "type": "array", "items": { "type": "number" } }
+      }
+    },
+    "StatFact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["label", "value"],
+      "properties": {
+        "label": { "enum": ["xg", "shots", "shots_on_target", "possession", "pressure", "momentum", "players_on_pitch", "fouls"] },
+        "value": { "type": "number" }
+      }
+    },
+    "KeyMoment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "match_id", "minute", "kind", "team", "score_home", "score_away", "facts"],
+      "properties": {
+        "id": { "type": "string" },
+        "match_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "kind": { "enum": ["goal", "red_card", "big_chance", "momentum_swing", "sustained_pressure"] },
+        "team": { "enum": ["home", "away"] },
+        "player_id": { "type": ["string", "null"], "default": null },
+        "event_id": { "type": ["string", "null"], "default": null },
+        "score_home": { "type": "integer" },
+        "score_away": { "type": "integer" },
+        "facts": { "type": "array", "items": { "$ref": "#/$defs/StatFact" } }
+      }
+    },
+    "Narrative": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "match_id", "minute", "moment_id", "mode", "language", "text", "source", "agent", "evidence", "team"],
+      "properties": {
+        "id": { "type": "string" },
+        "match_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "moment_id": { "type": "string" },
+        "mode": { "enum": ["fan", "analyst"] },
+        "language": { "enum": ["en", "es", "hi"] },
+        "text": { "type": "string", "minLength": 1 },
+        "source": { "enum": ["agent", "scripted"] },
+        "agent": { "type": "string" },
+        "evidence": { "type": "array", "items": { "type": "string" } },
+        "team": { "enum": ["home", "away"] },
+        "player_id": { "type": ["string", "null"], "default": null }
+      }
+    },
+    "Recap": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "match_id", "minute", "period", "mode", "language", "title", "bullets", "text", "source", "agent", "score_home", "score_away"],
+      "properties": {
+        "id": { "type": "string" },
+        "match_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "period": { "enum": ["half_time", "full_time"] },
+        "mode": { "enum": ["fan", "analyst"] },
+        "language": { "enum": ["en", "es", "hi"] },
+        "title": { "type": "string", "minLength": 1 },
+        "bullets": { "type": "array", "items": { "type": "string" }, "minItems": 3, "maxItems": 3 },
+        "text": { "type": "string", "minLength": 1 },
+        "source": { "enum": ["agent", "scripted"] },
+        "agent": { "type": "string" },
+        "score_home": { "type": "integer" },
+        "score_away": { "type": "integer" }
+      }
+    },
+    "LowerThirdData": {
+      "type": "object", "additionalProperties": false,
+      "required": ["headline", "subline", "team", "minute"],
+      "properties": {
+        "headline": { "type": "string" },
+        "subline": { "type": "string" },
+        "team": { "type": "string" },
+        "minute": { "type": "integer" }
+      }
+    },
+    "StatRow": {
+      "type": "object", "additionalProperties": false,
+      "required": ["label", "home", "away"],
+      "properties": {
+        "label": { "type": "string" },
+        "home": { "type": "number" },
+        "away": { "type": "number" }
+      }
+    },
+    "StatCardData": {
+      "type": "object", "additionalProperties": false,
+      "required": ["stat_rows"],
+      "properties": {
+        "stat_rows": { "type": "array", "items": { "$ref": "#/$defs/StatRow" }, "maxItems": 4 }
+      }
+    },
+    "PressureMapData": {
+      "type": "object", "additionalProperties": false,
+      "required": ["cols", "rows", "home", "away"],
+      "properties": {
+        "cols": { "type": "integer" },
+        "rows": { "type": "integer" },
+        "home": { "type": "array", "items": { "type": "number" } },
+        "away": { "type": "array", "items": { "type": "number" } }
+      }
+    },
+    "RecapCardData": {
+      "type": "object", "additionalProperties": false,
+      "required": ["title", "score", "bullets"],
+      "properties": {
+        "title": { "type": "string" },
+        "score": { "type": "string" },
+        "bullets": { "type": "array", "items": { "type": "string" }, "minItems": 3, "maxItems": 3 }
+      }
+    },
+    "Overlay": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "match_id", "minute", "kind", "duration_ms", "sources", "data"],
+      "properties": {
+        "id": { "type": "string" },
+        "match_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "kind": { "enum": ["lower_third", "stat_card", "pressure_map", "recap_card"] },
+        "language": { "enum": ["en", "es", "hi", null], "default": null },
+        "duration_ms": { "type": "integer" },
+        "sources": { "type": "array", "items": { "type": "string" } },
+        "data": {
+          "anyOf": [
+            { "$ref": "#/$defs/LowerThirdData" },
+            { "$ref": "#/$defs/StatCardData" },
+            { "$ref": "#/$defs/PressureMapData" },
+            { "$ref": "#/$defs/RecapCardData" }
+          ]
+        }
+      }
+    },
+    "ViewerProfile": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mode", "language"],
+      "properties": {
+        "mode": { "enum": ["fan", "analyst"] },
+        "language": { "enum": ["en", "es", "hi"] },
+        "club": { "type": ["string", "null"], "default": null },
+        "player": { "type": ["string", "null"], "default": null }
+      }
+    },
+    "Envelope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "type", "match_id", "minute", "highlighted", "payload"],
+      "properties": {
+        "id": { "type": "integer" },
+        "type": { "enum": ["match_status", "match_event", "stats", "pressure", "key_moment", "narrative", "recap", "overlay"] },
+        "match_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "highlighted": { "type": "boolean" },
+        "payload": { "type": "object" }
+      }
+    }
+  }
+}
