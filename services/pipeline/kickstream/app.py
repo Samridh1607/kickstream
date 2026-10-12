@@ -3,21 +3,26 @@
 import asyncio
 import os
 import secrets
+import time
 from collections.abc import Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from kickstream.adapters.agent_writer import AgentNarrativeWriter
 from kickstream.adapters.clocks import RealClock
+from kickstream.adapters.dir_image_store import DirImageStore
+from kickstream.adapters.json_studio_store import JsonStudioStore
 from kickstream.adapters.memory_bus import InMemoryEventBus
 from kickstream.adapters.memory_store import InMemoryMatchStore
 from kickstream.adapters.scripted_writer import ScriptedNarrativeWriter
 from kickstream.adapters.sse_broadcaster import InProcessBroadcaster
 from kickstream.analytics.stage import AnalyticsStage
 from kickstream.control import MatchController
+from kickstream.domain.demo import DEMO_SEED
 from kickstream.domain.teams import AWAY, HOME
 from kickstream.gateway.api import build_router
 from kickstream.gateway.recorder import Recorder
@@ -28,6 +33,12 @@ from kickstream.narration.stage import NarrationStage
 from kickstream.overlay.stage import OverlayStage
 from kickstream.ports.clock import Clock
 from kickstream.ports.writer import NarrativeWriter
+from kickstream.studio.api import build_studio_router, find_moment
+from kickstream.studio.rules import StudioError, sanitize_raw
+from kickstream.studio.service import StudioService
+from kickstream.studio.stage import StudioStage
+
+STUDIO_MATCH_SPEED = 30.0  # playback speed of a match the studio starts at the end of a countdown
 
 
 @dataclass(frozen=True)
@@ -39,6 +50,7 @@ class Settings:
     llm_reserve: int = 15  # kept back for goals and recaps
     llm_min_gap_s: float = 2.0  # between non-priority model calls
     cache_dir: Path = Path(".cache/narration")
+    data_dir: Path = Path(".data")  # the studio document and uploaded images
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ) -> "Settings":
@@ -48,6 +60,7 @@ class Settings:
             llm_api_key=env.get("KICKSTREAM_LLM_API_KEY") or None,
             llm_max_calls=int(env.get("KICKSTREAM_LLM_MAX_CALLS", "60")),
             cache_dir=Path(env.get("KICKSTREAM_CACHE_DIR", ".cache/narration")),
+            data_dir=Path(env.get("KICKSTREAM_DATA_DIR", ".data")),
         )
 
     @property
@@ -61,11 +74,13 @@ class Pipeline:
     store: InMemoryMatchStore
     broadcaster: InProcessBroadcaster
     controller: MatchController
+    studio: StudioService
     stages: list
     tasks: list[asyncio.Task] = field(default_factory=list)
 
     def start(self) -> None:
         self.tasks = [asyncio.create_task(stage.run()) for stage in self.stages]
+        self.tasks.append(asyncio.create_task(self.studio.run()))
 
     async def stop(self) -> None:
         await self.controller.stop()
@@ -81,6 +96,7 @@ def build_pipeline(
     clock_factory: Callable[[float], Clock] = RealClock,
     writer: NarrativeWriter | None = None,
     match_prefix: str = "m",
+    now: Callable[[], float] = time.time,
 ) -> Pipeline:
     bus, store, broadcaster = InMemoryEventBus(), InMemoryMatchStore(), InProcessBroadcaster()
     primary = writer
@@ -92,16 +108,23 @@ def build_pipeline(
         budget=Budget(settings.llm_max_calls, settings.llm_reserve, settings.llm_min_gap_s),
         cache=DiskCache(settings.cache_dir) if primary is not None else None,
     )
+    controller = MatchController(bus, clock_factory, HOME, AWAY, prefix=match_prefix)
+    studio = StudioService(
+        JsonStudioStore(settings.data_dir / "studio.json", sanitize=sanitize_raw),
+        DirImageStore(settings.data_dir / "images"),
+        now=now,
+        start_match=lambda: controller.start(DEMO_SEED, STUDIO_MATCH_SPEED),
+        find_moment=lambda match_id, moment_id: find_moment(store, match_id, moment_id),
+    )
     # Every stage subscribes in its constructor, so nothing published after this point is missed.
     stages = [
         AnalyticsStage(bus),
         NarrationStage(bus, service),
         OverlayStage(bus),
         Recorder(bus, store, broadcaster),
+        StudioStage(bus, studio),
     ]
-    return Pipeline(
-        bus, store, broadcaster, MatchController(bus, clock_factory, HOME, AWAY, prefix=match_prefix), stages
-    )
+    return Pipeline(bus, store, broadcaster, controller, studio, stages)
 
 
 def create_app(
@@ -110,6 +133,7 @@ def create_app(
     clock_factory: Callable[[float], Clock] = RealClock,
     writer: NarrativeWriter | None = None,
     match_prefix: str | None = None,
+    now: Callable[[], float] = time.time,
 ) -> FastAPI:
     # Match IDs are unique to this process, so an ID a browser kept from before a restart is
     # reported as unknown instead of silently naming a different match.
@@ -118,6 +142,7 @@ def create_app(
         clock_factory=clock_factory,
         writer=writer,
         match_prefix=match_prefix or f"m{secrets.token_hex(3)}",
+        now=now,
     )
 
     @asynccontextmanager
@@ -128,6 +153,13 @@ def create_app(
 
     app = FastAPI(title="Kickstream", lifespan=lifespan)
     app.state.pipeline = pipeline
+
+    @app.exception_handler(StudioError)
+    async def refused(_: Request, exc: StudioError) -> JSONResponse:
+        # The same shape FastAPI uses for its own validation errors, so clients read one format.
+        detail = [{"loc": ["body", exc.field], "msg": exc.message, "type": "studio"}]
+        return JSONResponse(status_code=exc.status, content={"detail": detail})
+
     app.include_router(
         build_router(
             store=pipeline.store,
@@ -138,4 +170,5 @@ def create_app(
             match_exists=pipeline.controller.exists,
         )
     )
+    app.include_router(build_studio_router(service=pipeline.studio, store=pipeline.store))
     return app

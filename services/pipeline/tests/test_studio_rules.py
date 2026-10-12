@@ -3,8 +3,17 @@ import pytest
 from kickstream.contracts import KeyMoment, SceneElement, StatFact, Studio, Ticker
 from kickstream.studio import rules
 from kickstream.studio.rules import StudioError
-from kickstream.studio.templates import (ANALYST_DESK, BREAK, CANVAS_H, CANVAS_W, FULL_TIME, LIVE_MATCH,
-                                         STARTING_SOON, builtin_templates, default_studio)
+from kickstream.studio.templates import (
+    ANALYST_DESK,
+    BREAK,
+    CANVAS_H,
+    CANVAS_W,
+    FULL_TIME,
+    LIVE_MATCH,
+    STARTING_SOON,
+    builtin_templates,
+    default_studio,
+)
 
 NOW = 1_000.0
 
@@ -14,8 +23,17 @@ def scene_id(doc, template):
 
 
 def element(**over):
-    fields = {"id": "x1", "type": "text", "x": 100, "y": 100, "width": 400, "height": 100, "layer": 1,
-              "visible": True, "props": {}}
+    fields = {
+        "id": "x1",
+        "type": "text",
+        "x": 100,
+        "y": 100,
+        "width": 400,
+        "height": 100,
+        "layer": 1,
+        "visible": True,
+        "props": {},
+    }
     return SceneElement(**{**fields, **over})
 
 
@@ -24,11 +42,20 @@ def refused(status, field):
 
 
 def moment(n=1, kind="goal"):
-    return KeyMoment(id=f"m-1-k{n}", match_id="m-1", minute=23, kind=kind, team="home", score_home=1,
-                     score_away=0, facts=[StatFact(label="xg", value=0.4)])
+    return KeyMoment(
+        id=f"m-1-k{n}",
+        match_id="m-1",
+        minute=23,
+        kind=kind,
+        team="home",
+        score_home=1,
+        score_away=0,
+        facts=[StatFact(label="xg", value=0.4)],
+    )
 
 
 # --- templates -------------------------------------------------------------------------------
+
 
 def test_there_are_five_built_in_templates_that_fit_the_canvas():
     templates = builtin_templates()
@@ -49,6 +76,7 @@ def test_a_new_studio_has_one_scene_per_template_with_starting_soon_live():
 
 
 # --- scenes ----------------------------------------------------------------------------------
+
 
 def test_scenes_can_be_made_from_a_template_a_saved_template_or_another_scene():
     doc = default_studio()
@@ -98,20 +126,29 @@ def test_replacing_a_scene_keeps_elements_inside_the_canvas_and_cleans_their_pro
     saved = {e.id: e for e in doc.scenes[1].elements}
     assert doc.scenes[1].name == "Renamed" and doc.scenes[1].template == LIVE_MATCH
     assert (saved["a"].x, saved["a"].y, saved["a"].width, saved["a"].height) == (0, CANVAS_H - 40, 40, 40)
-    assert (saved["b"].x, saved["b"].width, saved["b"].height, saved["b"].y) == (CANVAS_W - 400, 400, CANVAS_H, 0)
+    assert (saved["b"].x, saved["b"].width, saved["b"].height, saved["b"].y) == (
+        CANVAS_W - 400,
+        400,
+        CANVAS_H,
+        0,
+    )
     assert saved["c"].props == {"lines": 6}
     assert saved["d"].props == {"text": "Hi", "size": 12, "align": "center"}
     assert saved["e"].props == {"image_id": None, "fit": "contain"}
     assert saved["f"].props == {"pressure": False} and saved["g"].props == {}
 
 
-@pytest.mark.parametrize("name, elements, field", [
-    ("   ", [], "name"),
-    ("x" * 61, [], "name"),
-    ("Live", [element(id=f"e{i}") for i in range(41)], "elements"),
-    ("Live", [element(id="same"), element(id="same")], "elements"),
-    ("Live", [element(type="text", props={"text": "x" * 201})], "props.text"),
-], ids=["blank-name", "long-name", "too-many", "duplicate-ids", "long-text"])
+@pytest.mark.parametrize(
+    "name, elements, field",
+    [
+        ("   ", [], "name"),
+        ("x" * 61, [], "name"),
+        ("Live", [element(id=f"e{i}") for i in range(41)], "elements"),
+        ("Live", [element(id="same"), element(id="same")], "elements"),
+        ("Live", [element(type="text", props={"text": "x" * 201})], "props.text"),
+    ],
+    ids=["blank-name", "long-name", "too-many", "duplicate-ids", "long-text"],
+)
 def test_a_scene_outside_the_limits_is_refused(name, elements, field):
     doc = default_studio()
     with refused(422, field):
@@ -123,7 +160,9 @@ def test_replacing_an_unknown_scene_is_not_found_and_leaves_the_others_alone():
     with refused(404, "scene"):
         rules.replace_scene(doc, "nope", "Live", [])
     changed = rules.replace_scene(doc, doc.scenes[2].id, "Desk", [])
-    assert [s.elements for i, s in enumerate(changed.scenes) if i != 2] == [s.elements for i, s in enumerate(doc.scenes) if i != 2]
+    assert [s.elements for i, s in enumerate(changed.scenes) if i != 2] == [
+        s.elements for i, s in enumerate(doc.scenes) if i != 2
+    ]
     assert doc.scenes[2].elements, "the original document is not mutated"
 
 
@@ -158,8 +197,15 @@ def test_templates_can_be_deleted():
 
 # --- ticker and settings ---------------------------------------------------------------------
 
+
 def test_ticker_messages_are_trimmed_and_blank_ones_dropped():
-    ticker = Ticker(enabled=True, speed=200, messages=["  Welcome  ", "", "   ", "Subscribe"], show_score=False, show_stats=True)
+    ticker = Ticker(
+        enabled=True,
+        speed=200,
+        messages=["  Welcome  ", "", "   ", "Subscribe"],
+        show_score=False,
+        show_stats=True,
+    )
     saved = rules.set_ticker(default_studio(), ticker).ticker
     assert saved.messages == ["Welcome", "Subscribe"] and (saved.speed, saved.show_score) == (200, False)
 
@@ -177,6 +223,7 @@ def test_settings_are_replaced_whole():
 
 
 # --- banner ----------------------------------------------------------------------------------
+
 
 def test_the_first_banner_shows_at_once_and_later_ones_wait_in_order():
     doc = rules.enqueue_banner(default_studio(), "  First  ", "custom", 8, NOW)
@@ -202,7 +249,12 @@ def test_a_full_queue_drops_its_oldest_message_that_is_not_a_goal():
     assert len(doc.banner_queue) == rules.MAX_QUEUE
     doc = rules.enqueue_banner(doc, "newest", "info", 8, NOW)
     texts = [b.text for b in doc.banner_queue]
-    assert len(texts) == rules.MAX_QUEUE and texts[0] == "goal" and "info 0" not in texts and texts[-1] == "newest"
+    assert (
+        len(texts) == rules.MAX_QUEUE
+        and texts[0] == "goal"
+        and "info 0" not in texts
+        and texts[-1] == "newest"
+    )
 
 
 def test_clearing_the_banner_shows_the_next_one_or_nothing():
@@ -214,7 +266,10 @@ def test_clearing_the_banner_shows_the_next_one_or_nothing():
     assert rules.clear_banner(default_studio(), NOW).banner is None
 
 
-@pytest.mark.parametrize("text, duration, field", [("   ", 8, "text"), ("x" * 201, 8, "text"), ("ok", 2, "duration_s"), ("ok", 31, "duration_s")])
+@pytest.mark.parametrize(
+    "text, duration, field",
+    [("   ", 8, "text"), ("x" * 201, 8, "text"), ("ok", 2, "duration_s"), ("ok", 31, "duration_s")],
+)
 def test_banners_outside_the_limits_are_refused(text, duration, field):
     with refused(422, field):
         rules.enqueue_banner(default_studio(), text, "custom", duration, NOW)
@@ -222,11 +277,16 @@ def test_banners_outside_the_limits_are_refused(text, duration, field):
 
 # --- countdown and breaks --------------------------------------------------------------------
 
+
 def test_a_start_countdown_cuts_to_starting_soon():
     doc = default_studio()
     doc = rules.activate_scene(doc, scene_id(doc, FULL_TIME))
     doc = rules.start_countdown(doc, NOW + 600, NOW, label="Kick-off")
-    assert (doc.countdown.kind, doc.countdown.ends_at, doc.countdown.label) == ("start", NOW + 600, "Kick-off")
+    assert (doc.countdown.kind, doc.countdown.ends_at, doc.countdown.label) == (
+        "start",
+        NOW + 600,
+        "Kick-off",
+    )
     assert doc.active_scene_id == scene_id(doc, STARTING_SOON)
 
 
@@ -289,6 +349,7 @@ def test_cancelling_a_start_countdown_stays_on_the_current_scene():
 
 # --- replay ----------------------------------------------------------------------------------
 
+
 def test_a_replay_runs_for_eight_seconds_and_a_new_one_replaces_it():
     doc = rules.start_replay(default_studio(), moment(1), NOW)
     assert (doc.replay.match_id, doc.replay.moment_id, doc.replay.minute) == ("m-1", "m-1-k1", 23)
@@ -299,6 +360,7 @@ def test_a_replay_runs_for_eight_seconds_and_a_new_one_replaces_it():
 
 
 # --- deadlines -------------------------------------------------------------------------------
+
 
 def test_the_next_deadline_is_the_earliest_of_banner_countdown_and_replay():
     doc = default_studio()
@@ -355,6 +417,7 @@ def test_everything_overdue_is_settled_in_one_pass():
 
 # --- loading and uploads ---------------------------------------------------------------------
 
+
 def test_elements_of_an_unknown_type_are_dropped_from_a_loaded_file():
     raw = default_studio().model_dump()
     raw["scenes"][0]["elements"].append({**raw["scenes"][0]["elements"][0], "id": "zz", "type": "webcam"})
@@ -365,15 +428,19 @@ def test_elements_of_an_unknown_type_are_dropped_from_a_loaded_file():
     assert len(cleaned.scenes[0].elements) == len(default_studio().scenes[0].elements)
 
 
-@pytest.mark.parametrize("content, expected", [
-    (b"\x89PNG\r\n\x1a\n" + b"\x00" * 20, "image/png"),
-    (b"\xff\xd8\xff\xe0" + b"\x00" * 20, "image/jpeg"),
-    (b"RIFF\x24\x00\x00\x00WEBPVP8 ", "image/webp"),
-    (b"<svg xmlns='http://www.w3.org/2000/svg'/>", None),
-    (b"GIF89a" + b"\x00" * 20, None),
-    (b"just some text", None),
-    (b"RIFF\x24\x00\x00\x00WAVEfmt ", None),
-    (b"", None),
-], ids=["png", "jpeg", "webp", "svg", "gif", "text", "wav", "empty"])
+@pytest.mark.parametrize(
+    "content, expected",
+    [
+        (b"\x89PNG\r\n\x1a\n" + b"\x00" * 20, "image/png"),
+        (b"\xff\xd8\xff\xe0" + b"\x00" * 20, "image/jpeg"),
+        (b"RIFF\x24\x00\x00\x00WEBPVP8 ", "image/webp"),
+        (b"<svg xmlns='http://www.w3.org/2000/svg'/>", None),
+        (b"GIF89a" + b"\x00" * 20, None),
+        (b"just some text", None),
+        (b"RIFF\x24\x00\x00\x00WAVEfmt ", None),
+        (b"", None),
+    ],
+    ids=["png", "jpeg", "webp", "svg", "gif", "text", "wav", "empty"],
+)
 def test_an_image_is_recognised_by_its_content_not_its_name(content, expected):
     assert rules.sniff_image(content) == expected

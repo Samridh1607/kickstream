@@ -12,7 +12,7 @@ from tests.factories import FakeWriter
 
 async def _play(tmp_path, writer=None):
     pipeline = build_pipeline(
-        Settings(None, None, None, cache_dir=tmp_path),
+        Settings(None, None, None, cache_dir=tmp_path / "cache", data_dir=tmp_path / "data"),
         clock_factory=lambda speed: InstantClock(),
         writer=writer,
     )
@@ -91,4 +91,4 @@ async def test_with_a_writer_configured_goals_and_recaps_are_agent_written(tmp_p
     goal_ids = {item.payload.id for item in log if item.type == "key_moment" and item.payload.kind == "goal"}
     assert goal_ids and {n.source for n in narratives if n.moment_id in goal_ids} == {"agent"}
     assert {item.payload.source for item in log if item.type == "recap"} == {"agent"}
-    assert any(tmp_path.iterdir()), "agent output is cached on disk"
+    assert any((tmp_path / "cache").iterdir()), "agent output is cached on disk"

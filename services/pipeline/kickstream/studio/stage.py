@@ -37,7 +37,9 @@ class StudioStage:
             kind = _BANNER_KIND.get(self._kinds.get(payload.moment_id, ""))
             in_program_variant = (payload.mode, payload.language) == (settings.mode, settings.language)
             if kind and settings.auto_banner and in_program_variant:
-                await self._service.banner(payload.text[:200], kind, rules.DEFAULT_BANNER_SECONDS, source_id=payload.id)
+                await self._service.banner(
+                    payload.text[:200], kind, rules.DEFAULT_BANNER_SECONDS, source_id=payload.id
+                )
         elif isinstance(payload, MatchStatus) and payload.state == "half_time":
             if settings.auto_half_time_break and match_id not in self._half_times:
                 self._half_times.add(match_id)

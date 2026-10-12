@@ -27,7 +27,9 @@ class JsonStudioStore:
             return Studio.model_validate(self._sanitize(raw))
         except (OSError, ValueError, ValidationError, AttributeError, TypeError) as exc:
             aside = self._path.with_name(self._path.name + ".corrupt")
-            log.warning("studio file %s is unreadable (%s); moved to %s", self._path, type(exc).__name__, aside)
+            log.warning(
+                "studio file %s is unreadable (%s); moved to %s", self._path, type(exc).__name__, aside
+            )
             self._path.replace(aside)
             return None
 

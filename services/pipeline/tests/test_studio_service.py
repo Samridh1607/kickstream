@@ -13,8 +13,7 @@ from kickstream.studio import rules
 from kickstream.studio.rules import StudioError
 from kickstream.studio.service import StudioService
 from kickstream.studio.stage import StudioStage
-from kickstream.studio.templates import BREAK, LIVE_MATCH, default_studio
-
+from kickstream.studio.templates import BREAK, LIVE_MATCH
 from tests.factories import MATCH, moment
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
@@ -35,8 +34,12 @@ class Harness:
         self.fail_start = fail_start
         self.moments = {(MATCH, f"{MATCH}-k1"): moment(1)}
         self.service = StudioService(
-            JsonStudioStore(tmp_path / "studio.json", sanitize=rules.sanitize_raw), DirImageStore(tmp_path / "images", max_images=3),
-            now=self.now, start_match=self._start, find_moment=lambda m, k: self.moments.get((m, k)))
+            JsonStudioStore(tmp_path / "studio.json", sanitize=rules.sanitize_raw),
+            DirImageStore(tmp_path / "images", max_images=3),
+            now=self.now,
+            start_match=self._start,
+            find_moment=lambda m, k: self.moments.get((m, k)),
+        )
 
     async def _start(self):
         if self.fail_start:
@@ -83,7 +86,9 @@ async def test_a_result_outside_the_schema_is_refused_with_the_field_named(tmp_p
     harness = Harness(tmp_path)
 
     def too_many_queued(doc):
-        waiting = rules.enqueue_banner(rules.enqueue_banner(doc, "a", "info", 8, 0.0), "b", "info", 8, 0.0).banner_queue[0]
+        waiting = rules.enqueue_banner(
+            rules.enqueue_banner(doc, "a", "info", 8, 0.0), "b", "info", 8, 0.0
+        ).banner_queue[0]
         return doc.model_copy(update={"banner_queue": [waiting] * 11})
 
     with pytest.raises(StudioError, check=lambda e: e.status == 422 and e.field.startswith("banner_queue")):
@@ -185,7 +190,11 @@ async def test_the_run_loop_settles_overdue_deadlines_when_a_change_wakes_it(tmp
 async def test_replaying_a_known_moment_sets_the_replay_and_an_unknown_one_is_not_found(tmp_path):
     harness = Harness(tmp_path)
     doc = await harness.service.replay(MATCH, f"{MATCH}-k1")
-    assert (doc.replay.moment_id, doc.replay.started_at, doc.replay.duration_s) == (f"{MATCH}-k1", 1_000.0, 8.0)
+    assert (doc.replay.moment_id, doc.replay.started_at, doc.replay.duration_s) == (
+        f"{MATCH}-k1",
+        1_000.0,
+        8.0,
+    )
     for match_id, moment_id in ((MATCH, "nope"), ("m-9", f"{MATCH}-k1")):
         with pytest.raises(StudioError, check=lambda e: (e.status, e.field) == (404, "moment")):
             await harness.service.replay(match_id, moment_id)
@@ -209,13 +218,27 @@ async def test_uploads_are_checked_by_content_size_and_count(tmp_path):
 
 # --- stage ------------------------------------------------------------------------------------
 
+
 def narrative(mode="fan", language="en", n=1, text="GOAL! What a strike."):
-    return Narrative(id=f"{MATCH}-k{n}-{mode}-{language}", match_id=MATCH, minute=23, moment_id=f"{MATCH}-k{n}",
-                     mode=mode, language=language, text=text, source="scripted", agent="scripted", evidence=[], team="home")
+    return Narrative(
+        id=f"{MATCH}-k{n}-{mode}-{language}",
+        match_id=MATCH,
+        minute=23,
+        moment_id=f"{MATCH}-k{n}",
+        mode=mode,
+        language=language,
+        text=text,
+        source="scripted",
+        agent="scripted",
+        evidence=[],
+        team="home",
+    )
 
 
 def status(state="live", match_id=MATCH):
-    return MatchStatus(match_id=match_id, state=state, minute=45, score_home=0, score_away=0, speed=30, home=HOME, away=AWAY)
+    return MatchStatus(
+        match_id=match_id, state=state, minute=45, score_home=0, score_away=0, speed=30, home=HOME, away=AWAY
+    )
 
 
 async def staged(tmp_path, **settings):
@@ -241,7 +264,12 @@ async def test_a_goal_narrative_in_the_program_variant_becomes_a_banner(tmp_path
     await publish(NARRATIVES, narrative("fan", "en"))
     task.cancel()
     banner = harness.service.doc.banner
-    assert (banner.text, banner.kind, banner.duration_s, banner.source_id) == ("GOAL! What a strike.", "goal", 8, f"{MATCH}-k1-fan-en")
+    assert (banner.text, banner.kind, banner.duration_s, banner.source_id) == (
+        "GOAL! What a strike.",
+        "goal",
+        8,
+        f"{MATCH}-k1-fan-en",
+    )
 
 
 async def test_red_cards_become_card_banners_and_lesser_moments_do_not(tmp_path):

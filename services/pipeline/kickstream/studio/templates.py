@@ -13,8 +13,17 @@ FULL_TIME = "Full-time"
 
 
 def _el(layer: int, type_: str, x: int, y: int, width: int, height: int, **props) -> SceneElement:
-    return SceneElement(id=f"e{layer}", type=type_, x=x, y=y, width=width, height=height, layer=layer,
-                        visible=True, props=props)
+    return SceneElement(
+        id=f"e{layer}",
+        type=type_,
+        x=x,
+        y=y,
+        width=width,
+        height=height,
+        layer=layer,
+        visible=True,
+        props=props,
+    )
 
 
 def _title(layer: int, text: str, y: int, size: int) -> SceneElement:
@@ -64,11 +73,18 @@ def builtin_templates() -> list[Scene]:
 
 
 def default_studio() -> Studio:
-    scenes = [template.model_copy(update={"id": f"scene-{n}"}) for n, template in enumerate(builtin_templates(), 1)]
+    scenes = [
+        template.model_copy(update={"id": f"scene-{n}"}) for n, template in enumerate(builtin_templates(), 1)
+    ]
     return Studio(
-        revision=0, server_time=0.0, scenes=scenes, active_scene_id=scenes[0].id, templates=[],
-        settings=StudioSettings(mode="fan", language="en", auto_banner=True, auto_start=True,
-                                auto_half_time_break=False),
+        revision=0,
+        server_time=0.0,
+        scenes=scenes,
+        active_scene_id=scenes[0].id,
+        templates=[],
+        settings=StudioSettings(
+            mode="fan", language="en", auto_banner=True, auto_start=True, auto_half_time_break=False
+        ),
         banner_queue=[],
         ticker=Ticker(enabled=True, speed=120, messages=[], show_score=True, show_stats=True),
     )

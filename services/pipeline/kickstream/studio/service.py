@@ -18,9 +18,15 @@ log = logging.getLogger(__name__)
 
 
 class StudioService:
-    def __init__(self, store: StudioStore, images: ImageStore, *, now: Callable[[], float] = time.time,
-                 start_match: Callable[[], Awaitable[str]],
-                 find_moment: Callable[[str, str], KeyMoment | None]) -> None:
+    def __init__(
+        self,
+        store: StudioStore,
+        images: ImageStore,
+        *,
+        now: Callable[[], float] = time.time,
+        start_match: Callable[[], Awaitable[str]],
+        find_moment: Callable[[str, str], KeyMoment | None],
+    ) -> None:
         self._store = store
         self._images = images
         self._now = now
@@ -50,7 +56,9 @@ class StudioService:
         if changed is self._doc:
             return self.doc
         try:
-            candidate = Studio.model_validate(changed.model_copy(update={"revision": self._doc.revision + 1}).model_dump())
+            candidate = Studio.model_validate(
+                changed.model_copy(update={"revision": self._doc.revision + 1}).model_dump()
+            )
         except ValidationError as exc:
             first = exc.errors()[0]
             raise StudioError(422, ".".join(str(part) for part in first["loc"]), first["msg"]) from exc
@@ -67,7 +75,9 @@ class StudioService:
     # --- changes that need the clock or a lookup ---------------------------------------------
 
     async def banner(self, text: str, kind: str, duration_s: int, source_id: str | None = None) -> Studio:
-        return await self.apply(lambda doc: rules.enqueue_banner(doc, text, kind, duration_s, self._now(), source_id))
+        return await self.apply(
+            lambda doc: rules.enqueue_banner(doc, text, kind, duration_s, self._now(), source_id)
+        )
 
     async def clear_banner(self) -> Studio:
         return await self.apply(lambda doc: rules.clear_banner(doc, self._now()))

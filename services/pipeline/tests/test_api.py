@@ -10,7 +10,7 @@ from kickstream.gateway.api import parse_last_event_id
 
 @pytest.fixture
 def client(tmp_path):
-    settings = Settings(None, None, None, cache_dir=tmp_path)
+    settings = Settings(None, None, None, cache_dir=tmp_path / "cache", data_dir=tmp_path / "data")
     app = create_app(settings, clock_factory=lambda speed: InstantClock(), match_prefix="m")
     with TestClient(app) as test_client:
         yield test_client
@@ -112,7 +112,8 @@ def test_each_server_process_numbers_its_matches_under_its_own_prefix(tmp_path):
     ids = []
     for _ in range(2):
         app = create_app(
-            Settings(None, None, None, cache_dir=tmp_path), clock_factory=lambda speed: InstantClock()
+            Settings(None, None, None, cache_dir=tmp_path / "cache", data_dir=tmp_path / "data"),
+            clock_factory=lambda speed: InstantClock(),
         )
         with TestClient(app) as test_client:
             ids.append(test_client.post("/api/matches").json()["match_id"])
