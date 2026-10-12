@@ -9,6 +9,8 @@ export const target = resolve(import.meta.dirname, "../src/contracts.ts");
 export async function render() {
   return compileFromFile(schema, {
     unreachableDefinitions: true,
+    // Emit bounded arrays as plain arrays; the default turns every maxItems into a union of tuples.
+    maxItems: -1,
     bannerComment:
       "/* Generated from packages/contracts/kickstream.schema.json. Do not edit. Run `pnpm gen:contracts`. */",
   });

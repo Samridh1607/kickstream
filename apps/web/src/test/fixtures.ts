@@ -1,6 +1,6 @@
 import type {
   Envelope, KeyMoment, MatchEvent, MatchStatus, Narrative, Overlay, PressureSnapshot, Recap, StatsSnapshot,
-  TeamSheet, TeamStats,
+  Scene, SceneElement, Studio, TeamSheet, TeamStats,
 } from "../contracts";
 
 export const HOME: TeamSheet = {
@@ -110,3 +110,28 @@ export class FakeEventSource {
 }
 
 export const FakeEventSourceCtor = FakeEventSource as unknown as new (url: string) => EventSource;
+
+
+export const element = (over: Partial<SceneElement> = {}): SceneElement => ({
+  id: "e1", type: "text", x: 100, y: 100, width: 400, height: 200, layer: 1, visible: true,
+  props: { text: "Hello", size: 48, align: "center" }, ...over,
+});
+
+export const scene = (over: Partial<Scene> = {}): Scene => ({
+  id: "s1", name: "Live match", template: "Live match",
+  elements: [
+    element({ id: "score", type: "scoreboard", x: 40, y: 40, width: 1100, height: 120, layer: 1, props: {} }),
+    element({ id: "banner", type: "banner", x: 1180, y: 680, width: 700, height: 200, layer: 2, props: {} }),
+  ],
+  ...over,
+});
+
+export const studio = (over: Partial<Studio> = {}): Studio => ({
+  revision: 1, server_time: 1000,
+  scenes: [scene(), scene({ id: "s2", name: "Break", template: "Break", elements: [element({ id: "cd", type: "countdown", props: {} })] })],
+  active_scene_id: "s1", previous_scene_id: null, templates: [],
+  settings: { mode: "fan", language: "en", auto_banner: true, auto_start: true, auto_half_time_break: false },
+  banner: null, banner_queue: [],
+  ticker: { enabled: true, speed: 120, messages: [], show_score: true, show_stats: true },
+  countdown: null, replay: null, ...over,
+});

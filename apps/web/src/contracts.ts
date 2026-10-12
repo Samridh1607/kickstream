@@ -169,7 +169,7 @@ export interface Recap {
    * @minItems 3
    * @maxItems 3
    */
-  bullets: [string, string, string];
+  bullets: [string, string, string, ...string[]];
   text: string;
   source: "agent" | "scripted";
   agent: string;
@@ -203,7 +203,7 @@ export interface StatCardData {
   /**
    * @maxItems 4
    */
-  stat_rows: [] | [StatRow] | [StatRow, StatRow] | [StatRow, StatRow, StatRow] | [StatRow, StatRow, StatRow, StatRow];
+  stat_rows: StatRow[];
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
@@ -226,7 +226,7 @@ export interface RecapCardData {
    * @minItems 3
    * @maxItems 3
    */
-  bullets: [string, string, string];
+  bullets: [string, string, string, ...string[]];
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
@@ -341,139 +341,7 @@ export interface Ticker {
   /**
    * @maxItems 20
    */
-  messages:
-    | []
-    | [string]
-    | [string, string]
-    | [string, string, string]
-    | [string, string, string, string]
-    | [string, string, string, string, string]
-    | [string, string, string, string, string, string]
-    | [string, string, string, string, string, string, string]
-    | [string, string, string, string, string, string, string, string]
-    | [string, string, string, string, string, string, string, string, string]
-    | [string, string, string, string, string, string, string, string, string, string]
-    | [string, string, string, string, string, string, string, string, string, string, string]
-    | [string, string, string, string, string, string, string, string, string, string, string, string]
-    | [string, string, string, string, string, string, string, string, string, string, string, string, string]
-    | [string, string, string, string, string, string, string, string, string, string, string, string, string, string]
-    | [
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string
-      ]
-    | [
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string
-      ]
-    | [
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string
-      ]
-    | [
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string
-      ]
-    | [
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string
-      ]
-    | [
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string,
-        string
-      ];
+  messages: string[];
   show_score: boolean;
   show_stats: boolean;
 }
@@ -508,227 +376,19 @@ export interface Studio {
    * @minItems 1
    * @maxItems 20
    */
-  scenes:
-    | [Scene]
-    | [Scene, Scene]
-    | [Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene
-      ]
-    | [
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene
-      ]
-    | [
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene
-      ]
-    | [
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene
-      ];
+  scenes: [Scene, ...Scene[]];
   active_scene_id: string;
   previous_scene_id?: string | null;
   /**
    * @maxItems 20
    */
-  templates:
-    | []
-    | [Scene]
-    | [Scene, Scene]
-    | [Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene, Scene]
-    | [
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene
-      ]
-    | [
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene
-      ]
-    | [
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene
-      ]
-    | [
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene,
-        Scene
-      ];
+  templates: Scene[];
   settings: StudioSettings;
   banner?: Banner | null;
   /**
    * @maxItems 10
    */
-  banner_queue:
-    | []
-    | [Banner]
-    | [Banner, Banner]
-    | [Banner, Banner, Banner]
-    | [Banner, Banner, Banner, Banner]
-    | [Banner, Banner, Banner, Banner, Banner]
-    | [Banner, Banner, Banner, Banner, Banner, Banner]
-    | [Banner, Banner, Banner, Banner, Banner, Banner, Banner]
-    | [Banner, Banner, Banner, Banner, Banner, Banner, Banner, Banner]
-    | [Banner, Banner, Banner, Banner, Banner, Banner, Banner, Banner, Banner]
-    | [Banner, Banner, Banner, Banner, Banner, Banner, Banner, Banner, Banner, Banner];
+  banner_queue: Banner[];
   ticker: Ticker;
   countdown?: Countdown | null;
   replay?: Replay | null;
