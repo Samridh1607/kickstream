@@ -1,7 +1,9 @@
 import asyncio
+import logging
 import subprocess
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
@@ -25,13 +27,16 @@ window.__kickstreamStartCapture = async () => {
 };
 </script>"""
 REFUSES = "<!doctype html><script>window.__kickstreamStartCapture = async () => { throw new Error('no camera here'); };</script>"
+NEVER_SETTLES = (
+    "<!doctype html><script>window.__kickstreamStartCapture = () => new Promise(() => {});</script>"
+)
 NEVER_READY = "<!doctype html><title>nothing</title>"
 
 
 @pytest.fixture
 def pages():
     """A local web server with the three pages above."""
-    bodies = {"/captures": CAPTURES, "/refuses": REFUSES, "/never": NEVER_READY}
+    bodies = {"/captures": CAPTURES, "/refuses": REFUSES, "/never": NEVER_READY, "/hangs": NEVER_SETTLES}
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -123,8 +128,32 @@ async def test_a_page_that_cannot_capture_reports_why_and_leaves_no_browser(page
 
 
 @needs_browser
-async def test_a_page_that_never_becomes_ready_is_given_up_on(pages):
-    capture = ChromiumCapture(ready_timeout_s=1.0)
-    with pytest.raises(OutputFailure, match="did not start"):
+async def test_a_page_that_never_becomes_ready_is_given_up_on(pages, caplog):
+    caplog.set_level(logging.DEBUG)
+    capture = ChromiumCapture(start_timeout_s=3.0)
+    began = time.monotonic()
+    with pytest.raises(OutputFailure, match="did not start") as raised:
         await capture.start(f"{pages}/never?capture=secret-token", 1280, 720)
+    assert time.monotonic() - began < 6.0
+    assert "secret-token" not in str(raised.value)
+    assert all("secret-token" not in record.getMessage() for record in caplog.records)
     await asyncio.wait_for(capture.wait(), 10)
+
+
+@needs_browser
+async def test_a_page_whose_recording_never_begins_is_given_up_on(pages):
+    capture = ChromiumCapture(start_timeout_s=4.0)
+    began = time.monotonic()
+    with pytest.raises(OutputFailure, match="did not begin recording"):
+        await capture.start(f"{pages}/hangs", 1280, 720)
+    assert time.monotonic() - began < 7.0
+    await asyncio.wait_for(capture.wait(), 10)
+
+
+@needs_browser
+async def test_a_proxy_in_the_environment_is_not_used_for_the_browser_connection(pages, monkeypatch):
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+        monkeypatch.setenv(name, "http://127.0.0.1:9")
+    capture = ChromiumCapture()
+    await capture.start(f"{pages}/captures", 1280, 720)
+    await capture.stop()

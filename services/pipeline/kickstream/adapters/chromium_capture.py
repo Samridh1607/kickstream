@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import itertools
 import json
+import logging
 import os
 import shutil
 import tempfile
@@ -68,8 +69,16 @@ def browser_args(profile: Path, width: int, height: int) -> list[str]:
     ]
 
 
-def _page_socket(port: int) -> str:
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}/json/list", timeout=5) as response:
+# The library logs every frame at DEBUG, and the navigation frame carries the page address with its token.
+_QUIET = logging.getLogger("kickstream.devtools_frames")
+_QUIET.setLevel(logging.CRITICAL)
+_QUIET.propagate = False
+
+
+def _page_socket(port: int, timeout: float) -> str:
+    # Loopback must not go through a proxy from the environment or the system settings.
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    with opener.open(f"http://127.0.0.1:{port}/json/list", timeout=timeout) as response:
         targets = json.load(response)
     address = next(
         (target["webSocketDebuggerUrl"] for target in targets if target.get("type") == "page"), None
@@ -89,9 +98,10 @@ def _remove(profile: Path) -> None:
 
 
 class ChromiumCapture:
-    def __init__(self, browser: str | None = None, *, ready_timeout_s: float = 15.0) -> None:
+    def __init__(self, browser: str | None = None, *, start_timeout_s: float = 15.0) -> None:
         self._configured = browser
-        self._ready_timeout_s = ready_timeout_s
+        self._start_timeout_s = start_timeout_s
+        self._deadline = 0.0
         self._process: asyncio.subprocess.Process | None = None
         self._group: KillOnExit | None = None
         self._devtools = None
@@ -101,10 +111,25 @@ class ChromiumCapture:
     def available(self) -> str | None:
         return None if find_browser(self._configured) else _MISSING
 
+    def _left(self) -> float:
+        return max(0.0, self._deadline - asyncio.get_running_loop().time())
+
+    async def _within(self, stage: str, work):
+        """Run `work` in what is left of the start deadline; running out reports which stage it was in."""
+        try:
+            return await asyncio.wait_for(work, self._left())
+        except TimeoutError:
+            raise OutputFailure(stage) from None
+
     async def start(self, url: str, width: int, height: int) -> None:
         binary = find_browser(self._configured)
         if binary is None:
             raise OutputFailure(_MISSING)
+        self._deadline = asyncio.get_running_loop().time() + self._start_timeout_s
+        browser_late = "The hidden browser did not start in time."
+        # The address is shown without its query, which carries the run's token.
+        page_late = f"The program page did not start. Check that it opens at {url.split('?')[0]}"
+        record_late = "The program page did not begin recording in time."
         self._profile = Path(tempfile.mkdtemp(prefix="kickstream-browser-"))
         try:
             self._process = await asyncio.create_subprocess_exec(
@@ -115,22 +140,39 @@ class ChromiumCapture:
             )
             self._group = KillOnExit()
             self._group.add(self._process.pid)
-            port = await self._debugging_port()
-            address = await asyncio.to_thread(_page_socket, port)
-            # Kept open for the life of the capture: the page size set below lasts only as long as it.
-            self._devtools = await websockets.connect(address, max_size=None, ping_interval=None)
-            await self._call(
-                "Emulation.setDeviceMetricsOverride",
-                width=width,
-                height=height,
-                deviceScaleFactor=1,
-                mobile=False,
+            port = await self._within(browser_late, self._debugging_port())
+            address = await self._within(
+                browser_late, asyncio.to_thread(_page_socket, port, max(0.1, min(5.0, self._left())))
             )
-            await self._call("Page.navigate", url=url)
-            await self._until_ready(url)
+            # Kept open for the life of the capture: the page size set below lasts only as long as it.
+            self._devtools = await self._within(
+                browser_late,
+                websockets.connect(
+                    address,
+                    max_size=None,
+                    ping_interval=None,
+                    proxy=None,
+                    logger=_QUIET,
+                    open_timeout=max(0.1, self._left()),
+                    close_timeout=1,
+                ),
+            )
+            await self._within(
+                browser_late,
+                self._call(
+                    "Emulation.setDeviceMetricsOverride",
+                    width=width,
+                    height=height,
+                    deviceScaleFactor=1,
+                    mobile=False,
+                ),
+            )
+            await self._within(browser_late, self._call("Page.navigate", url=url))
+            await self._within(page_late, self._until_ready())
             # A page may only ask to be captured in answer to a user's action; this stands in for one.
-            started = await self._call(
-                "Runtime.evaluate", expression=_START, awaitPromise=True, userGesture=True
+            started = await self._within(
+                record_late,
+                self._call("Runtime.evaluate", expression=_START, awaitPromise=True, userGesture=True),
             )
             if "exceptionDetails" in started:
                 why = started["exceptionDetails"].get("exception", {}).get("description", "unknown reason")
@@ -145,43 +187,36 @@ class ChromiumCapture:
     async def _debugging_port(self) -> int:
         """The browser writes the port it chose into its profile once it is listening."""
         port_file = self._profile / "DevToolsActivePort"
-        for _ in range(100):
+        while True:
             with contextlib.suppress(OSError, ValueError, IndexError):
                 return int(port_file.read_text(encoding="utf-8").splitlines()[0])
             if self._process.returncode is not None:
                 raise OSError("the browser exited at once")
             await asyncio.sleep(0.1)
-        raise TimeoutError
 
     async def _call(self, method: str, **params) -> dict:
         call_id = next(self._ids)
         await self._devtools.send(json.dumps({"id": call_id, "method": method, "params": params}))
         while True:
-            message = json.loads(await asyncio.wait_for(self._devtools.recv(), 30))
+            message = json.loads(await self._devtools.recv())
             if message.get("id") == call_id:
                 if "error" in message:
                     raise OutputFailure(f"The hidden browser refused {method}.")
                 return message.get("result", {})
 
-    async def _until_ready(self, url: str) -> None:
-        deadline = asyncio.get_running_loop().time() + self._ready_timeout_s
-        while asyncio.get_running_loop().time() < deadline:
+    async def _until_ready(self) -> None:
+        while True:
             answer = await self._call("Runtime.evaluate", expression=_READY, returnByValue=True)
             if answer.get("result", {}).get("value") is True:
                 return
             await asyncio.sleep(0.25)
-        # The address is shown without its query, which carries the run's token.
-        raise OutputFailure(f"The program page did not start. Check that it opens at {url.split('?')[0]}")
 
     async def wait(self) -> None:
         if self._process is not None:
             await self._process.wait()
 
     async def stop(self) -> None:
-        devtools, self._devtools = self._devtools, None
-        if devtools is not None:
-            with contextlib.suppress(Exception):
-                await devtools.close()
+        # End the browser first: a frozen one would never answer a close handshake.
         group, self._group = self._group, None
         if group is not None:
             group.close()
@@ -189,7 +224,12 @@ class ChromiumCapture:
         if process is not None and process.returncode is None:
             with contextlib.suppress(ProcessLookupError):
                 process.kill()
-            await process.wait()
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(process.wait(), 5)
+        devtools, self._devtools = self._devtools, None
+        if devtools is not None:
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(devtools.close(), 2)
         profile, self._profile = self._profile, None
         if profile is not None:
             await asyncio.to_thread(_remove, profile)
