@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { defineConfig, type PlaywrightTestConfig } from "@playwright/test";
 
 // No model endpoint is configured, so the whole run uses scripted narratives.
@@ -9,10 +10,12 @@ export const WEB = "http://127.0.0.1:5183";
 /** The tunnel the tests pretend guests come through. */
 export const PUBLIC_HOST = "guests.example";
 // A fresh data directory for every run, so one run's scenes and broadcasts never meet the next.
+// The runner and each worker load this file, so the first one picks the directory and hands it down.
+export const DATA_DIR = (process.env.E2E_DATA_DIR ??= resolve(import.meta.dirname, ".data-e2e", String(Date.now())));
 // The hidden browser must open the program page on the tests' own dev server, not a developer's.
 // Guests use in-memory rooms, so no test needs Azure.
 const TEST_SERVER = {
-  ...NO_MODEL, KICKSTREAM_DATA_DIR: `.data-e2e/${Date.now()}`, KICKSTREAM_PROGRAM_URL: `${WEB}/studio?output`,
+  ...NO_MODEL, KICKSTREAM_DATA_DIR: DATA_DIR, KICKSTREAM_PROGRAM_URL: `${WEB}/studio?output`,
   KICKSTREAM_ROOMS: "fake", KICKSTREAM_PUBLIC_HOSTS: PUBLIC_HOST,
 };
 

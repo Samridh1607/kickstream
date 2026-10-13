@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { DATA_DIR } from "../playwright.config";
 import { openStudio } from "./broadcasts";
 
 // The test pipeline and dev server; see playwright.config.ts.
@@ -52,4 +53,6 @@ test("through the tunnel only a guest's routes answer", async ({ request }) => {
   expect((await request.get(`${WEB}/api/studio`, { headers: tunnel })).status()).toBe(404);
   expect((await request.get(`${WEB}/api/guest/${secret}`, { headers: tunnel })).status()).toBe(200);
   expect((await request.get(`${WEB}/api/broadcasts`)).status()).toBe(200);
+  const people = `${WEB}/@fs/${DATA_DIR.replaceAll("\\", "/")}/people.json`.replace("/@fs//", "/@fs/");
+  expect(await (await request.get(people, { headers: tunnel })).text()).not.toContain('"secret"');
 });
