@@ -9,6 +9,7 @@ from kickstream.studio.templates import (
     CANVAS_H,
     CANVAS_W,
     FULL_TIME,
+    INTERVIEW,
     LIVE_MATCH,
     STARTING_SOON,
     builtin_templates,
@@ -57,9 +58,16 @@ def moment(n=1, kind="goal"):
 # --- templates -------------------------------------------------------------------------------
 
 
-def test_there_are_five_built_in_templates_that_fit_the_canvas():
+def test_there_are_six_built_in_templates_that_fit_the_canvas():
     templates = builtin_templates()
-    assert [t.name for t in templates] == [STARTING_SOON, LIVE_MATCH, ANALYST_DESK, BREAK, FULL_TIME]
+    assert [t.name for t in templates] == [
+        STARTING_SOON,
+        LIVE_MATCH,
+        ANALYST_DESK,
+        BREAK,
+        FULL_TIME,
+        INTERVIEW,
+    ]
     for template in templates:
         assert template.template == template.name and template.elements
         for e in template.elements:
@@ -67,7 +75,7 @@ def test_there_are_five_built_in_templates_that_fit_the_canvas():
             assert rules.normalize_element(e) == e, f"{template.name}/{e.type} is not already normal"
 
 
-def test_a_new_studio_has_one_scene_per_template_with_starting_soon_live():
+def test_a_new_studio_starts_with_the_match_templates_and_starting_soon_live():
     doc = default_studio()
     assert [s.template for s in doc.scenes] == [STARTING_SOON, LIVE_MATCH, ANALYST_DESK, BREAK, FULL_TIME]
     assert doc.active_scene_id == scene_id(doc, STARTING_SOON) and doc.revision == 0
@@ -100,6 +108,7 @@ def test_the_live_match_is_the_fan_scene_and_the_analyst_desk_the_analyst_scene(
         ANALYST_DESK: "analyst",
         BREAK: None,
         FULL_TIME: None,
+        INTERVIEW: None,
     }
 
 
@@ -535,3 +544,30 @@ def test_ids_have_a_length_limit():
         Studio.model_validate(doc.model_copy(update={"scenes": [long_scene]}).model_dump())
     with pytest.raises(Exception, match="at most 64"):
         element(id="x" * 65)
+
+
+def test_a_cameras_element_keeps_only_its_name_tags_switch():
+    made = rules.normalize_element(
+        SceneElement(
+            id="c",
+            type="cameras",
+            x=0,
+            y=0,
+            width=800,
+            height=450,
+            layer=1,
+            visible=True,
+            props={"names": False, "junk": 1},
+        )
+    )
+    assert made.props == {"names": False}
+    plain = made.model_copy(update={"props": {}})
+    assert rules.normalize_element(plain).props == {"names": True}
+
+
+def test_the_interview_template_puts_the_cameras_first_and_new_studios_start_without_it():
+    interview = next(t for t in builtin_templates() if t.name == INTERVIEW)
+    assert [e.type for e in interview.elements] == ["cameras", "scoreboard"]
+    assert INTERVIEW not in {scene.name for scene in default_studio().scenes}
+    doc = rules.create_scene(default_studio(), "builtin", INTERVIEW)
+    assert doc.scenes[-1].name == INTERVIEW

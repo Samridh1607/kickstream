@@ -10,6 +10,7 @@ LIVE_MATCH = "Live match"
 ANALYST_DESK = "Analyst desk"
 BREAK = "Break"
 FULL_TIME = "Full-time"
+INTERVIEW = "Interview"
 
 # Whose commentary each built-in scene carries; the others follow the studio's mode.
 TEMPLATE_MODES = {LIVE_MATCH: "fan", ANALYST_DESK: "analyst"}
@@ -68,6 +69,10 @@ def builtin_templates() -> list[Scene]:
             _el(3, "stats", 1000, 200, 760, 560),
             _el(4, "banner", 400, 800, 1120, 180),
         ],
+        INTERVIEW: [
+            _el(1, "cameras", 40, 40, 1840, 820, names=True),
+            _el(2, "scoreboard", 410, 880, 1100, 120),
+        ],
     }
     return [
         Scene(
@@ -82,9 +87,8 @@ def builtin_templates() -> list[Scene]:
 
 
 def default_studio() -> Studio:
-    scenes = [
-        template.model_copy(update={"id": f"scene-{n}"}) for n, template in enumerate(builtin_templates(), 1)
-    ]
+    starting = [template for template in builtin_templates() if template.name != INTERVIEW]
+    scenes = [template.model_copy(update={"id": f"scene-{n}"}) for n, template in enumerate(starting, 1)]
     return Studio(
         revision=0,
         server_time=0.0,

@@ -252,7 +252,7 @@
       "required": ["id", "type", "x", "y", "width", "height", "layer", "visible", "props"],
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "type": { "enum": ["scoreboard", "pitch", "narration", "stats", "banner", "ticker", "timeline", "recap", "replay", "countdown", "text", "image"] },
+        "type": { "enum": ["scoreboard", "pitch", "narration", "stats", "banner", "ticker", "timeline", "recap", "replay", "countdown", "text", "image", "cameras"] },
         "x": { "type": "integer" },
         "y": { "type": "integer" },
         "width": { "type": "integer" },

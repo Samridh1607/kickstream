@@ -136,3 +136,36 @@ test("with no replay playing the element is empty", () => {
   show("replay");
   expect(screen.queryByTestId("program-replay")).toBeNull();
 });
+
+test("the cameras element tiles the people on stage with name tags and their video", () => {
+  const rendered: string[] = [];
+  const renderVideo = (acsId: string, box: HTMLElement) => {
+    rendered.push(acsId);
+    box.setAttribute("data-video", acsId);
+    return () => box.removeAttribute("data-video");
+  };
+  const cameras = [
+    { id: "i1", name: "Sam Lee", acsId: "8:acs:1", present: true },
+    { id: "host", name: "Alex", acsId: null, present: false },
+    { id: "i2", name: "Kim", acsId: "8:acs:2", present: true },
+  ];
+  show("cameras", { cameras, renderVideo }, { names: true });
+  const grid = screen.getByTestId("program-cameras");
+  expect([grid.style.gridTemplateColumns, grid.style.gridTemplateRows]).toEqual(["repeat(2, 1fr)", "repeat(2, 1fr)"]);
+  expect(screen.getAllByTestId("camera-tile")).toHaveLength(3);
+  expect(rendered).toEqual(["8:acs:1", "8:acs:2"]);
+  expect(screen.getByText("Alex · away")).toBeTruthy();
+  expect(screen.getByText("SL")).toBeTruthy();
+});
+
+test("one person on stage fills the box, and name tags can be switched off", () => {
+  show("cameras", { cameras: [{ id: "i1", name: "Sam", acsId: null, present: true }] }, { names: false });
+  const grid = screen.getByTestId("program-cameras");
+  expect([grid.style.gridTemplateColumns, grid.style.gridTemplateRows]).toEqual(["repeat(1, 1fr)", "repeat(1, 1fr)"]);
+  expect(screen.queryByText("Sam")).toBeNull();
+});
+
+test("with no one on stage the cameras element shows nothing", () => {
+  show("cameras");
+  expect(screen.queryByTestId("program-cameras")).toBeNull();
+});

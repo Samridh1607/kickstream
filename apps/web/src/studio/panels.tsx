@@ -4,7 +4,7 @@ import {
 import {
   AddRegular, ArrowDownRegular, ArrowUpRegular, ClockRegular, CopyRegular, DataTrendingRegular, DeleteRegular,
   DismissRegular, HourglassRegular, PeopleRegular, PlayRegular, SaveRegular, SlideLayoutRegular, SportSoccerRegular,
-  TrophyRegular,
+  TrophyRegular, VideoPersonRegular,
 } from "@fluentui/react-icons";
 import { type ChangeEvent, type ReactElement, useEffect, useState } from "react";
 import type { Scene, SceneElement, Studio, StudioSettings, Ticker } from "../contracts";
@@ -14,10 +14,10 @@ import { formatRemaining } from "./format";
 import { lower, nextLayer, raise } from "./geometry";
 import { sceneMode } from "./mode";
 
-const BUILTIN = ["Starting soon", "Live match", "Analyst desk", "Break", "Full-time"];
+const BUILTIN = ["Starting soon", "Live match", "Analyst desk", "Break", "Full-time", "Interview"];
 const TEMPLATE_ICONS: Record<string, ReactElement> = {
   "Starting soon": <ClockRegular />, "Live match": <SportSoccerRegular />, "Analyst desk": <DataTrendingRegular />,
-  Break: <HourglassRegular />, "Full-time": <TrophyRegular />,
+  Break: <HourglassRegular />, "Full-time": <TrophyRegular />, Interview: <VideoPersonRegular />,
 };
 
 export const sceneIcon = (scene: Scene) => TEMPLATE_ICONS[scene.template ?? ""] ?? <SlideLayoutRegular />;
@@ -34,7 +34,7 @@ export function ModeBadge({ scene, studio }: { scene: Scene; studio: Studio }) {
   );
 }
 const ELEMENT_TYPES: SceneElement["type"][] = [
-  "scoreboard", "pitch", "narration", "stats", "banner", "ticker", "timeline", "recap", "replay", "countdown", "text", "image",
+  "scoreboard", "pitch", "narration", "stats", "banner", "ticker", "timeline", "recap", "replay", "countdown", "text", "image", "cameras",
 ];
 
 const useStyles = makeStyles({
@@ -239,6 +239,9 @@ export function ElementPanel({ scene, selectedId, onSelect, onChange, onUpload }
       )}
       {selected?.type === "pitch" && (
         <Switch label="Pressure map" checked={selected.props.pressure !== false} onChange={(_, data) => setProp(selected, "pressure", data.checked)} />
+      )}
+      {selected?.type === "cameras" && (
+        <Switch label="Name tags" checked={selected.props.names !== false} onChange={(_, data) => setProp(selected, "names", data.checked)} />
       )}
       {selected?.type === "image" && (
         <>

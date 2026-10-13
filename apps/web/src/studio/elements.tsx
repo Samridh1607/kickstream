@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { Pitch } from "../components/Pitch";
 import { StatsPanel } from "../components/StatsPanel";
 import { Timeline } from "../components/Timeline";
@@ -8,12 +8,24 @@ import type { MatchData } from "../stream/store";
 import { fetchReplay, imageUrl } from "./api";
 import { countdownLabel, formatRemaining, tickerItems } from "./format";
 
+/** Someone on stage, as the cameras element draws them. */
+export interface CameraTile {
+  id: string;
+  name: string;
+  acsId: string | null;
+  present: boolean;
+}
+
 /** Everything an element can draw from. `now` is the server's clock in Unix seconds. */
 export interface ProgramData {
   match: MatchData;
   studio: Studio;
   now: number;
   language: Language;
+  /** The people on stage, in order. */
+  cameras?: readonly CameraTile[];
+  /** Puts a person's video into the element; returns what takes it out. Absent where there is no call. */
+  renderVideo?: (acsId: string, element: HTMLElement) => () => void;
 }
 
 // The program is a broadcast picture, not themed interface: one fixed look, sized for 1080p.
@@ -170,6 +182,46 @@ function ImageView({ imageId, fit }: { imageId: unknown; fit: unknown }) {
   );
 }
 
+const initials = (name: string) =>
+  name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0].toUpperCase()).join("");
+
+function CameraFeed({ tile, names, renderVideo, language }: { tile: CameraTile; names: boolean; renderVideo?: ProgramData["renderVideo"]; language: Language }) {
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!tile.acsId || !renderVideo || !box.current) return;
+    return renderVideo(tile.acsId, box.current);
+  }, [tile.acsId, renderVideo]);
+  return (
+    <div data-testid="camera-tile" data-person={tile.id}
+      style={{ position: "relative", overflow: "hidden", borderRadius: 16, backgroundColor: "#101828" }}>
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 96, fontWeight: 700, color: "rgba(255, 255, 255, 0.45)" }}>
+        {initials(tile.name)}
+      </div>
+      <div ref={box} style={{ position: "absolute", inset: 0 }} />
+      {names && (
+        <span style={{ position: "absolute", left: 16, bottom: 16, padding: "4px 16px", borderRadius: 8, color: "#FFFFFF", backgroundColor: "rgba(16, 24, 40, 0.8)", fontSize: 28, fontWeight: 600 }}>
+          {tile.present ? tile.name : `${tile.name} · ${t(language, "away")}`}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function CamerasView({ data, names }: { data: ProgramData; names: boolean }) {
+  const tiles = data.cameras ?? [];
+  if (tiles.length === 0) return null;
+  const columns = tiles.length === 1 ? 1 : 2;
+  const rows = tiles.length <= 2 ? 1 : 2;
+  return (
+    <div data-testid="program-cameras"
+      style={{ width: "100%", height: "100%", display: "grid", gap: 16, gridTemplateColumns: `repeat(${columns}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}>
+      {tiles.map((tile) => (
+        <CameraFeed key={tile.id} tile={tile} names={names} renderVideo={data.renderVideo} language={data.language} />
+      ))}
+    </div>
+  );
+}
+
 /** Draws one scene element from the match and the studio document. */
 export function ElementView({ element, data }: { element: SceneElement; data: ProgramData }) {
   const { match, studio, language } = data;
@@ -220,5 +272,7 @@ export function ElementView({ element, data }: { element: SceneElement; data: Pr
       );
     case "image":
       return <ImageView imageId={props.image_id} fit={props.fit} />;
+    case "cameras":
+      return <CamerasView data={data} names={props.names !== false} />;
   }
 }

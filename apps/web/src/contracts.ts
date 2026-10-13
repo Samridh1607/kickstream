@@ -284,7 +284,8 @@ export interface SceneElement {
     | "replay"
     | "countdown"
     | "text"
-    | "image";
+    | "image"
+    | "cameras";
   x: number;
   y: number;
   width: number;

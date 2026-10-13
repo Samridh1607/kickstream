@@ -3,6 +3,7 @@ import type { Scene, Studio, ViewerProfile } from "../contracts";
 import { useMatch } from "../stream/store";
 import { type CurrentMatchOptions, useCurrentMatch } from "../stream/useCurrentMatch";
 import { startCapture, type StopCapture } from "./capture";
+import type { CameraTile } from "./elements";
 import { fitScale, nextLayer } from "./geometry";
 import { programMode } from "./mode";
 import { SceneCanvas } from "./SceneCanvas";
@@ -17,9 +18,18 @@ export function withReplayFallback(scene: Scene, studio: Studio): Scene {
   return { ...scene, elements: [...scene.elements, fallback] };
 }
 
+const CAMERAS_BOX = { x: 1440, y: 740, width: 440, height: 300 };
+
+/** People on stage must be seen: add a picture-in-picture box to a scene that shows no cameras. */
+export function withCamerasFallback(scene: Scene, cameras: readonly CameraTile[]): Scene {
+  if (cameras.length === 0 || scene.elements.some((element) => element.type === "cameras" && element.visible)) return scene;
+  const fallback = { id: "__cameras", type: "cameras" as const, ...CAMERAS_BOX, layer: nextLayer(scene.elements), visible: true, props: { names: true } };
+  return { ...scene, elements: [...scene.elements, fallback] };
+}
+
 /** Whatever is on air must be visible: add a default box for each thing the scene has no element for. */
-export function withFallbacks(scene: Scene, studio: Studio): Scene {
-  return withReplayFallback(scene, studio);
+export function withFallbacks(scene: Scene, studio: Studio, cameras: readonly CameraTile[] = []): Scene {
+  return withCamerasFallback(withReplayFallback(scene, studio), cameras);
 }
 
 function useWindowSize() {

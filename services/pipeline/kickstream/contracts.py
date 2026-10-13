@@ -255,7 +255,7 @@ class SceneElement(BaseModel):
         extra='forbid',
     )
     id: constr(min_length=1, max_length=64)
-    type: Literal['scoreboard', 'pitch', 'narration', 'stats', 'banner', 'ticker', 'timeline', 'recap', 'replay', 'countdown', 'text', 'image']
+    type: Literal['scoreboard', 'pitch', 'narration', 'stats', 'banner', 'ticker', 'timeline', 'recap', 'replay', 'countdown', 'text', 'image', 'cameras']
     x: int
     y: int
     width: int

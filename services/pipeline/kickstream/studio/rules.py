@@ -95,6 +95,8 @@ def _normalize_props(type_: str, props: dict) -> dict:
             "image_id": image_id if isinstance(image_id, str) else None,
             "fit": _choice_prop(props, "fit", "contain", ("contain", "cover")),
         }
+    if type_ == "cameras":
+        return {"names": props.get("names", True) is not False}
     return {}
 
 

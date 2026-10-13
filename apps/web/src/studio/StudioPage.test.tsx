@@ -112,6 +112,13 @@ test("scenes can be added from a template, duplicated, saved as a template and d
   await waitFor(() => expect(last(server)).toMatchObject({ url: "/api/studio/scenes/s2", method: "DELETE" }));
 });
 
+test("an Interview scene can be made from the built-in templates", async () => {
+  const server = await opened();
+  fireEvent.change(screen.getByLabelText("New scene from"), { target: { value: "builtin:Interview" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add scene" }));
+  await waitFor(() => expect(last(server).body).toEqual({ source: "builtin", ref: "Interview" }));
+});
+
 test("the editor opens on the scene on air, and another scene can be edited without going live", async () => {
   const server = await opened();
   const editor = within(screen.getByRole("region", { name: "Editor" }));
