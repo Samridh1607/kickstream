@@ -47,6 +47,8 @@ const sdk = vi.hoisted(() => {
     calls: [] as FakeCall[],
     renderers: [] as FakeRenderer[],
     joinThrows: null as Error | null,
+    gates: [] as Promise<void>[],
+    asked: 0,
     Emitter,
   };
 
@@ -65,6 +67,9 @@ const sdk = vi.hoisted(() => {
 
   class FakeClient {
     createCallAgent = vi.fn(async () => {
+      state.asked += 1;
+      const gate = state.gates.shift();
+      if (gate) await gate;
       const agent = new FakeAgent(state.agents.length + 1);
       state.agents.push(agent);
       state.log.push(`create ${agent.n}`);
@@ -101,9 +106,20 @@ beforeEach(() => {
   sdk.state.calls = [];
   sdk.state.renderers = [];
   sdk.state.joinThrows = null;
+  sdk.state.gates = [];
+  sdk.state.asked = 0;
 });
 
 const options: JoinOptions = { roomId: "room-1", token: "t1", name: "Host", refresh: async () => "t2" };
+const LEFT = "The call was left before it was joined.";
+
+function holdNextAgent() {
+  let release!: () => void;
+  sdk.state.gates.push(new Promise<void>((resolve) => {
+    release = resolve;
+  }));
+  return () => release();
+}
 
 async function joinAndConnect(call: AcsRoomCall) {
   const before = sdk.state.calls.length;
@@ -154,6 +170,42 @@ test("a join the service refuses at once is dropped and gives up its agent", asy
   await expect(call.join(options)).rejects.toThrow("Bad room.");
   expect([call.state, call.problem]).toEqual(["dropped", "The call could not be joined."]);
   expect(sdk.state.agents[0].dispose).toHaveBeenCalled();
+});
+
+test("leaving while the agent is still being made gives it up without joining", async () => {
+  const release = holdNextAgent();
+  const call = new AcsRoomCall();
+  const joining = call.join(options);
+  await vi.waitFor(() => expect(sdk.state.asked).toBe(1));
+  await call.leave();
+  const given = expect(joining).rejects.toThrow(LEFT);
+  release();
+  await vi.waitFor(() => expect(sdk.state.agents[0]?.dispose).toHaveBeenCalled());
+  await given;
+  expect(sdk.state.agents[0].join).not.toHaveBeenCalled();
+  expect(call.state).toBe("idle");
+});
+
+test("join, leave and join again leave one agent alive, joined", async () => {
+  const release = holdNextAgent();
+  const call = new AcsRoomCall();
+  const first = call.join(options);
+  await vi.waitFor(() => expect(sdk.state.asked).toBe(1));
+  const leaving = call.leave();
+  const second = call.join(options);
+  const given = expect(first).rejects.toThrow(LEFT);
+  release();
+  await vi.waitFor(() => expect(sdk.state.agents[0]?.dispose).toHaveBeenCalled());
+  await given;
+  await leaving;
+  await vi.waitFor(() => expect(sdk.state.calls).toHaveLength(1));
+  sdk.state.calls[0].reach("Connected");
+  await second;
+  expect(call.state).toBe("joined");
+  expect(sdk.state.agents.filter((agent) => agent.dispose.mock.calls.length === 0)).toHaveLength(1);
+  expect(sdk.state.agents[0].dispose).toHaveBeenCalled();
+  expect(sdk.state.agents[0].join).not.toHaveBeenCalled();
+  expect(sdk.state.log).toEqual(["create 1", "dispose 1", "create 2"]);
 });
 
 test("a video that cannot be shown lets go of its renderer", async () => {

@@ -16,6 +16,7 @@ const idOf = (participant: RemoteParticipant) =>
 const cameraOf = (participant: RemoteParticipant | undefined) =>
   participant?.videoStreams.find((stream) => stream.mediaStreamType === "Video");
 const toDevice = (device: VideoDeviceInfo | AudioDeviceInfo): Device => ({ id: device.id, name: device.name });
+const LEFT = "The call was left before it was joined.";
 
 /** A seat in an Azure Communication Services room. */
 export class AcsRoomCall implements RoomCall {
@@ -31,6 +32,10 @@ export class AcsRoomCall implements RoomCall {
   private agent: CallAgent | null = null;
   private call: Call | null = null;
   private local: LocalVideoStream | null = null;
+  /** Each join and leave takes a new number; a join that is no longer the latest gives up. */
+  private attempt = 0;
+  /** A call client allows one call agent at a time, so each is made only after the last is settled. */
+  private creating: Promise<void> = Promise.resolve();
 
   onChange(listener: () => void) {
     this.listeners.add(listener);
@@ -110,26 +115,43 @@ export class AcsRoomCall implements RoomCall {
     }
   }
 
-  /** A call client allows one call agent at a time. */
-  private async releaseAgent() {
+  private async release() {
+    const call = this.call;
     const agent = this.agent;
-    this.agent = null;
     this.call = null;
-    await agent?.dispose();
+    this.agent = null;
+    this.participants = [];
+    try {
+      if (call && call.state !== "Disconnected") await call.hangUp();
+    } finally {
+      await agent?.dispose();
+    }
   }
 
   async join({ roomId, token, name, refresh, receiveOnly = false }: JoinOptions) {
-    await this.releaseAgent();
+    const attempt = ++this.attempt;
+    const current = () => attempt === this.attempt;
     this.problem = null;
     this.state = "joining";
     this.emit();
-    let agent: CallAgent | null = null;
     try {
+      await this.release();
       const client = await this.start();
       const [, common] = await load();
+      if (!current()) throw new Error(LEFT);
       const credential = new common.AzureCommunicationTokenCredential({ token, tokenRefresher: () => refresh(), refreshProactively: true });
-      agent = await client.createCallAgent(credential, { displayName: name });
-      this.agent = agent;
+      const made = this.creating.then(async () => {
+        const created = await client.createCallAgent(credential, { displayName: name });
+        if (!current()) {
+          await created.dispose();
+          return null;
+        }
+        this.agent = created;
+        return created;
+      });
+      this.creating = made.then(() => undefined, () => undefined);
+      const agent = await made;
+      if (!agent || !current()) throw new Error(LEFT);
       const sending = !receiveOnly && this.local ? { localVideoStreams: [this.local] } : undefined;
       const call = agent.join({ roomId }, { videoOptions: sending, audioOptions: { muted: receiveOnly || this.muted } });
       this.call = call;
@@ -157,15 +179,16 @@ export class AcsRoomCall implements RoomCall {
         call.on("stateChanged", check);
         check();
       });
+      if (!current()) throw new Error(LEFT);
     } catch (caught) {
-      if (agent && agent !== this.agent) throw caught;
-      this.agent = null;
-      this.call = null;
-      this.participants = [];
+      if (!current()) throw new Error(LEFT);
       this.state = "dropped";
       this.problem ??= "The call could not be joined.";
-      this.emit();
-      await agent?.dispose();
+      try {
+        await this.release();
+      } finally {
+        this.emit();
+      }
       throw caught;
     }
   }
@@ -207,16 +230,11 @@ export class AcsRoomCall implements RoomCall {
   }
 
   async leave() {
-    const call = this.call;
-    const agent = this.agent;
-    this.call = null;
-    this.agent = null;
-    this.participants = [];
+    this.attempt += 1;
     this.state = "idle";
     try {
-      if (call && call.state !== "Disconnected") await call.hangUp();
+      await this.release();
     } finally {
-      await agent?.dispose();
       this.emit();
     }
   }

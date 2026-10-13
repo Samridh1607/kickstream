@@ -41,6 +41,7 @@ export interface RoomCall {
   setCamera(deviceId: string | null): Promise<void>;
   setMicrophone(deviceId: string): Promise<void>;
   setMuted(muted: boolean): Promise<void>;
+  /** Rejects if the call is left, or joined again, before this join connects. */
   join(options: JoinOptions): Promise<void>;
   leave(): Promise<void>;
   /** The host and co-hosts may mute anyone. */
