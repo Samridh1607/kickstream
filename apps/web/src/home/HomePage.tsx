@@ -7,7 +7,7 @@ import {
 import { type ReactNode, useMemo, useState } from "react";
 import { speedFromLocation, startMatch } from "../api";
 import { STUDIO_AUDIENCE_STREAM } from "../audience/api";
-import { BROADCASTS_STREAM, broadcastPath, endBroadcast, goLiveWith } from "../broadcasts/api";
+import { BROADCASTS_STREAM, broadcastPath, endBroadcast, goLiveWith, studioPath } from "../broadcasts/api";
 import { BroadcastList } from "../broadcasts/BroadcastList";
 import { CreateBroadcastDialog } from "../broadcasts/CreateBroadcastDialog";
 import { clock } from "../broadcasts/format";
@@ -218,7 +218,9 @@ export function HomePage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) 
                   End broadcast
                 </Button>
               )}
-              <Button as="a" href="/studio" size="large" icon={<VideoClipMultipleRegular />} className={styles.ghost}>Open studio</Button>
+              {current && (
+                <Button as="a" href={studioPath(current.id)} size="large" icon={<VideoClipMultipleRegular />} className={styles.ghost}>Open studio</Button>
+              )}
               {current && (
                 <Button as="a" href={broadcastPath(current.id)} size="large" icon={<InfoRegular />} className={styles.ghost}>Details</Button>
               )}
@@ -271,7 +273,7 @@ export function HomePage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) 
 
           <div className={styles.column}>
             <Card icon={<LiveRegular />} title="Destinations" label="Destinations"
-              action={<Button as="a" href="/studio" appearance="subtle" icon={<OpenRegular />}>Manage</Button>}>
+              action={<Button as="a" href={current ? studioPath(current.id) : "/studio"} appearance="subtle" icon={<OpenRegular />}>Manage</Button>}>
               {!output || output.destinations.length === 0 ? (
                 <Text className={styles.muted}>No destinations yet. Add YouTube, X, Facebook, Twitch or a recording in the studio's Output box.</Text>
               ) : (

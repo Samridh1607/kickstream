@@ -74,6 +74,10 @@ interface OutputTabProps {
   now: number;
   /** Sends one change and applies the answer. Resolves to true when it was accepted. */
   onRun(request: () => Promise<Output>): Promise<boolean>;
+  /** Goes live some other way, such as with the studio's broadcast. Resolves to true when it started. */
+  onGoLive?(): Promise<boolean>;
+  /** Going live turns recording on by itself, so no destination needs to be switched on first. */
+  recordsItself?: boolean;
 }
 
 /** While the output is on: how long it has been live, and how each stream it sends to is doing. */
@@ -103,7 +107,7 @@ export function LiveStatus({ output, now }: { output: Output | null; now: number
 }
 
 /** Where the program is sent, and the button that sends it. */
-export function OutputTab({ output, now, onRun }: OutputTabProps) {
+export function OutputTab({ output, now, onRun, onGoLive, recordsItself = false }: OutputTabProps) {
   const styles = useStyles();
   const [platform, setPlatform] = useState<Platform>("youtube");
   const [name, setName] = useState("");
@@ -113,17 +117,18 @@ export function OutputTab({ output, now, onRun }: OutputTabProps) {
   const inFlight = useRef(false);
 
   /** One request at a time: while it is in flight nothing else from this tab can start. */
-  const run = async (request: () => Promise<Output>): Promise<boolean> => {
+  const guard = async (work: () => Promise<boolean>): Promise<boolean> => {
     if (inFlight.current) return false;
     inFlight.current = true;
     setBusy(true);
     try {
-      return await onRun(request);
+      return await work();
     } finally {
       inFlight.current = false;
       setBusy(false);
     }
   };
+  const run = (request: () => Promise<Output>) => guard(() => onRun(request));
 
   if (!output) return <Text>Connecting to the output…</Text>;
 
@@ -146,7 +151,8 @@ export function OutputTab({ output, now, onRun }: OutputTabProps) {
           {output.state === "live" && typeof output.started_at === "number" && <Text>{elapsed(now - output.started_at)}</Text>}
           <span className={styles.grow} />
           {idle ? (
-            <Button appearance="primary" icon={<LiveFilled />} disabled={busy || !output.destinations.some((item) => item.enabled)} onClick={() => void run(goLive)}>Go live</Button>
+            <Button appearance="primary" icon={<LiveFilled />} disabled={busy || (!recordsItself && !output.destinations.some((item) => item.enabled))}
+              onClick={() => void (onGoLive ? guard(onGoLive) : run(goLive))}>Go live</Button>
           ) : (
             <Button icon={<StopFilled />} disabled={busy || output.state === "stopping"} onClick={() => void run(stopOutput)}>Stop</Button>
           )}

@@ -53,6 +53,17 @@ test("an ended broadcast shows its stats", () => {
   expect(tile("Key moments").getByText("1")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Go live" })).toBeNull();
   expect(screen.queryByRole("button", { name: "End broadcast" })).toBeNull();
+  // Ended: there is nothing left to produce in the studio.
+  expect(screen.queryByRole("link", { name: "Open studio" })).toBeNull();
+});
+
+test("the broadcast sits under Home, and its studio sits under it", () => {
+  serve();
+  show(broadcasts({ broadcasts: [broadcast()], current_id: "b1" }));
+  const trail = within(screen.getByRole("navigation", { name: "Breadcrumb" }));
+  expect(trail.getByRole("link", { name: "Home" }).getAttribute("href")).toBe("/");
+  expect(trail.getByText("Derby day").getAttribute("aria-current")).toBe("page");
+  expect(screen.getByRole("link", { name: "Open studio" }).getAttribute("href")).toBe("/broadcasts/b1/studio");
 });
 
 test("the recording plays here and can be downloaded", () => {

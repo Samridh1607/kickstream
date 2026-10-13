@@ -77,6 +77,14 @@ def test_a_broadcast_is_created_edited_and_deleted(client):
     assert client.delete(f"{BASE}/{broadcast['id']}").json()["broadcasts"] == []
 
 
+def test_opening_a_broadcast_in_the_studio_makes_it_current(client):
+    first = client.post(BASE, json={"title": "Derby day"}).json()["broadcasts"][0]
+    second = client.post(BASE, json={"title": "Cup final"}).json()["broadcasts"][0]
+    assert client.get(BASE).json()["current_id"] == second["id"]
+    assert client.post(f"{BASE}/{first['id']}/select").json()["current_id"] == first["id"]
+    assert client.post(f"{BASE}/nope/select").status_code == 404
+
+
 def test_refusals_name_the_field(client):
     refused = client.post(BASE, json={"title": "  "})
     assert (refused.status_code, field(refused)) == (422, "title")

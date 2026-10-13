@@ -6,7 +6,9 @@ import {
 import { type ReactElement, type ReactNode, useEffect, useMemo, useState } from "react";
 import { STUDIO_AUDIENCE_STREAM } from "../audience/api";
 import { AudienceTab } from "../audience/AudienceTab";
-import type { Audience, Output, Scene, SceneElement, Studio, ViewerProfile } from "../contracts";
+import { endBroadcast, goLiveWith } from "../broadcasts/api";
+import { StudioBroadcastBar, useStudioBroadcast } from "../broadcasts/StudioBroadcast";
+import type { Audience, Broadcast, Output, Scene, SceneElement, Studio, ViewerProfile } from "../contracts";
 import { OUTPUT_STREAM } from "../output/api";
 import { OutputTab } from "../output/OutputTab";
 import { AppNav } from "../shell/AppNav";
@@ -71,10 +73,17 @@ function Heading({ icon, title, children }: { icon: ReactNode; title: string; ch
   );
 }
 
+interface StudioPageProps extends CurrentMatchOptions {
+  /** The broadcast this studio works on; its address is `/broadcasts/{id}/studio`. */
+  broadcastId?: string;
+}
+
 /** The streamer's control page: arrange scenes, switch them, and drive what is on the program. */
-export function StudioPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) {
+export function StudioPage({ broadcastId, eventSource, retryMs, pollMs }: StudioPageProps) {
   const styles = useStyles();
   const { studio, offset, connected, accept } = useStudio(eventSource, retryMs);
+  const link = useStudioBroadcast(broadcastId, eventSource, retryMs);
+  const [ending, setEnding] = useState(false);
   const { doc: audience, accept: acceptAudience } = useLiveDocument<Audience>(STUDIO_AUDIENCE_STREAM, eventSource, retryMs);
   const { doc: output, accept: acceptOutput } = useLiveDocument<Output>(OUTPUT_STREAM, eventSource, retryMs);
   // The match is followed in the commentary of the scene on air, as the program shows it.
@@ -154,6 +163,30 @@ export function StudioPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions
     }
   };
 
+  /** Going live in a broadcast's studio goes live with that broadcast, so its sessions, recording and stats are kept. */
+  const linked = broadcastId !== undefined ? link.broadcast : null;
+  const goLiveWithBroadcast = linked === null ? undefined : async (): Promise<boolean> => {
+    try {
+      link.accept(await goLiveWith(linked.id));
+      setProblem(null);
+      return true;
+    } catch (caught) {
+      setProblem(caught instanceof Error ? caught.message : "The broadcast could not go live.");
+      return false;
+    }
+  };
+  const end = async (broadcast: Broadcast) => {
+    setEnding(true);
+    try {
+      link.accept(await endBroadcast(broadcast.id));
+      setProblem(null);
+    } catch (caught) {
+      setProblem(caught instanceof Error ? caught.message : "The broadcast could not end.");
+    } finally {
+      setEnding(false);
+    }
+  };
+
   const onAir = onAirScene(studio);
   const saved = studio.scenes.find((scene) => scene.id === editingId) ?? onAir;
   const editing = pending?.id === saved.id ? pending : saved;
@@ -189,6 +222,7 @@ export function StudioPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions
           <ModeBadge scene={onAir} studio={studio} />
         </span>
       </AppNav>
+      {broadcastId !== undefined && <StudioBroadcastBar link={link} busy={ending} onEnd={(broadcast) => void end(broadcast)} />}
       {problem && (
         <MessageBar intent="error">
           <MessageBarBody>{problem}</MessageBarBody>
@@ -231,7 +265,8 @@ export function StudioPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions
         <div className={mergeClasses(styles.column, styles.controls)}>
           <section className={styles.card} aria-label="Output">
             <Heading icon={<LiveRegular />} title="Output" />
-            <OutputTab output={output} now={now} onRun={runOutput} />
+            <OutputTab output={output} now={now} onRun={runOutput} onGoLive={goLiveWithBroadcast}
+              recordsItself={linked !== null && linked.record && linked.state === "ready"} />
           </section>
           <div className={styles.card}>
             <TabList size="small" style={{ flexWrap: "wrap" }} selectedValue={tab} onTabSelect={(_, selection) => setTab(selection.value as TabName)}>

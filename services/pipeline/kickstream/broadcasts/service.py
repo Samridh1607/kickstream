@@ -134,6 +134,10 @@ class BroadcastService:
         self._apply(lambda state: rules.delete(state, broadcast_id))
         shutil.rmtree(self._reels_dir / broadcast_id, ignore_errors=True)
 
+    def select(self, broadcast_id: str) -> None:
+        """Make the broadcast the one the studio works on, and the one the next stream belongs to."""
+        self._apply(lambda state: rules.select(state, broadcast_id))
+
     def go_live(self, broadcast_id: str) -> None:
         """Make the broadcast current and start the stream; its session opens when the stream is live."""
         self._apply(lambda state: rules.select(state, broadcast_id))

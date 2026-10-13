@@ -3,7 +3,7 @@ import {
   mergeClasses, MessageBar, MessageBarBody, Spinner, Text, tokens,
 } from "@fluentui/react-components";
 import {
-  ArrowDownloadRegular, ArrowLeftRegular, BotSparkleRegular, ChatRegular, DeleteRegular, FilmstripRegular, FlashRegular,
+  ArrowDownloadRegular, BotSparkleRegular, ChatRegular, DeleteRegular, FilmstripRegular, FlashRegular,
   LiveRegular, PeopleCommunityRegular, PlayRegular, PollRegular, RecordRegular, RecordStopRegular, SparkleRegular,
   SportSoccerRegular, TimerRegular, VideoClipMultipleRegular,
 } from "@fluentui/react-icons";
@@ -12,9 +12,12 @@ import type { Broadcast, Broadcasts, Output } from "../contracts";
 import { OUTPUT_STREAM } from "../output/api";
 import { AppNav } from "../shell/AppNav";
 import { PlatformMark } from "../shell/PlatformMark";
+import { Trail } from "../shell/Trail";
 import { useLiveDocument } from "../stream/useLiveDocument";
 import { useNow } from "../studio/useStudio";
-import { BROADCASTS_STREAM, deleteBroadcast, deleteReel, endBroadcast, generateReels, goLiveWith, recordingUrl } from "./api";
+import {
+  BROADCASTS_STREAM, deleteBroadcast, deleteReel, endBroadcast, generateReels, goLiveWith, recordingUrl, studioPath,
+} from "./api";
 import { bytes, clock, duration, intoBroadcast, MOMENT_LABELS, onAir, plural, reach, STATE, teamName, votes, when } from "./format";
 import { ReelCard } from "./ReelCard";
 
@@ -34,7 +37,7 @@ const useStyles = makeStyles({
     color: "#FFFFFF", boxShadow: tokens.shadow16,
     backgroundImage: "radial-gradient(circle at 85% 10%, rgba(217, 45, 32, 0.35), transparent 40%), linear-gradient(135deg, #1C0F33 0%, #3A1A78 55%, #6528CF 100%)",
   },
-  back: { display: "inline-flex", alignItems: "center", gap: "6px", color: "rgba(255, 255, 255, 0.85)", textDecorationLine: "none", fontSize: tokens.fontSizeBase200, ":hover": { color: "#FFFFFF", textDecorationLine: "underline" } },
+  trail: { color: "#FFFFFF" },
   headRow: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: tokens.spacingHorizontalS },
   title: { margin: 0, fontSize: "36px", lineHeight: 1.15, fontWeight: tokens.fontWeightBold, overflowWrap: "anywhere" },
   description: { opacity: 0.9, maxWidth: "760px", lineHeight: 1.5 },
@@ -187,7 +190,7 @@ function Details({ broadcast, doc, output, now, busy, playing, setPlaying, run, 
   return (
     <>
       <section className={styles.header} aria-label="Broadcast">
-        <a href="/" className={styles.back}><ArrowLeftRegular /> All broadcasts</a>
+        <Trail steps={[{ label: "Home", href: "/" }, { label: broadcast.title }]} className={styles.trail} />
         <div className={styles.headRow}>
           <Badge appearance="filled" color={state.color} icon={live ? <LiveRegular /> : undefined}>{state.label}</Badge>
           <Text className={styles.when}>{`Created ${when(broadcast.created_at)}`}</Text>
@@ -213,7 +216,9 @@ function Details({ broadcast, doc, output, now, busy, playing, setPlaying, run, 
               End broadcast
             </Button>
           )}
-          <Button as="a" href="/studio" size="large" icon={<VideoClipMultipleRegular />} className={styles.ghost}>Open studio</Button>
+          {broadcast.state !== "ended" && (
+            <Button as="a" href={studioPath(broadcast.id)} size="large" icon={<VideoClipMultipleRegular />} className={styles.ghost}>Open studio</Button>
+          )}
           {!live && (
             <Dialog>
               <DialogTrigger disableButtonEnhancement>

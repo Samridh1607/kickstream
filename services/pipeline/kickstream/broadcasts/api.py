@@ -69,6 +69,11 @@ def build_broadcasts_router(*, service: BroadcastService, socket_hosts: Collecti
         service.delete(broadcast_id)
         return service.view()
 
+    @router.post(f"{BASE}/{{broadcast_id}}/select")
+    async def post_select(broadcast_id: str) -> Broadcasts:
+        service.select(broadcast_id)
+        return service.view()
+
     @router.post(f"{BASE}/{{broadcast_id}}/live")
     async def post_live(broadcast_id: str) -> Broadcasts:
         service.go_live(broadcast_id)

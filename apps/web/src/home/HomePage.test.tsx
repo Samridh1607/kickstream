@@ -51,6 +51,8 @@ test("with no broadcast, Home asks for one and creates it from a title, a descri
   const hero = within(screen.getByRole("region", { name: "Broadcast" }));
   expect(hero.getByRole("heading", { level: 1 }).textContent).toBe("Create a broadcast");
   expect(hero.queryByRole("button", { name: "Go live" })).toBeNull();
+  // The studio works on a broadcast, so there is none to open yet.
+  expect(hero.queryByRole("link", { name: "Open studio" })).toBeNull();
   expect(screen.getByText("No broadcasts yet")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Home" }).getAttribute("aria-current")).toBe("page");
 
@@ -78,6 +80,8 @@ test("the current broadcast goes live from Home, even with recording as its only
   expect(hero.getByText("Matchday 12")).toBeTruthy();
   expect(hero.getByText("Recording on")).toBeTruthy();
   expect(hero.getByRole("link", { name: "Details" }).getAttribute("href")).toBe("/broadcasts/b1");
+  expect(hero.getByRole("link", { name: "Open studio" }).getAttribute("href")).toBe("/broadcasts/b1/studio");
+  expect(screen.getByRole("link", { name: "Manage" }).getAttribute("href")).toBe("/broadcasts/b1/studio");
   fireEvent.click(hero.getByRole("button", { name: "Go live" }));
   await waitFor(() => expect(calls).toContainEqual({ url: "/api/broadcasts/b1/live", method: "POST", body: undefined }));
 });

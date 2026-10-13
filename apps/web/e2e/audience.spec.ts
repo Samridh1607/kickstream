@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openStudio } from "./broadcasts";
 
 // The test pipeline; see playwright.config.ts.
 const API = "http://127.0.0.1:8010";
@@ -17,7 +18,7 @@ test("fans vote and ask, and the streamer puts the result and an answer on the p
   const fan = await fanContext.newPage();
 
   try {
-    await control.goto("/studio");
+    await openStudio(control, request, `Fan day ${tag}`);
     await program.goto("/studio?output");
     await fan.goto("/join");
     await control.getByRole("tab", { name: "Audience" }).click();

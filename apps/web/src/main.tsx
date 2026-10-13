@@ -3,19 +3,26 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { JoinPage } from "./audience/JoinPage";
 import { BroadcastPage } from "./broadcasts/BroadcastPage";
+import { StudioEntry } from "./broadcasts/StudioEntry";
 import { HomePage } from "./home/HomePage";
 import { MatchPage } from "./MatchPage";
 import { isOutputView, ProgramPage } from "./studio/ProgramPage";
 import { StudioPage } from "./studio/StudioPage";
 import { useAppTheme } from "./theme";
 
-/** The pages: the streamer's home, each broadcast, the studio (with its clean output), the match data, and the fan join page. */
+/**
+ * The pages: Home lists the broadcasts, each broadcast has its page and its studio, and the studio's clean output,
+ * the match data and the fan join page stand beside them.
+ */
 function Page() {
   const path = window.location.pathname.replace(/\/+$/, "");
-  const broadcast = /^\/broadcasts\/([^/]+)$/.exec(path);
-  if (broadcast) return <BroadcastPage broadcastId={decodeURIComponent(broadcast[1])} />;
+  const broadcast = /^\/broadcasts\/([^/]+)(\/studio)?$/.exec(path);
+  if (broadcast) {
+    const broadcastId = decodeURIComponent(broadcast[1]);
+    return broadcast[2] ? <StudioPage broadcastId={broadcastId} /> : <BroadcastPage broadcastId={broadcastId} />;
+  }
   if (path === "/join") return <JoinPage />;
-  if (path === "/studio") return isOutputView(window.location.search) ? <ProgramPage /> : <StudioPage />;
+  if (path === "/studio") return isOutputView(window.location.search) ? <ProgramPage /> : <StudioEntry />;
   if (path === "/match") return <MatchPage />;
   return <HomePage />;
 }

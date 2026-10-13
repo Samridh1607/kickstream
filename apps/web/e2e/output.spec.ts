@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { openStudio } from "./broadcasts";
 
 // The test pipeline; see playwright.config.ts.
 const OUTPUT = "http://127.0.0.1:8010/api/studio/output";
@@ -26,7 +27,7 @@ function find(file: string): string {
 }
 
 test("the streamer records the program to a file, changes it while live, and stops", async ({ page, request }) => {
-  await page.goto("/studio");
+  await openStudio(page, request, `Output test ${Date.now()}`);
   await page.getByLabel("Platform").selectOption("file");
   await page.getByRole("button", { name: "Add destination" }).click();
   await expect(page.getByRole("switch", { name: "Send to Record to file" })).toBeVisible();

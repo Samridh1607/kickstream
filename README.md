@@ -25,7 +25,8 @@ Open `http://127.0.0.1:5173`, the streaming home, press **Create a broadcast**, 
 |---|---|
 | `/` | Home: create a broadcast and go live or end it, where the stream is going and how each destination is doing, every saved broadcast, the fan page link, and a quick-start checklist |
 | `/broadcasts/{id}` | One broadcast: its stats, recording player, key moments, sessions and reels |
-| `/studio` | Build and switch scenes, see the program as it goes out, run banners, polls and questions, and manage the Output |
+| `/broadcasts/{id}/studio` | That broadcast's studio: build and switch scenes, see the program as it goes out, run banners, polls and questions, and go live with it |
+| `/studio` | Opens the studio of the broadcast on air, or else of the current one; with neither, asks you to choose or create one |
 | `/match` | The match data: pitch, key moments, narratives and stats, in Fan or Analyst view |
 | `/join` | The fan page to share with viewers |
 
@@ -47,11 +48,13 @@ Four Microsoft Agent Framework agents do the writing: a Commentator and a Tactic
 
 ## Studio
 
-A streamer composes the picture at `/studio`, watches it in the studio's **Program** preview, and sends it out from the **Output** box (see Going live below).
+The pages follow one path: **Home › Broadcast › Studio**. The studio always works on a broadcast. Open it with **Open studio** on Home or on a broadcast's page; its top bar names the broadcast and links back to it and to Home. Opening a broadcast's studio makes it the current broadcast, so **Go live** there goes live with it. An ended broadcast's studio cannot go live; create a new broadcast instead. Scenes are one library shared by every broadcast, so a layout built once is ready for the next show.
+
+A streamer composes the picture in the studio, watches it in the **Program** preview, and sends it out from the **Output** box (see Going live below).
 
 | Address | Use |
 |---|---|
-| `http://127.0.0.1:5173/studio` | Arrange scenes on a 16:9 canvas, switch them, and control banners, the ticker, replays and countdowns |
+| `http://127.0.0.1:5173/broadcasts/{id}/studio` | Arrange scenes on a 16:9 canvas, switch them, and control banners, the ticker, replays and countdowns |
 | `http://127.0.0.1:5173/studio?output` | The scene that is on air, full window, with no controls. This is what Go live streams. To use another tool instead, such as an OBS browser source, point it here at 1920 × 1080 |
 
 - **Scenes** are saved canvases. Five templates are built in: Starting soon, Live match, Analyst desk, Break and Full-time. Drag and resize elements, or select one and use the arrow keys (Shift with the arrow keys resizes). Press **Switch** on a scene to put it on air.
@@ -90,7 +93,7 @@ A broadcast is one show: a title, an optional description, and whether to record
 - **Recordings:** the MP4s written while it was live, playable and downloadable on its page.
 - **Stats:** time on air, destinations reached, poll votes and fan questions, the score, and the key moments with their commentary.
 
-Going live from the studio with no broadcast chosen still saves one, titled with the date and time. Broadcasts are kept in `.data/broadcasts.json`.
+Starting the Output with no broadcast (through the API, for example) still saves one, titled with the date and time. Broadcasts are kept in `.data/broadcasts.json`.
 
 On an ended broadcast's page, **Generate reels** cuts up to four 15-second vertical clips (1080 × 1920) from the recording, around its goals, red cards and big chances, or spread through it when there were none. With a model configured, two Microsoft Agent Framework agents do the choosing: a Highlight Editor picks the moments and a Social Copywriter writes each reel's title, caption and hashtags. Without a model, or if they fail, templates do it. The agents never set the times: each clip starts 8 seconds before its moment. Each reel plays on the page, downloads as an MP4, and has a button that copies its post. Reels are kept in `.data/reels/`.
 
@@ -99,6 +102,7 @@ On an ended broadcast's page, **Generate reels** cuts up to four 15-second verti
 | `GET /api/broadcasts`, `/api/broadcasts/socket` | Every broadcast, once or live |
 | `POST /api/broadcasts` | Create one: `{"title", "description", "record"}` |
 | `PUT`, `DELETE /api/broadcasts/{id}` | Edit or delete one |
+| `POST /api/broadcasts/{id}/select` | Make it the current broadcast, the one the studio works on and the next stream belongs to |
 | `POST /api/broadcasts/{id}/live`, `/end` | Go live with it, or end it |
 | `POST /api/broadcasts/{id}/reels` | Generate reels from its recording |
 | `GET /api/broadcasts/{id}/recordings/{file}`, `/reels/{reel}.mp4` | Its recordings and reels, with range requests for seeking |

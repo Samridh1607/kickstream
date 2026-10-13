@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openStudio } from "./broadcasts";
 
 // The test pipeline; see playwright.config.ts.
 const API = "http://127.0.0.1:8010";
@@ -21,7 +22,7 @@ test("a streamer builds a scene, goes live, and drives the program", async ({ br
   await program.setViewportSize({ width: 960, height: 540 });
 
   try {
-    await control.goto("/studio");
+    await openStudio(control, request, `Studio test ${Date.now()}`);
     await program.goto("/studio?output");
 
     // Scenes: going live cuts the program.
