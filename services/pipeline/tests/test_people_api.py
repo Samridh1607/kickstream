@@ -189,6 +189,14 @@ def test_a_co_host_opens_the_studio_on_the_public_host_until_their_invite_is_rev
     assert client.get("/api/broadcasts", headers=as_cohost).status_code == 404
 
 
+def test_a_co_host_is_let_in_beside_a_cookie_another_site_left_malformed(client):
+    b = new_broadcast(client)
+    cohost = invite(client, b, role="cohost")
+    client.post(f"/api/guest/{secret_of(cohost)}/join", json={"name": "Kim"}, headers={"host": PUBLIC})
+    headers = {"host": PUBLIC, "cookie": f'a={{"x":1}}; kickstream_cohost={secret_of(cohost)}'}
+    assert client.get("/api/broadcasts", headers=headers).status_code == 200
+
+
 def test_settings_read_guests_from_the_environment():
     settings = Settings.from_env(
         {
@@ -216,6 +224,23 @@ def test_a_dotenv_file_fills_in_what_the_environment_leaves_out(tmp_path):
         "KICKSTREAM_PUBLIC_HOSTS": "from-shell",
     }
     assert environment(tmp_path / "missing", {}) == {}
+
+
+def test_a_dotenv_file_is_read_as_the_web_server_reads_it(tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "KICKSTREAM_PUBLIC_HOSTS=a.example, b.example   # the tunnel\n"
+        "KICKSTREAM_ROOMS=fake#for now\n"
+        'KICKSTREAM_BROWSER="C:/Edge #2/msedge.exe" # quoted\n'
+        "KICKSTREAM_FFMPEG=   # unset\n",
+        encoding="utf-8",
+    )
+    assert environment(env_file, {}) == {
+        "KICKSTREAM_PUBLIC_HOSTS": "a.example, b.example",
+        "KICKSTREAM_ROOMS": "fake",
+        "KICKSTREAM_BROWSER": "C:/Edge #2/msedge.exe",
+        "KICKSTREAM_FFMPEG": "",
+    }
 
 
 def test_an_acs_connection_string_chooses_azure_and_starting_calls_nothing(tmp_path):

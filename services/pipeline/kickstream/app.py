@@ -7,12 +7,12 @@ import time
 from collections.abc import Callable, Collection, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from http.cookies import CookieError, SimpleCookie
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from starlette.requests import cookie_parser
 
 from kickstream.adapters.acs_rooms import AcsRooms
 from kickstream.adapters.agent_reels import AgentReelProducer
@@ -194,17 +194,15 @@ class PublicHostGate:
     def _allowed(self, path: str, headers: dict[bytes, bytes]) -> bool:
         if path.startswith("/api/guest/"):
             return True
-        cookies = SimpleCookie()
-        try:
-            cookies.load(headers.get(b"cookie", b"").decode("latin-1"))
-        except CookieError:
-            return False
-        morsel = cookies.get(COHOST_COOKIE)
-        return morsel is not None and self._is_cohost(morsel.value)
+        secret = cookie_parser(headers.get(b"cookie", b"").decode("latin-1")).get(COHOST_COOKIE)
+        return secret is not None and self._is_cohost(secret)
 
 
 def read_env_file(path: Path) -> dict[str, str]:
-    """`KEY=value` lines from a .env file, if there is one. Surrounding quotes are dropped."""
+    """`KEY=value` lines from a .env file, if there is one, read as the web server reads them.
+
+    Quotes around a value are dropped; an unquoted value ends at a `#`, which starts a comment.
+    """
     if not path.is_file():
         return {}
     found = {}
@@ -214,9 +212,8 @@ def read_env_file(path: Path) -> dict[str, str]:
             continue
         key, value = line.split("=", 1)
         key, value = key.strip().removeprefix("export ").strip(), value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-            value = value[1:-1]
-        found[key] = value
+        closing = value.find(value[0], 1) if value[:1] in ("'", '"') else -1
+        found[key] = value[1:closing] if closing > 0 else value.split("#", 1)[0].rstrip()
     return found
 
 
