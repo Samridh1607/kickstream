@@ -2,7 +2,7 @@ import ast
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parents[1] / "kickstream"
-STAGES = {"simulator", "analytics", "narration", "overlay", "gateway", "studio", "audience"}
+STAGES = {"simulator", "analytics", "narration", "overlay", "gateway", "studio", "audience", "output"}
 SHARED = {"contracts", "domain", "ports"}
 
 
