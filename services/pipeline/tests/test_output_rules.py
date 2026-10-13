@@ -197,8 +197,21 @@ def test_a_target_is_the_address_with_the_key_or_a_new_file():
     file_dest = one(platform="file", key="").doc.destinations[0]
     target = rules.target_for(file_dest, "", Path("rec"), 1_800_000_000.0)
     assert target.kind == "file"
-    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}-\d{6}\.mp4", Path(target.location).name)
+    assert re.fullmatch(
+        rf"\d{{4}}-\d{{2}}-\d{{2}}-\d{{6}}-{re.escape(file_dest.id)}\.mp4", Path(target.location).name
+    )
     assert Path(target.location).parent == Path("rec")
+
+
+def test_two_file_destinations_started_in_the_same_second_get_different_recordings():
+    state = rules.add_destination(one(platform="file", key=""), "Second", "file", "", "")
+    first, second = state.doc.destinations
+    now = 1_800_000_000.0
+    a = rules.target_for(first, "", Path("rec"), now)
+    b = rules.target_for(second, "", Path("rec"), now)
+    assert a.location != b.location
+    assert Path(a.location).name.endswith(f"-{first.id}.mp4")
+    assert Path(b.location).name.endswith(f"-{second.id}.mp4")
 
 
 def test_the_twenty_newest_recordings_are_listed_newest_first():

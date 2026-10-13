@@ -225,7 +225,8 @@ def redact(text: str, key: str) -> str:
 
 def target_for(destination: Destination, key: str, recordings_dir: Path, now: float) -> Target:
     if destination.platform == "file":
-        name = datetime.fromtimestamp(now).strftime("%Y-%m-%d-%H%M%S") + ".mp4"
+        # The destination id keeps two file destinations started in the same second apart.
+        name = datetime.fromtimestamp(now).strftime("%Y-%m-%d-%H%M%S") + f"-{destination.id}.mp4"
         return Target("file", str(recordings_dir / name))
     return Target("rtmp", f"{destination.url.rstrip('/')}/{key}")
 
