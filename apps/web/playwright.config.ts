@@ -3,10 +3,10 @@ import { defineConfig } from "@playwright/test";
 // No model endpoint is configured, so the whole run uses scripted narratives.
 const NO_MODEL = { KICKSTREAM_LLM_BASE_URL: "", KICKSTREAM_LLM_MODEL: "", KICKSTREAM_LLM_API_KEY: "" };
 // The tests run their own pipeline and dev server, on their own ports and data directory, so they
-// never touch the scenes, polls or match of a developer who has Kickstream running.
+// never touch the scenes or match of a developer who has Kickstream running.
 const API = "http://127.0.0.1:8010";
 const WEB = "http://127.0.0.1:5183";
-// A fresh data directory for every run, so one run's scenes, polls and questions never meet the next.
+// A fresh data directory for every run, so one run's scenes and broadcasts never meet the next.
 // The hidden browser must open the program page on the tests' own dev server, not a developer's.
 const TEST_SERVER = { ...NO_MODEL, KICKSTREAM_DATA_DIR: `.data-e2e/${Date.now()}`, KICKSTREAM_PROGRAM_URL: `${WEB}/studio?output` };
 

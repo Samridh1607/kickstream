@@ -7,6 +7,8 @@ test("Home leads to a broadcast, and the broadcast to its studio and scenes", as
   await expect(nav.getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("region", { name: "Scenes" })).toHaveCount(0);
   await expect(page.locator('a[href="/program"]')).toHaveCount(0);
+  await expect(page.locator('a[href="/join"]')).toHaveCount(0);
+  await expect(nav.getByRole("link", { name: "Fan page" })).toHaveCount(0);
 
   // Home: create the broadcast. Exact: the list of broadcasts is a region too.
   const hero = page.getByRole("region", { name: "Broadcast", exact: true });
