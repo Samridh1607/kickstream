@@ -6,7 +6,6 @@ export const MODES: readonly Mode[] = ["fan", "analyst"];
 export const LANGUAGE_NAMES: Record<Language, string> = { en: "English", es: "Español", hi: "हिन्दी" };
 
 const en = {
-  appTitle: "Kickstream",
   matchData: "Match data",
   start: "Start match",
   restart: "Restart match",
@@ -71,7 +70,6 @@ const en = {
 export type StringKey = keyof typeof en;
 
 const es: Record<StringKey, string> = {
-  appTitle: "Kickstream",
   matchData: "Datos del partido",
   start: "Iniciar partido",
   restart: "Reiniciar partido",
@@ -134,7 +132,6 @@ const es: Record<StringKey, string> = {
 };
 
 const hi: Record<StringKey, string> = {
-  appTitle: "Kickstream",
   matchData: "मैच डेटा",
   start: "मैच शुरू करें",
   restart: "मैच फिर शुरू करें",
