@@ -9,7 +9,6 @@ STAGES = {
     "overlay",
     "gateway",
     "studio",
-    "audience",
     "output",
     "broadcasts",
 }

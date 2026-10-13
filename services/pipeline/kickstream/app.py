@@ -13,7 +13,6 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from kickstream.adapters.agent_expert import AgentExpertWriter
 from kickstream.adapters.agent_reels import AgentReelProducer
 from kickstream.adapters.agent_writer import AgentNarrativeWriter
 from kickstream.adapters.chromium_capture import ChromiumCapture
@@ -29,10 +28,6 @@ from kickstream.adapters.scripted_reels import ScriptedReelProducer
 from kickstream.adapters.scripted_writer import ScriptedNarrativeWriter
 from kickstream.adapters.sse_broadcaster import InProcessBroadcaster
 from kickstream.analytics.stage import AnalyticsStage
-from kickstream.audience.api import build_audience_router
-from kickstream.audience.context import MatchTracker
-from kickstream.audience.service import AudienceService
-from kickstream.audience.stage import AudienceStage
 from kickstream.broadcasts.api import build_broadcasts_router
 from kickstream.broadcasts.service import BroadcastService
 from kickstream.broadcasts.stage import BroadcastStage
@@ -50,7 +45,6 @@ from kickstream.output.api import build_output_router
 from kickstream.output.service import OutputService
 from kickstream.overlay.stage import OverlayStage
 from kickstream.ports.clock import Clock
-from kickstream.ports.expert import ExpertWriter
 from kickstream.ports.output import Encoder, ProgramCapture, Sender
 from kickstream.ports.reels import ClipCutter, ReelProducer
 from kickstream.ports.writer import NarrativeWriter
@@ -206,8 +200,6 @@ class Pipeline:
     broadcaster: InProcessBroadcaster
     controller: MatchController
     studio: StudioService
-    audience: AudienceService
-    tracker: MatchTracker
     output: OutputService
     broadcasts: BroadcastService
     stages: list
@@ -216,7 +208,6 @@ class Pipeline:
     def start(self) -> None:
         self.tasks = [asyncio.create_task(stage.run()) for stage in self.stages]
         self.tasks.append(asyncio.create_task(self.studio.run()))
-        self.tasks.append(asyncio.create_task(self.audience.run()))
         self.tasks.append(asyncio.create_task(self.broadcasts.run()))
 
     async def stop(self) -> None:
@@ -227,7 +218,6 @@ class Pipeline:
             task.cancel()
         await asyncio.gather(*self.tasks, return_exceptions=True)
         self.tasks = []
-        await self.audience.stop()
 
 
 def build_pipeline(
@@ -237,7 +227,6 @@ def build_pipeline(
     writer: NarrativeWriter | None = None,
     match_prefix: str = "m",
     now: Callable[[], float] = time.time,
-    expert: ExpertWriter | None = None,
     capture: ProgramCapture | None = None,
     encoder: Encoder | None = None,
     new_sender: Callable[[], Sender] | None = None,
@@ -262,16 +251,6 @@ def build_pipeline(
         start_match=lambda: controller.start(DEMO_SEED, STUDIO_MATCH_SPEED),
         find_moment=lambda match_id, moment_id: find_moment(store, match_id, moment_id),
     )
-    tracker = MatchTracker()
-    if expert is None and settings.llm_configured:
-        expert = AgentExpertWriter(settings.llm_base_url, settings.llm_model, settings.llm_api_key)
-    audience = AudienceService(
-        JsonRecordStore(settings.data_dir / "audience.json"),
-        now=now,
-        expert=expert,
-        context=tracker.context,
-        language=lambda: studio.settings.language,
-    )
     output = OutputService(
         JsonRecordStore(settings.data_dir / "output.json"),
         JsonRecordStore(settings.data_dir / "output-keys.json", private=True),
@@ -287,8 +266,6 @@ def build_pipeline(
     broadcasts = BroadcastService(
         JsonRecordStore(settings.data_dir / "broadcasts.json"),
         output=output,
-        audience_view=lambda: audience.view(studio=True),
-        audience_changes=lambda: audience.changes(studio=True),
         producer=reel_producer,
         fallback=ScriptedReelProducer(),
         cutter=cutter or FfmpegClipCutter(settings.ffmpeg),
@@ -303,12 +280,9 @@ def build_pipeline(
         OverlayStage(bus),
         Recorder(bus, store, broadcaster),
         StudioStage(bus, studio),
-        AudienceStage(bus, tracker),
         BroadcastStage(bus, broadcasts),
     ]
-    return Pipeline(
-        bus, store, broadcaster, controller, studio, audience, tracker, output, broadcasts, stages
-    )
+    return Pipeline(bus, store, broadcaster, controller, studio, output, broadcasts, stages)
 
 
 def create_app(
@@ -318,7 +292,6 @@ def create_app(
     writer: NarrativeWriter | None = None,
     match_prefix: str | None = None,
     now: Callable[[], float] = time.time,
-    expert: ExpertWriter | None = None,
     capture: ProgramCapture | None = None,
     encoder: Encoder | None = None,
     new_sender: Callable[[], Sender] | None = None,
@@ -334,7 +307,6 @@ def create_app(
         writer=writer,
         match_prefix=match_prefix or f"m{secrets.token_hex(3)}",
         now=now,
-        expert=expert,
         capture=capture,
         encoder=encoder,
         new_sender=new_sender,
@@ -374,11 +346,6 @@ def create_app(
     app.include_router(
         build_studio_router(
             service=pipeline.studio, store=pipeline.store, socket_hosts=settings.allowed_hosts
-        )
-    )
-    app.include_router(
-        build_audience_router(
-            service=pipeline.audience, teams=pipeline.tracker.teams, socket_hosts=settings.allowed_hosts
         )
     )
     app.include_router(build_output_router(service=pipeline.output, socket_hosts=settings.allowed_hosts))

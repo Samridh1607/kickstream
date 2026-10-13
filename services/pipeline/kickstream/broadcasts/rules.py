@@ -10,11 +10,9 @@ from datetime import datetime
 
 from kickstream.broadcasts.reels import latest_recording, recording_length
 from kickstream.contracts import (
-    Audience,
     Broadcast,
     BroadcastDestination,
     BroadcastMoment,
-    BroadcastPoll,
     BroadcastRecording,
     Broadcasts,
     BroadcastScore,
@@ -33,7 +31,6 @@ MAX_BROADCASTS = 100
 MAX_SESSIONS = 50
 MAX_RECORDINGS = 50
 MAX_MOMENTS = 100
-MAX_POLLS = 20
 MAX_REELS = 12
 MAX_TITLE = 80
 MAX_DESCRIPTION = 500
@@ -52,8 +49,6 @@ class BroadcastsState:
     doc: Broadcasts
     # What the live session has seen so far. Not saved: a restart closes the session anyway.
     file_starts: Mapping[str, float] = field(default_factory=dict)  # file destination id -> when it began
-    polls_before: frozenset[str] = frozenset()  # polls already over when the session opened
-    questions_seen: frozenset[str] = frozenset()
 
 
 def empty_state(ai: bool) -> BroadcastsState:
@@ -115,7 +110,7 @@ def _new(broadcast_id: str, title: str, description: str, record: bool, now: flo
         sessions=[],
         recordings=[],
         moments=[],
-        stats=BroadcastStats(live_s=0.0, polls=[], questions=0),
+        stats=BroadcastStats(live_s=0.0),
         reels=[],
         generating=False,
     )
@@ -189,9 +184,7 @@ def end(state: BroadcastsState, broadcast_id: str, now: float) -> BroadcastsStat
 # --- following the output ---------------------------------------------------------------------
 
 
-def _open(
-    state: BroadcastsState, output: Output, audience: Audience | None, now: float, new_id: str
-) -> BroadcastsState:
+def _open(state: BroadcastsState, output: Output, now: float, new_id: str) -> BroadcastsState:
     target = find(state, state.doc.current_id) if state.doc.current_id else None
     if target is None or target.state != "ready":
         state = create(state, new_id, untitled(now), "", False, now)
@@ -206,10 +199,7 @@ def _open(
     )
     sessions = [*target.sessions, session][-MAX_SESSIONS:]
     state = _put(state, _change(target, state="live", sessions=sessions, problem=None))
-    before = frozenset(poll.id for poll in audience.history) if audience is not None else frozenset()
-    return replace(
-        _doc(state, current_id=target.id), file_starts={}, polls_before=before, questions_seen=frozenset()
-    )
+    return replace(_doc(state, current_id=target.id), file_starts={})
 
 
 def _close(
@@ -230,7 +220,7 @@ def _close(
         stats=stats,
         problem=_reason(problem),
     )
-    return replace(_put(state, closed), file_starts={}, polls_before=frozenset(), questions_seen=frozenset())
+    return replace(_put(state, closed), file_starts={})
 
 
 def _reason(text: str | None) -> str | None:
@@ -279,13 +269,11 @@ def _follow(state: BroadcastsState, broadcast: Broadcast, output: Output) -> Bro
     return replace(_put(state, updated), file_starts=starts)
 
 
-def observe_output(
-    state: BroadcastsState, output: Output, audience: Audience | None, now: float, new_id: str
-) -> BroadcastsState:
+def observe_output(state: BroadcastsState, output: Output, now: float, new_id: str) -> BroadcastsState:
     """Sessions follow the output, whoever started it. `new_id` names a broadcast made for an unplanned stream."""
     on_air = live(state)
     if output.state == "live" and on_air is None:
-        state = _open(state, output, audience, now, new_id)
+        state = _open(state, output, now, new_id)
         on_air = live(state)
     if on_air is None:
         return state
@@ -295,34 +283,7 @@ def observe_output(
     return state
 
 
-# --- following the audience and the match -----------------------------------------------------
-
-
-def observe_audience(state: BroadcastsState, audience: Audience) -> BroadcastsState:
-    """Polls run and questions asked while live."""
-    on_air = live(state)
-    if on_air is None:
-        return state
-    started = on_air.sessions[-1].started_at
-    polls = {poll.id: poll for poll in on_air.stats.polls}
-    for poll in [*([audience.poll] if audience.poll else []), *audience.history]:
-        if poll.id in state.polls_before:
-            continue
-        votes = sum(option.votes for option in poll.options)
-        kept = polls.get(poll.id)
-        polls[poll.id] = BroadcastPoll(
-            id=poll.id, question=poll.question, votes=max(votes, kept.votes if kept else 0)
-        )
-    asked = {q.id for q in audience.questions if q.asked_at >= started} - state.questions_seen
-    stats = on_air.stats.model_copy(
-        update={
-            "polls": list(polls.values())[-MAX_POLLS:],
-            "questions": on_air.stats.questions + len(asked),
-        }
-    )
-    if stats == on_air.stats:
-        return state
-    return replace(_put(state, _change(on_air, stats=stats)), questions_seen=state.questions_seen | asked)
+# --- following the match ----------------------------------------------------------------------
 
 
 def observe_status(state: BroadcastsState, status: MatchStatus) -> BroadcastsState:
@@ -454,9 +415,16 @@ def dump(state: BroadcastsState) -> dict:
     return {"doc": state.doc.model_dump(mode="json")}
 
 
+_FORGOTTEN_STATS = ("polls", "questions")  # kept by versions that had a fan page
+
+
 def load(record: dict, ai: bool) -> BroadcastsState:
     """A saved state, as it should be after a restart: nothing live, nothing being made."""
-    doc = Broadcasts.model_validate(record["doc"])
+    raw = record["doc"]
+    for broadcast in raw.get("broadcasts", []):
+        for name in _FORGOTTEN_STATS:
+            broadcast.get("stats", {}).pop(name, None)
+    doc = Broadcasts.model_validate(raw)
     state = BroadcastsState(doc=doc.model_copy(update={"ai": ai}))
     for broadcast in doc.broadcasts:
         if broadcast.state == "live":

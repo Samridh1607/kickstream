@@ -14,7 +14,7 @@ from kickstream.ports.bus import INSIGHTS
 from tests.broadcast_fakes import FakeCutter, FakeProducer
 from tests.factories import moment
 from tests.output_fakes import FakeNow, until
-from tests.test_broadcast_rules import audience, destination, output, poll
+from tests.test_broadcast_rules import destination, output
 
 T0 = 5_000.0
 FILE = "2026-10-13-140000-rec.mp4"
@@ -74,7 +74,6 @@ class Rig:
         return BroadcastService(
             JsonRecordStore(self.tmp_path / "broadcasts.json"),
             output=self.output,
-            audience_view=lambda: audience(history=[poll("old", state="closed")]),
             producer=self.producer,
             fallback=ScriptedReelProducer(),
             cutter=self.cutter,
@@ -162,7 +161,7 @@ async def test_ending_a_broadcast_that_never_went_live_does_not_touch_the_stream
     assert missing.value.status == 404
 
 
-async def test_the_audience_and_match_are_kept_while_live(rig, tmp_path):
+async def test_the_match_is_kept_while_live(rig, tmp_path):
     bus = InMemoryEventBus()
     stage = BroadcastStage(bus, rig.service)
     running = asyncio.create_task(stage.run())
@@ -170,14 +169,12 @@ async def test_the_audience_and_match_are_kept_while_live(rig, tmp_path):
         rig.service.create("Derby day", "", True)
         rig.output.set(output("live", T0, [destination()]))
         await until(lambda: rig.broadcast().state == "live")
-        rig.service.observe_audience(audience(poll("p1", (3, 4))))
         rig.now.at = T0 + 30
         await bus.publish(INSIGHTS, "m-1", moment(1, minute=12))
         await until(lambda: rig.broadcast().moments)
     finally:
         running.cancel()
     broadcast = rig.broadcast()
-    assert [(p.id, p.votes) for p in broadcast.stats.polls] == [("p1", 7)]
     assert [(m.id, m.at) for m in broadcast.moments] == [("m-1-k1", T0 + 30)]
 
 

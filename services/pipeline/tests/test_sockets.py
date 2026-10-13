@@ -15,8 +15,6 @@ from starlette.websockets import WebSocketDisconnect
 from kickstream.adapters.clocks import InstantClock
 from kickstream.app import Settings, create_app
 
-ANN = {"x-voter": "voter-ann-0000001"}
-
 
 @pytest.fixture
 def client(tmp_path):
@@ -46,15 +44,6 @@ def test_the_studio_socket_sends_the_document_and_then_each_change(client):
         client.post("/api/studio/banner", json={"text": "Hello"})
         changed = json.loads(socket.receive_text())
         assert changed["revision"] == 1 and changed["banner"]["text"] == "Hello"
-
-
-def test_the_fan_socket_never_carries_hidden_questions_or_the_draft(client):
-    hidden = client.post("/api/audience/questions", headers=ANN, json={"text": "Something rude"}).json()["id"]
-    client.post(f"/api/studio/audience/questions/{hidden}/hide")
-    with client.websocket_connect("/api/audience/socket") as fan:
-        assert "Something rude" not in fan.receive_text()
-    with client.websocket_connect("/api/studio/audience/socket") as studio:
-        assert "Something rude" in studio.receive_text()
 
 
 def test_the_match_socket_replays_the_match_for_the_viewers_variant(client):
@@ -93,7 +82,7 @@ def test_an_unknown_mode_or_language_closes_the_socket(client, query):
 
 
 @pytest.mark.parametrize(
-    "path", ["/api/studio/socket", "/api/audience/socket", "/api/studio/audience/socket"]
+    "path", ["/api/studio/socket", "/api/broadcasts/socket", "/api/studio/output/socket"]
 )
 def test_a_page_on_another_site_cannot_open_a_socket(client, path):
     """WebSockets are not covered by the browser's same-origin rule, so the server checks."""
@@ -110,5 +99,10 @@ def test_the_apps_own_pages_can_open_a_socket_whatever_port_serves_them(client, 
 
 
 def test_a_tool_that_sends_no_origin_can_open_a_socket(client):
-    with client.websocket_connect("/api/audience/socket") as socket:
+    with client.websocket_connect("/api/broadcasts/socket") as socket:
         assert json.loads(socket.receive_text())["revision"] == 0
+
+
+def test_the_fan_routes_are_gone(client):
+    assert client.get("/api/audience").status_code == 404
+    assert client.get("/api/studio/audience").status_code == 404

@@ -17,7 +17,6 @@ ROLES = (
     "tactical_analyst",
     "recap_writer",
     "localizer",
-    "match_expert",
     "highlight_editor",
     "social_copywriter",
 )
@@ -60,8 +59,6 @@ class FakeLLM:
     def _reply(self, role: str, user: str) -> str:
         if role in self.replies:
             return self.replies[role]
-        if role == "match_expert":
-            return "The press came from fresh legs after the substitution."
         if role == "commentator":
             return "Fan line."
         if role == "tactical_analyst":

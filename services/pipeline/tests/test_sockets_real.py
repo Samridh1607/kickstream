@@ -75,7 +75,7 @@ def test_a_real_client_from_another_site_is_told_it_is_refused(server):
 
 def test_a_page_served_from_another_port_of_this_host_is_let_in(server):
     with connect(
-        server.url("/api/audience/socket"), origin="http://127.0.0.1:5173", open_timeout=5
+        server.url("/api/broadcasts/socket"), origin="http://127.0.0.1:5173", open_timeout=5
     ) as client:
         assert json.loads(client.recv(timeout=5))["revision"] == 0
 
@@ -84,11 +84,11 @@ def test_behind_a_proxy_the_public_host_is_let_in_once_it_is_configured(tmp_path
     """A reverse proxy usually rewrites Host, so the page's origin no longer matches it."""
     assert_refused = None
     with Server(tmp_path / "a") as plain:
-        assert_refused = close_code(plain.url("/api/audience/socket"), origin="https://kick.example")
+        assert_refused = close_code(plain.url("/api/broadcasts/socket"), origin="https://kick.example")
     assert assert_refused == 1008
     with Server(tmp_path / "b", allowed_hosts=("kick.example",)) as configured:
         with connect(
-            configured.url("/api/audience/socket"), origin="https://kick.example", open_timeout=5
+            configured.url("/api/broadcasts/socket"), origin="https://kick.example", open_timeout=5
         ) as client:
             assert json.loads(client.recv(timeout=5))["revision"] == 0
-        assert close_code(configured.url("/api/audience/socket"), origin="https://evil.example") == 1008
+        assert close_code(configured.url("/api/broadcasts/socket"), origin="https://evil.example") == 1008

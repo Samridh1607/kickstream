@@ -11,7 +11,7 @@ from pathlib import Path
 
 from kickstream.broadcasts import reels, rules
 from kickstream.broadcasts.rules import BroadcastError, BroadcastsState
-from kickstream.contracts import Audience, Broadcasts, KeyMoment, MatchStatus, Narrative, Output, Reel
+from kickstream.contracts import Broadcasts, KeyMoment, MatchStatus, Narrative, Output, Reel
 from kickstream.ports.broadcasts import LiveOutput
 from kickstream.ports.output import RecordStore
 from kickstream.ports.reels import ClipCutter, ClipFailure, ReelBrief, ReelCandidate, ReelPick, ReelProducer
@@ -25,8 +25,6 @@ class BroadcastService:
         store: RecordStore,
         *,
         output: LiveOutput,
-        audience_view: Callable[[], Audience | None] = lambda: None,
-        audience_changes: Callable[[], AsyncIterator[Audience]] | None = None,
         producer: ReelProducer | None,
         fallback: ReelProducer,
         cutter: ClipCutter,
@@ -38,8 +36,6 @@ class BroadcastService:
     ) -> None:
         self._store = store
         self._output = output
-        self._audience_view = audience_view
-        self._audience_changes = audience_changes
         self._producer = producer
         self._fallback = fallback
         self._cutter = cutter
@@ -156,17 +152,12 @@ class BroadcastService:
             self.observe_output(self._output.view())
         self._apply(lambda state: rules.end(state, broadcast_id, self._now()))
 
-    # --- following the output, the audience and the match -----------------------------------------
+    # --- following the output and the match -----------------------------------------------------
 
     def observe_output(self, output: Output) -> None:
         opening = output.state == "live" and rules.live(self._state) is None
         new_id = self._new_id() if opening else ""
-        self._apply(
-            lambda state: rules.observe_output(state, output, self._audience_view(), self._now(), new_id)
-        )
-
-    def observe_audience(self, audience: Audience) -> None:
-        self._apply(lambda state: rules.observe_audience(state, audience))
+        self._apply(lambda state: rules.observe_output(state, output, self._now(), new_id))
 
     def observe_match(self, payload) -> None:
         if isinstance(payload, MatchStatus):
@@ -177,10 +168,7 @@ class BroadcastService:
             self._apply(lambda state: rules.observe_narrative(state, payload))
 
     async def run(self) -> None:
-        followers = [self._follow(self._output.changes(), self.observe_output)]
-        if self._audience_changes is not None:
-            followers.append(self._follow(self._audience_changes(), self.observe_audience))
-        await asyncio.gather(*followers)
+        await self._follow(self._output.changes(), self.observe_output)
 
     @staticmethod
     async def _follow(documents: AsyncIterator, observe: Callable) -> None:

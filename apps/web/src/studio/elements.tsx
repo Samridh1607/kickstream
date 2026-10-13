@@ -210,9 +210,6 @@ export function ElementView({ element, data }: { element: SceneElement; data: Pr
       return studio.replay ? <ReplayView replay={studio.replay} data={data} /> : null;
     case "countdown":
       return <CountdownView data={data} />;
-    case "poll":
-    case "qa":
-      return null;
     case "text":
       return (
         <div style={{ ...PANEL, ...CENTERED, backgroundColor: "transparent" }}>

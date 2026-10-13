@@ -36,8 +36,6 @@ def broadcast_moment(id_, kind, at, minute=10, team="home", commentary=None) -> 
 def broadcast(moments=(), recordings=(), score=True) -> Broadcast:
     stats = BroadcastStats(
         live_s=300,
-        polls=[],
-        questions=0,
         score=BroadcastScore(home="Northbridge FC", away="Harbour City", score_home=2, score_away=1)
         if score
         else None,

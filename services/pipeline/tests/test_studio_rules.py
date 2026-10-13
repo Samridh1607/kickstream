@@ -475,6 +475,14 @@ def test_elements_of_an_unknown_type_are_dropped_from_a_loaded_file():
     assert len(cleaned.scenes[0].elements) == len(default_studio().scenes[0].elements)
 
 
+def test_poll_and_qa_elements_from_an_older_studio_are_dropped():
+    raw = {
+        "scenes": [{"id": "s1", "elements": [{"type": "poll"}, {"type": "qa"}, {"type": "text"}]}],
+        "templates": [],
+    }
+    assert [e["type"] for e in rules.sanitize_raw(raw)["scenes"][0]["elements"]] == ["text"]
+
+
 @pytest.mark.parametrize(
     "content, expected",
     [

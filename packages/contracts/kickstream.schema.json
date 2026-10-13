@@ -252,7 +252,7 @@
       "required": ["id", "type", "x", "y", "width", "height", "layer", "visible", "props"],
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "type": { "enum": ["scoreboard", "pitch", "narration", "stats", "banner", "ticker", "timeline", "recap", "replay", "countdown", "text", "image", "poll", "qa"] },
+        "type": { "enum": ["scoreboard", "pitch", "narration", "stats", "banner", "ticker", "timeline", "recap", "replay", "countdown", "text", "image"] },
         "x": { "type": "integer" },
         "y": { "type": "integer" },
         "width": { "type": "integer" },
@@ -345,73 +345,6 @@
         "replay": { "anyOf": [{ "$ref": "#/$defs/Replay" }, { "type": "null" }], "default": null }
       }
     },
-    "PollOption": {
-      "type": "object", "additionalProperties": false,
-      "required": ["id", "text", "votes"],
-      "properties": {
-        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "text": { "type": "string", "minLength": 1, "maxLength": 60 },
-        "votes": { "type": "integer", "minimum": 0 }
-      }
-    },
-    "Poll": {
-      "type": "object", "additionalProperties": false,
-      "required": ["id", "question", "options", "state"],
-      "properties": {
-        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "question": { "type": "string", "minLength": 1, "maxLength": 140 },
-        "options": { "type": "array", "items": { "$ref": "#/$defs/PollOption" }, "minItems": 2, "maxItems": 6 },
-        "state": { "enum": ["open", "closed"] },
-        "closes_at": { "type": ["number", "null"], "default": null }
-      }
-    },
-    "Question": {
-      "type": "object", "additionalProperties": false,
-      "required": ["id", "text", "nickname", "votes", "state", "asked_at"],
-      "properties": {
-        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "text": { "type": "string", "minLength": 1, "maxLength": 200 },
-        "nickname": { "type": "string", "minLength": 1, "maxLength": 24 },
-        "votes": { "type": "integer", "minimum": 0 },
-        "state": { "enum": ["open", "hidden", "answered"] },
-        "answer": { "type": ["string", "null"], "default": null },
-        "asked_at": { "type": "number" }
-      }
-    },
-    "Draft": {
-      "type": "object", "additionalProperties": false,
-      "required": ["question_id", "text", "state"],
-      "properties": {
-        "question_id": { "type": "string" },
-        "text": { "type": "string", "maxLength": 400 },
-        "state": { "enum": ["writing", "ready", "unavailable"] }
-      }
-    },
-    "QaOnAir": {
-      "type": "object", "additionalProperties": false,
-      "required": ["question_id", "question", "nickname", "answer", "ends_at"],
-      "properties": {
-        "question_id": { "type": "string" },
-        "question": { "type": "string" },
-        "nickname": { "type": "string" },
-        "answer": { "type": "string" },
-        "ends_at": { "type": "number" }
-      }
-    },
-    "Audience": {
-      "type": "object", "additionalProperties": false,
-      "required": ["revision", "server_time", "poll_on_air", "history", "questions"],
-      "properties": {
-        "revision": { "type": "integer" },
-        "server_time": { "type": "number" },
-        "poll": { "anyOf": [{ "$ref": "#/$defs/Poll" }, { "type": "null" }], "default": null },
-        "poll_on_air": { "type": "boolean" },
-        "history": { "type": "array", "items": { "$ref": "#/$defs/Poll" }, "maxItems": 20 },
-        "questions": { "type": "array", "items": { "$ref": "#/$defs/Question" }, "maxItems": 250 },
-        "draft": { "anyOf": [{ "$ref": "#/$defs/Draft" }, { "type": "null" }], "default": null },
-        "qa": { "anyOf": [{ "$ref": "#/$defs/QaOnAir" }, { "type": "null" }], "default": null }
-      }
-    },
     "Destination": {
       "type": "object",
       "additionalProperties": false,
@@ -498,15 +431,6 @@
         "commentary": { "type": ["string", "null"], "default": null }
       }
     },
-    "BroadcastPoll": {
-      "type": "object", "additionalProperties": false,
-      "required": ["id", "question", "votes"],
-      "properties": {
-        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "question": { "type": "string", "minLength": 1, "maxLength": 140 },
-        "votes": { "type": "integer", "minimum": 0 }
-      }
-    },
     "BroadcastScore": {
       "type": "object", "additionalProperties": false,
       "required": ["home", "away", "score_home", "score_away"],
@@ -519,11 +443,9 @@
     },
     "BroadcastStats": {
       "type": "object", "additionalProperties": false,
-      "required": ["live_s", "polls", "questions"],
+      "required": ["live_s"],
       "properties": {
         "live_s": { "type": "number", "minimum": 0 },
-        "polls": { "type": "array", "items": { "$ref": "#/$defs/BroadcastPoll" }, "maxItems": 20 },
-        "questions": { "type": "integer", "minimum": 0 },
         "score": { "anyOf": [{ "$ref": "#/$defs/BroadcastScore" }, { "type": "null" }], "default": null }
       }
     },

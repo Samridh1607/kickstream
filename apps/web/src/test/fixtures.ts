@@ -155,7 +155,7 @@ export const reel = (over: Partial<Reel> = {}): Reel => ({
 
 export const broadcast = (over: Partial<Broadcast> = {}): Broadcast => ({
   id: "b1", title: "Derby day", description: "Matchday 12", record: true, state: "ready", created_at: 1000,
-  sessions: [], recordings: [], moments: [], stats: { live_s: 0, polls: [], questions: 0, score: null },
+  sessions: [], recordings: [], moments: [], stats: { live_s: 0, score: null },
   reels: [], generating: false, problem: null, ...over,
 });
 
@@ -173,8 +173,7 @@ export const endedBroadcast = (over: Partial<Broadcast> = {}): Broadcast => broa
   recordings: [{ file: "2026-10-13-140000-rec.mp4", size_bytes: 5 * 1024 * 1024, started_at: 1000, made_at: 1120 }],
   moments: [{ id: "m-1-k1", kind: "goal", team: "home", minute: 23, at: 1042, score_home: 1, score_away: 0, commentary: "Top corner!" }],
   stats: {
-    live_s: 120, questions: 3,
-    polls: [{ id: "p1", question: "Who will win?", votes: 7 }],
+    live_s: 120,
     score: { home: "Northbridge FC", away: "Harbour City", score_home: 1, score_away: 0 },
   },
   reels: [reel()],
