@@ -12,7 +12,7 @@ interface Sent {
   body: unknown;
 }
 
-function serve(answers: Record<string, () => Response> = {}) {
+function serve(answers: Record<string, () => Response | Promise<Response>> = {}) {
   const sent: Sent[] = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";
@@ -157,4 +157,97 @@ test("a join cut short by leaving the call is not shown as a problem", async () 
   await waitFor(() => expect(first.left).toBe(1));
   await waitFor(() => expect((screen.getByRole("button", { name: "Join" }) as HTMLButtonElement).disabled).toBe(false));
   expect(screen.queryByText("The call was left before it was joined.")).toBeNull();
+});
+
+test("a guest whose broadcast goes live while their join is pending joins muted", async () => {
+  let answer: (response: Response) => void = () => {};
+  const sent = serve({ "POST /api/guest/s3cret/join": () => new Promise<Response>((resolve) => { answer = resolve; }) });
+  const call = open();
+  await waitFor(() => expect(call.cameraOn).toBe(true));
+  fireEvent.click(screen.getByRole("button", { name: "Join" }));
+  await waitFor(() => expect(sent.some((one) => one.method === "POST")).toBe(true));
+  send(guestDoc({ revision: 2, broadcast_state: "live", muted_live: true }));
+  await act(async () => answer(new Response(JSON.stringify(callSeat()), { status: 200 })));
+  await waitFor(() => expect(call.joined).toHaveLength(1));
+  expect(call.muted).toBe(true);
+  expect((screen.getByRole("button", { name: "Unmute" }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+/** A call whose join connects when the test says, with the microphone as the room left it. */
+class ConnectingCall extends FakeRoomCall {
+  private connected: (() => void) | null = null;
+
+  override join(options: JoinOptions) {
+    this.joined.push(options);
+    return new Promise<void>((resolve) => {
+      this.connected = resolve;
+    });
+  }
+
+  connect(muted: boolean) {
+    this.muted = muted;
+    this.state = "joined";
+    this.emit();
+    this.connected?.();
+  }
+}
+
+test("a guest backstage is muted again once their call connects during a live broadcast", async () => {
+  serve();
+  const call = new ConnectingCall();
+  open(guestDoc(), call);
+  await waitFor(() => expect(call.cameraOn).toBe(true));
+  fireEvent.click(screen.getByRole("button", { name: "Join" }));
+  await waitFor(() => expect(call.joined).toHaveLength(1));
+  send(guestDoc({ revision: 2, broadcast_state: "live", muted_live: true }));
+  act(() => call.connect(false));
+  await waitFor(() => expect(call.muted).toBe(true));
+  expect((screen.getByRole("button", { name: "Unmute" }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+/** A call whose microphone or leaving fails on request. */
+class FailingCall extends FakeRoomCall {
+  failMute: string | null = null;
+  failLeave = false;
+
+  override async setMuted(muted: boolean) {
+    if (this.failMute) throw new Error(this.failMute);
+    await super.setMuted(muted);
+  }
+
+  override async leave() {
+    await super.leave();
+    if (this.failLeave) throw new Error("The call could not be left.");
+  }
+}
+
+test("a microphone that cannot be changed is explained", async () => {
+  serve();
+  const call = new FailingCall();
+  open(guestDoc(), call);
+  await join(call);
+  call.failMute = "The microphone is busy.";
+  fireEvent.click(screen.getByRole("button", { name: "Mute" }));
+  expect(await screen.findByText("The microphone is busy.")).toBeTruthy();
+});
+
+test("a live mute that fails is explained", async () => {
+  serve();
+  const call = new FailingCall();
+  open(guestDoc(), call);
+  await join(call);
+  call.failMute = "The microphone is busy.";
+  send(guestDoc({ revision: 2, joined: true, broadcast_state: "live", muted_live: true }));
+  expect(await screen.findByText("The microphone is busy.")).toBeTruthy();
+});
+
+test("a call that cannot be left when the invite is revoked is not a problem", async () => {
+  serve();
+  const call = new FailingCall();
+  call.failLeave = true;
+  open(guestDoc(), call);
+  await join(call);
+  send(guestDoc({ revision: 2, valid: false }));
+  expect(await screen.findByText("This invite is no longer valid")).toBeTruthy();
+  await waitFor(() => expect(call.left).toBe(1));
 });

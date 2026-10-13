@@ -30,6 +30,8 @@ export function guestBanner(doc: Guest): string {
   return doc.muted_live ? "You're backstage and muted while the broadcast is live" : "You're backstage";
 }
 
+const muteProblem = (caught: unknown) => (caught instanceof Error ? caught.message : "Your microphone could not be changed.");
+
 function Shell({ children }: { children: ReactNode }) {
   const styles = useStyles();
   return (
@@ -69,7 +71,8 @@ export function GuestPage({ secret, eventSource, retryMs, newCall = openRoomCall
     currentCall.current = call;
     return () => {
       currentCall.current = null;
-      void call?.leave();
+      // The page is going away; there is nowhere to show a failed leave.
+      call?.leave().catch(() => undefined);
     };
   }, [call]);
   const devices = useDevices(call);
@@ -77,9 +80,15 @@ export function GuestPage({ secret, eventSource, retryMs, newCall = openRoomCall
   const [joining, setJoining] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const mutedLive = doc?.muted_live ?? false;
+  const mutedLiveNow = useRef(mutedLive);
+  const joined = call?.state === "joined";
   useEffect(() => {
-    if (call && mutedLive) void call.setMuted(true);
-  }, [call, mutedLive]);
+    mutedLiveNow.current = mutedLive;
+    if (!call || !mutedLive) return;
+    call.setMuted(true).catch((caught: unknown) => {
+      if (currentCall.current === call) setProblem(muteProblem(caught));
+    });
+  }, [call, mutedLive, joined]);
 
   if (!valid) {
     return (
@@ -93,12 +102,11 @@ export function GuestPage({ secret, eventSource, retryMs, newCall = openRoomCall
   if (!call) return <Shell><Text>Guests are not set up on this Kickstream yet.</Text></Shell>;
 
   const shownName = name ?? doc.joined_name ?? doc.name ?? "";
-  const joined = call.state === "joined";
   const join = async () => {
     setJoining(true);
     try {
-      const seat = await joinAsGuest(secret, shownName);
-      await call.setMuted(doc.muted_live);
+      const seat = await joinAsGuest(secret, shownName.trim());
+      await call.setMuted(mutedLiveNow.current);
       await call.join({ roomId: seat.room_id, token: seat.token, name: shownName.trim(), refresh: async () => (await refreshGuestSeat(secret)).token });
       setProblem(null);
     } catch (caught) {
@@ -122,7 +130,7 @@ export function GuestPage({ secret, eventSource, retryMs, newCall = openRoomCall
           <MessageBar intent={doc.on_stage ? "success" : "info"}><MessageBarBody>{guestBanner(doc)}</MessageBarBody></MessageBar>
           <div className={styles.row}>
             <Button icon={call.muted ? <MicOffRegular /> : <MicRegular />} disabled={call.muted && doc.muted_live}
-              onClick={() => void call.setMuted(!call.muted)}>
+              onClick={() => void call.setMuted(!call.muted).catch((caught: unknown) => setProblem(muteProblem(caught)))}>
               {call.muted ? "Unmute" : "Mute"}
             </Button>
             <Button icon={call.cameraOn ? <VideoRegular /> : <VideoOffRegular />}
