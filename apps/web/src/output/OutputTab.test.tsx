@@ -1,5 +1,5 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import type { Output } from "../contracts";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import type { Destination, Output } from "../contracts";
 import { destination, output } from "../test/fixtures";
 import { renderUi } from "../test/render";
 import { OutputTab } from "./OutputTab";
@@ -10,10 +10,12 @@ interface Call {
   body: any;
 }
 
-function setup(doc: Output | null = output(), accepted = true) {
+function setup(doc: Output | null = output(), accepted = true, hold = false) {
   const calls: Call[] = [];
+  const waiting: (() => void)[] = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, method: init?.method ?? "GET", body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined });
+    if (hold) await new Promise<void>((resolve) => waiting.push(resolve));
     return new Response(JSON.stringify(doc ?? output()), { status: 200 });
   }));
   const onRun = vi.fn(async (request: () => Promise<Output>) => {
@@ -21,7 +23,8 @@ function setup(doc: Output | null = output(), accepted = true) {
     return accepted;
   });
   renderUi(<OutputTab output={doc} now={1100} onRun={onRun} />);
-  return { calls };
+  const release = () => act(async () => { waiting.splice(0).forEach((resolve) => resolve()); });
+  return { calls, onRun, release };
 }
 
 const last = (calls: Call[]) => calls[calls.length - 1];
@@ -55,11 +58,14 @@ test("a destination is added with its key, and the key box is emptied afterwards
 });
 
 test("a refused destination keeps what was typed", async () => {
-  setup(output(), false);
+  const { onRun } = setup(output(), false);
   const key = screen.getByLabelText("Stream key") as HTMLInputElement;
   fireEvent.change(key, { target: { value: KEY } });
   fireEvent.click(screen.getByRole("button", { name: "Add destination" }));
-  await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+  await waitFor(() => expect(onRun).toHaveBeenCalled());
+  // The refusal has fully settled once onRun has resolved and the button works again.
+  await onRun.mock.results[0].value;
+  await waitFor(() => expect((screen.getByRole("button", { name: "Add destination" }) as HTMLButtonElement).disabled).toBe(false));
   expect(key.value).toBe(KEY);
 });
 
@@ -123,4 +129,73 @@ test("a run that ended by itself says why, and recordings are listed with their 
   expect(screen.getByText("The hidden browser stopped.")).toBeTruthy();
   expect(screen.getByText("2026-10-13-101500.mp4")).toBeTruthy();
   expect(screen.getByText("5.4 MB")).toBeTruthy();
+});
+
+test("a double click on Add sends one request, and Add works again once it settles", async () => {
+  const { calls, release } = setup(output(), true, true);
+  const add = screen.getByRole("button", { name: "Add destination" }) as HTMLButtonElement;
+  fireEvent.change(screen.getByLabelText("Stream key"), { target: { value: KEY } });
+  fireEvent.click(add);
+  fireEvent.click(add);
+  expect(calls).toHaveLength(1);
+  expect(add.disabled).toBe(true);
+  await release();
+  await waitFor(() => expect(add.disabled).toBe(false));
+  fireEvent.click(add);
+  expect(calls).toHaveLength(2);
+  await release();
+});
+
+test("a double click on Go live sends one request, and Go live works again once it settles", async () => {
+  const { calls, release } = setup(output({ destinations: [destination()] }), false, true);
+  const go = screen.getByRole("button", { name: "Go live" }) as HTMLButtonElement;
+  fireEvent.click(go);
+  fireEvent.click(go);
+  expect(calls).toHaveLength(1);
+  expect(go.disabled).toBe(true);
+  await release();
+  await waitFor(() => expect(go.disabled).toBe(false));
+  fireEvent.click(go);
+  expect(calls).toHaveLength(2);
+  await release();
+});
+
+test("while one change is in flight the other controls cannot send another", async () => {
+  const { calls, release } = setup(output({ destinations: [destination()] }), true, true);
+  fireEvent.click(screen.getByRole("button", { name: "Go live" }));
+  expect((screen.getByRole("button", { name: "Remove YouTube" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("switch", { name: "Send to YouTube" }) as HTMLInputElement).disabled).toBe(true);
+  expect((screen.getByLabelText("Quality") as HTMLSelectElement).disabled).toBe(true);
+  expect(calls).toHaveLength(1);
+  await release();
+});
+
+test("a state, status or platform this page does not know is shown as it came", () => {
+  const doc = output({ state: "paused", destinations: [destination({ status: "sleeping", platform: "kick" } as unknown as Partial<Destination>)] } as unknown as Partial<Output>);
+  setup(doc as unknown as Output);
+  expect(screen.getByText("paused")).toBeTruthy();
+  const row = within(screen.getByTestId("destination-d1"));
+  expect(row.getByText("sleeping")).toBeTruthy();
+  expect(row.getByText(/kick/)).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy();
+});
+
+test("changing the platform clears the address and the key", async () => {
+  const { calls } = setup();
+  fireEvent.change(screen.getByLabelText("Platform"), { target: { value: "custom" } });
+  fireEvent.change(screen.getByLabelText("Server address"), { target: { value: "rtmp://mine/app" } });
+  fireEvent.change(screen.getByLabelText("Stream key"), { target: { value: KEY } });
+  fireEvent.change(screen.getByLabelText("Platform"), { target: { value: "twitch" } });
+  expect((screen.getByLabelText("Server address") as HTMLInputElement).value).toBe("");
+  expect((screen.getByLabelText("Stream key") as HTMLInputElement).value).toBe("");
+  fireEvent.click(screen.getByRole("button", { name: "Add destination" }));
+  await waitFor(() => expect(last(calls).body).toEqual({ name: "Twitch", platform: "twitch", url: "", key: "" }));
+});
+
+test("a key typed before choosing Record to file does not come back", () => {
+  setup();
+  fireEvent.change(screen.getByLabelText("Stream key"), { target: { value: KEY } });
+  fireEvent.change(screen.getByLabelText("Platform"), { target: { value: "file" } });
+  fireEvent.change(screen.getByLabelText("Platform"), { target: { value: "youtube" } });
+  expect((screen.getByLabelText("Stream key") as HTMLInputElement).value).toBe("");
 });

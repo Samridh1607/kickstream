@@ -1,5 +1,5 @@
 import { Badge, Button, Field, Input, makeStyles, MessageBar, MessageBarBody, Select, Switch, Text, tokens } from "@fluentui/react-components";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Destination, Output } from "../contracts";
 import { addDestination, goLive, removeDestination, setDestinationEnabled, setQuality, stopOutput } from "./api";
 
@@ -26,6 +26,12 @@ const STATUS = {
   retrying: { label: "Retrying", color: "warning" },
   failed: { label: "Failed", color: "danger" },
 } as const;
+
+const NEUTRAL = "subtle" as const;
+/** A value this page does not know (an older page after a server upgrade) is shown as it came. */
+function look<T extends { label: string }>(table: Record<string, T>, value: string): Omit<T, "label"> & { label: string; color: string } {
+  return (Object.hasOwn(table, value) ? table[value] : { label: value, color: NEUTRAL }) as never;
+}
 
 const useStyles = makeStyles({
   root: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL },
@@ -61,6 +67,21 @@ export function OutputTab({ output, now, onRun }: OutputTabProps) {
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
+
+  /** One request at a time: while it is in flight nothing else from this tab can start. */
+  const run = async (request: () => Promise<Output>): Promise<boolean> => {
+    if (inFlight.current) return false;
+    inFlight.current = true;
+    setBusy(true);
+    try {
+      return await onRun(request);
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  };
 
   if (!output) return <Text>Connecting to the output…</Text>;
 
@@ -68,7 +89,7 @@ export function OutputTab({ output, now, onRun }: OutputTabProps) {
   const toFile = platform === "file";
   const add = async () => {
     const added = { name: name.trim() || PLATFORMS[platform].label, platform, url: toFile ? "" : address.trim(), key: toFile ? "" : key };
-    if (await onRun(() => addDestination(added))) {
+    if (await run(() => addDestination(added))) {
       setName("");
       setAddress("");
       setKey("");
@@ -79,13 +100,13 @@ export function OutputTab({ output, now, onRun }: OutputTabProps) {
     <div className={styles.root}>
       <section className={styles.section} aria-label="Stream">
         <div className={styles.row}>
-          <Badge color={STATE[output.state].color}>{STATE[output.state].label}</Badge>
+          <Badge color={look(STATE, output.state).color}>{look(STATE, output.state).label}</Badge>
           {output.state === "live" && typeof output.started_at === "number" && <Text>{elapsed(now - output.started_at)}</Text>}
           <span className={styles.grow} />
           {idle ? (
-            <Button appearance="primary" disabled={!output.destinations.some((item) => item.enabled)} onClick={() => void onRun(goLive)}>Go live</Button>
+            <Button appearance="primary" disabled={busy || !output.destinations.some((item) => item.enabled)} onClick={() => void run(goLive)}>Go live</Button>
           ) : (
-            <Button disabled={output.state === "stopping"} onClick={() => void onRun(stopOutput)}>Stop</Button>
+            <Button disabled={busy || output.state === "stopping"} onClick={() => void run(stopOutput)}>Stop</Button>
           )}
         </div>
         {output.problem && (
@@ -94,7 +115,7 @@ export function OutputTab({ output, now, onRun }: OutputTabProps) {
           </MessageBar>
         )}
         <Field label="Quality">
-          <Select value={output.quality} disabled={!idle} onChange={(_, data) => void onRun(() => setQuality(data.value as Output["quality"]))}>
+          <Select value={output.quality} disabled={!idle || busy} onChange={(_, data) => void run(() => setQuality(data.value as Output["quality"]))}>
             <option value="720p30">720p, 30 frames per second</option>
             <option value="1080p30">1080p, 30 frames per second</option>
           </Select>
@@ -109,10 +130,10 @@ export function OutputTab({ output, now, onRun }: OutputTabProps) {
             <li key={item.id} data-testid={`destination-${item.id}`}>
               <div className={styles.row}>
                 <Text weight="semibold" className={styles.grow}>{item.name}</Text>
-                <Badge color={STATUS[item.status].color}>{STATUS[item.status].label}</Badge>
+                <Badge color={look(STATUS, item.status).color}>{look(STATUS, item.status).label}</Badge>
               </div>
               <Text size={200} block>
-                {PLATFORMS[item.platform].label}
+                {look(PLATFORMS, item.platform).label}
                 {item.platform !== "file" && (
                   <>
                     {" · "}
@@ -122,9 +143,9 @@ export function OutputTab({ output, now, onRun }: OutputTabProps) {
               </Text>
               {item.reason && <Text size={200} block className={styles.grow}>{item.reason}</Text>}
               <div className={styles.row}>
-                <Switch label={`Send to ${item.name}`} checked={item.enabled} disabled={!idle}
-                  onChange={(_, data) => void onRun(() => setDestinationEnabled(item, data.checked))} />
-                <Button size="small" disabled={!idle} aria-label={`Remove ${item.name}`} onClick={() => void onRun(() => removeDestination(item.id))}>Remove</Button>
+                <Switch label={`Send to ${item.name}`} checked={item.enabled} disabled={!idle || busy}
+                  onChange={(_, data) => void run(() => setDestinationEnabled(item, data.checked))} />
+                <Button size="small" disabled={!idle || busy} aria-label={`Remove ${item.name}`} onClick={() => void run(() => removeDestination(item.id))}>Remove</Button>
               </div>
             </li>
           ))}
@@ -134,7 +155,12 @@ export function OutputTab({ output, now, onRun }: OutputTabProps) {
       <section className={styles.section} aria-label="Add a destination">
         <Text weight="semibold">Add a destination</Text>
         <Field label="Platform">
-          <Select value={platform} onChange={(_, data) => setPlatform(data.value as Platform)}>
+          <Select value={platform} onChange={(_, data) => {
+            setPlatform(data.value as Platform);
+            // An address or key typed for one platform must never be sent to another.
+            setAddress("");
+            setKey("");
+          }}>
             {(Object.keys(PLATFORMS) as Platform[]).map((option) => (
               <option key={option} value={option}>{PLATFORMS[option].label}</option>
             ))}
@@ -153,7 +179,7 @@ export function OutputTab({ output, now, onRun }: OutputTabProps) {
             </Field>
           </>
         )}
-        <Button disabled={!idle} onClick={() => void add()}>Add destination</Button>
+        <Button disabled={!idle || busy} onClick={() => void add()}>Add destination</Button>
       </section>
 
       {output.recordings.length > 0 && (
