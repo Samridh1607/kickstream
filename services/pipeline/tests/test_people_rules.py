@@ -228,6 +228,10 @@ def test_people_survive_a_save_and_load():
     assert rules.load(json.loads(json.dumps(rules.dump(state)))) == state
 
 
+def saved_invite(*, id_="i1", secret="s"):
+    return {"id": id_, "role": "speaker", "name": None, "secret": secret, "made_at": 1.0}
+
+
 @pytest.mark.parametrize(
     "record",
     [
@@ -246,6 +250,18 @@ def test_people_survive_a_save_and_load():
             },
         },
         {"revision": 0, "rooms": {"b1": {"invites": [], "stage": ["nobody"]}}},
+        {"revision": 0, "rooms": {"b1": {"invites": [saved_invite(secret=None)], "stage": []}}},
+        {"revision": 0, "rooms": {"b1": {"invites": [saved_invite(secret=7)], "stage": []}}},
+        {"revision": 0, "rooms": {"b1": {"invites": [saved_invite(id_=7)], "stage": []}}},
+        {
+            "revision": 0,
+            "rooms": {
+                "b1": {
+                    "invites": [saved_invite(id_=f"i{n}", secret=f"s{n}") for n in range(4)],
+                    "stage": ["host", "i0", "i1", "i2", "i3"],
+                }
+            },
+        },
     ],
 )
 def test_a_record_that_cannot_be_used_raises_what_the_service_catches(record):

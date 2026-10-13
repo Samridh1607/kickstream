@@ -357,5 +357,9 @@ def load(record: dict) -> PeopleState:
         known = {HOST, *(item.id for item in invites)}
         if any(item.role not in ROLES for item in invites) or any(person not in known for person in stage):
             raise ValueError("an unknown role or person")
+        if any(not isinstance(item.id, str) or not isinstance(item.secret, str) for item in invites):
+            raise ValueError("an invite without a usable id or secret")
+        if len(stage) > MAX_STAGE:
+            raise ValueError("too many people on stage")
         rooms[str(broadcast_id)] = Room(**{**raw, "invites": invites, "stage": stage})
     return PeopleState(revision=int(record["revision"]), rooms=rooms)
