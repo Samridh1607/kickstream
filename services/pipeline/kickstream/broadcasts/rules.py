@@ -418,13 +418,22 @@ def dump(state: BroadcastsState) -> dict:
 _FORGOTTEN_STATS = ("polls", "questions")  # kept by versions that had a fan page
 
 
+def _without_forgotten_stats(raw):
+    """A copy without stats older versions kept. Anything misshapen is left for validation to refuse."""
+    if not isinstance(raw, dict) or not isinstance(raw.get("broadcasts"), list):
+        return raw
+    broadcasts = []
+    for broadcast in raw["broadcasts"]:
+        if isinstance(broadcast, dict) and isinstance(broadcast.get("stats"), dict):
+            stats = {k: v for k, v in broadcast["stats"].items() if k not in _FORGOTTEN_STATS}
+            broadcast = {**broadcast, "stats": stats}
+        broadcasts.append(broadcast)
+    return {**raw, "broadcasts": broadcasts}
+
+
 def load(record: dict, ai: bool) -> BroadcastsState:
     """A saved state, as it should be after a restart: nothing live, nothing being made."""
-    raw = record["doc"]
-    for broadcast in raw.get("broadcasts", []):
-        for name in _FORGOTTEN_STATS:
-            broadcast.get("stats", {}).pop(name, None)
-    doc = Broadcasts.model_validate(raw)
+    doc = Broadcasts.model_validate(_without_forgotten_stats(record["doc"]))
     state = BroadcastsState(doc=doc.model_copy(update={"ai": ai}))
     for broadcast in doc.broadcasts:
         if broadcast.state == "live":

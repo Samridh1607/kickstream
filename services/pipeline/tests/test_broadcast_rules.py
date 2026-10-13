@@ -351,3 +351,19 @@ def test_broadcasts_saved_with_audience_stats_still_load():
     )
     loaded = rules.load(record, ai=False)
     assert rules.get(loaded, "b1").stats.live_s == 0.0
+    assert rules.get(loaded, "b1").title == "Derby"
+    assert "polls" in record["doc"]["broadcasts"][0]["stats"]
+
+
+def test_a_malformed_saved_file_is_refused_in_a_way_the_service_sets_aside():
+    record = {
+        "doc": {
+            "revision": 0,
+            "server_time": 0.0,
+            "broadcasts": [{"stats": None}],
+            "current_id": None,
+            "ai": False,
+        }
+    }
+    with pytest.raises((ValueError, TypeError, KeyError, IndexError)):
+        rules.load(record, ai=False)
