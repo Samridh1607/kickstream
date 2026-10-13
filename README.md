@@ -54,10 +54,10 @@ A streamer composes the picture in the studio, watches it in the **Program** pre
 
 | Address | Use |
 |---|---|
-| `http://127.0.0.1:5173/broadcasts/{id}/studio` | Arrange scenes on a 16:9 canvas, switch them, and control banners, the ticker, replays and countdowns, and invite guests |
+| `http://127.0.0.1:5173/broadcasts/{id}/studio` | Arrange scenes on a 16:9 canvas, switch them, and control banners, the ticker, replays, countdowns and invite guests |
 | `http://127.0.0.1:5173/studio?output` | The scene that is on air, full window, with no controls. This is what Go live streams. To use another tool instead, such as an OBS browser source, point it here at 1920 × 1080 |
 
-- **Scenes** are saved canvases. Five templates are built in: Starting soon, Live match, Analyst desk, Break and Full-time. Drag and resize elements, or select one and use the arrow keys (Shift with the arrow keys resizes). Press **Switch** on a scene to put it on air.
+- **Scenes** are saved canvases. Six templates are built in: Starting soon, Live match, Analyst desk, Break, Full-time and Interview. Drag and resize elements, or select one and use the arrow keys (Shift with the arrow keys resizes). Press **Switch** on a scene to put it on air.
 - **Fan and Analyst scenes:** each scene's commentary is Fan, Analyst, or the studio default (set it with the selector above the editor). Live match is a Fan scene and Analyst desk an Analyst scene, so switching between them while live changes the program's narration from the Commentator's to the Tactical Analyst's.
 - **Banners** appear by themselves for goals and red cards. Any narration line can be sent to the banner from the Highlights tab, and the Banner tab takes your own text.
 - **Replays** animate the 20 seconds of play before a key moment on the pitch.
@@ -81,7 +81,7 @@ Kickstream opens the studio's clean output (`/studio?output`) in a hidden browse
 | `KICKSTREAM_BROWSER` | Path to a Chromium-based browser, when Edge is not wanted or not found |
 | `KICKSTREAM_FFMPEG` | Path to ffmpeg, when it is not on the `PATH` |
 
-Stream keys are kept in `.data/output-keys.json` and are never sent back to a page. Kickstream has no sign-in: keep the pipeline and the web server reachable from your machine only. Anyone who can reach them can stream to your channels. The stream carries no sound yet. Do not run the pipeline with `--reload` when going live; on Windows it cannot start ffmpeg that way.
+Stream keys are kept in `.data/output-keys.json` and are never sent back to a page. Kickstream has no sign-in: keep the pipeline and the web server reachable from your machine only. The one exception is the guests' tunnel, which opens only the guest routes (see Guests). Anyone who can reach the rest can stream to your channels. The stream's sound is the guests' call: the voices of everyone unmuted in the broadcast's room, you included when you join with your camera. There is no other sound, so with no one in the call the stream is silent. Do not run the pipeline with `--reload` when going live; on Windows it cannot start ffmpeg that way.
 
 Pages follow live data over WebSockets, which the pipeline accepts only from pages on the host it was reached at. Behind a reverse proxy that rewrites the `Host` header, list the public hostnames in `KICKSTREAM_ALLOWED_HOSTS` (comma-separated, for example `kick.example,www.kick.example`).
 
@@ -125,7 +125,9 @@ Calls go through Azure Communication Services Rooms. Create a Communication Serv
 
 To try guests without Azure, set `KICKSTREAM_ROOMS=fake` instead: invites, the stage and the guest page work, but no one sees or hears anyone else.
 
-Guests on other networks reach you through an HTTPS tunnel (Cloudflare Tunnel or ngrok) to the web server on port 5173; browsers allow cameras only on `https://` pages or `localhost`. Put the tunnel's hostname in `KICKSTREAM_PUBLIC_HOSTS` (in `.env` too). On that address only the guest routes answer, and a co-host's studio routes; everything else stays on your machine.
+Guests on other networks reach you through an HTTPS tunnel (Cloudflare Tunnel or ngrok) to the web server on port 5173; browsers allow cameras only on `https://` pages or `localhost`. Put the tunnel's hostname in `KICKSTREAM_PUBLIC_HOSTS` (in `.env` too) before starting the pipeline and the web server; both read it at start. On that address only the guest routes answer, and a co-host's studio routes; everything else stays on your machine. Never open a tunnel while `KICKSTREAM_PUBLIC_HOSTS` is empty: with no public hosts the gate is off, and the tunnel opens the whole studio to anyone with its address.
+
+A co-host can do everything you can in the studio: go live, end or delete the broadcast, and make or revoke invites. A co-host's **Join with camera** in the studio joins as you, the host: it is your seat in the room, with your name and your place on the stage, not a second one.
 
 | Variable | Use |
 |---|---|
@@ -139,8 +141,11 @@ Guests on other networks reach you through an HTTPS tunnel (Cloudflare Tunnel or
 | `POST /api/broadcasts/{id}/people/invites` | `{role, name?}`: make an invite link |
 | `DELETE /api/broadcasts/{id}/people/invites/{invite}` | Revoke it |
 | `PUT /api/broadcasts/{id}/people/stage` | `{people}`: who is on stage, in order |
+| `POST /api/broadcasts/{id}/people/host/seat` | `{name?}`: your seat in the room, for **Join with camera**; asking again gives a new token for the same seat |
+| `POST /api/broadcasts/{id}/people/program/seat` | The program page's seat in the room, from which it shows who is on stage and carries their voices; asking again gives a new token |
 | `GET /api/guest/{secret}`, `/socket` | What a guest's page shows |
 | `POST /api/guest/{secret}/join` | `{name}`: join the room |
+| `POST /api/guest/{secret}/seat/refresh` | A new token for a guest who has joined |
 
 ## Layout
 
