@@ -1,5 +1,6 @@
 import { Badge, Button, Field, Input, makeStyles, MessageBar, MessageBarBody, Text, Textarea, tokens } from "@fluentui/react-components";
-import { useState } from "react";
+import { ArrowUpFilled, ChatMultipleRegular, PollRegular, QuestionCircleRegular, SendRegular, SparkleRegular } from "@fluentui/react-icons";
+import { type ReactNode, useState } from "react";
 import type { Audience, Poll, Question } from "../contracts";
 import { type Language, t } from "../i18n";
 import type { Choices } from "./voter";
@@ -8,6 +9,11 @@ const useStyles = makeStyles({
   root: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXL, width: "100%", maxWidth: "640px", margin: "0 auto" },
   card: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM, padding: tokens.spacingHorizontalL, borderRadius: tokens.borderRadiusLarge, backgroundColor: tokens.colorNeutralBackground1, boxShadow: tokens.shadow2 },
   heading: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS },
+  icon: {
+    display: "inline-flex", alignItems: "center", justifyContent: "center", width: "32px", height: "32px", flexShrink: 0, fontSize: "18px",
+    borderRadius: tokens.borderRadiusMedium, color: tokens.colorBrandForeground1, backgroundColor: tokens.colorBrandBackground2,
+  },
+  title: { margin: 0 },
   option: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXXS },
   bar: { height: "8px", borderRadius: tokens.borderRadiusCircular, backgroundColor: tokens.colorNeutralBackground4, overflow: "hidden" },
   fill: { height: "100%", backgroundColor: tokens.colorBrandBackground },
@@ -78,9 +84,9 @@ function QuestionItem({ question, mine, upvoted, language, onUpvote }: { questio
   const styles = useStyles();
   return (
     <li className={styles.question} data-testid={`question-${question.id}`}>
-      <Button aria-label={`${t(language, "upvote")}: ${question.text}`} aria-pressed={upvoted || mine}
+      <Button aria-label={`${t(language, "upvote")}: ${question.text}`} aria-pressed={upvoted || mine} icon={<ArrowUpFilled />}
         appearance={upvoted || mine ? "primary" : "secondary"} disabled={mine || question.state !== "open"} onClick={onUpvote}>
-        ▲ {question.votes}
+        {question.votes}
       </Button>
       <div className={styles.grow}>
         <div className={styles.row}>
@@ -90,12 +96,25 @@ function QuestionItem({ question, mine, upvoted, language, onUpvote }: { questio
         <Text block>{question.text}</Text>
         {question.answer && (
           <div className={styles.answer}>
-            <Text size={200} weight="semibold" block>{t(language, "expertAnswer")}</Text>
+            <div className={styles.row}>
+              <SparkleRegular />
+              <Text size={200} weight="semibold">{t(language, "expertAnswer")}</Text>
+            </div>
             <Text block>{question.answer}</Text>
           </div>
         )}
       </div>
     </li>
+  );
+}
+
+function CardTitle({ icon, children }: { icon: ReactNode; children: string }) {
+  const styles = useStyles();
+  return (
+    <div className={styles.heading}>
+      <span className={styles.icon}>{icon}</span>
+      <Text as="h2" size={400} weight="semibold" className={styles.title}>{children}</Text>
+    </div>
   );
 }
 
@@ -128,21 +147,21 @@ export function JoinPanel({ audience, choices, remembered, language, problem, on
         </MessageBar>
       )}
       <section className={styles.card} aria-label={t(language, "pollTitle")}>
-        <Text as="h2" weight="semibold">{t(language, "pollTitle")}</Text>
+        <CardTitle icon={<PollRegular />}>{t(language, "pollTitle")}</CardTitle>
         <PollCard poll={poll} chosen={poll ? choices.polls[poll.id] : undefined} language={language} onVote={onVote} />
       </section>
       <section className={styles.card} aria-label={t(language, "askTitle")}>
-        <Text as="h2" weight="semibold">{t(language, "askTitle")}</Text>
+        <CardTitle icon={<QuestionCircleRegular />}>{t(language, "askTitle")}</CardTitle>
         <Field label={t(language, "yourQuestion")}>
           <Textarea value={text} maxLength={200} onChange={(_, data) => setText(data.value)} />
         </Field>
         <Field label={t(language, "nickname")}>
           <Input value={nickname} maxLength={24} onChange={(_, data) => setNickname(data.value)} />
         </Field>
-        <Button appearance="primary" disabled={sending || text.trim() === ""} onClick={() => void ask()}>{t(language, "send")}</Button>
+        <Button appearance="primary" icon={<SendRegular />} disabled={sending || text.trim() === ""} onClick={() => void ask()}>{t(language, "send")}</Button>
       </section>
       <section className={styles.card} aria-label={t(language, "questionsTitle")}>
-        <Text as="h2" weight="semibold">{t(language, "questionsTitle")}</Text>
+        <CardTitle icon={<ChatMultipleRegular />}>{t(language, "questionsTitle")}</CardTitle>
         {questions.length === 0 ? (
           <Text>{t(language, "noQuestions")}</Text>
         ) : (

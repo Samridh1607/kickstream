@@ -68,6 +68,16 @@ test("it follows the current match in the studio's mode and language", async () 
   expect(screen.getByTestId("program-score").textContent).toBe("3 - 0");
 });
 
+test("cutting to a Fan or Analyst scene switches the commentary to that scene's", async () => {
+  serve("m-1");
+  renderUi(<ProgramPage eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} />);
+  const fanAndAnalyst = [scene({ mode: "fan" }), scene({ id: "s2", name: "Analyst desk", template: "Analyst desk", mode: "analyst" })];
+  push(studio({ scenes: [fanAndAnalyst[0], fanAndAnalyst[1]], settings: { ...studio().settings, mode: "analyst" } }));
+  await waitFor(() => expect(stream("/api/matches/")?.url).toBe("/api/matches/m-1/stream?mode=fan&lang=en"));
+  push(studio({ revision: 2, scenes: [fanAndAnalyst[0], fanAndAnalyst[1]], active_scene_id: "s2" }));
+  await waitFor(() => expect(stream("/api/matches/")?.url).toBe("/api/matches/m-1/stream?mode=analyst&lang=en"));
+});
+
 test("a banner from the studio appears on the program", () => {
   serve(null);
   renderUi(<ProgramPage eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} />);

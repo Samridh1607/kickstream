@@ -39,7 +39,7 @@ export function Header({ status, connection, profile, onModeChange, onLanguageCh
   return (
     <header className={styles.root}>
       <Text as="h1" size={500} weight="semibold">
-        {t(language, "appTitle")}
+        {t(language, "matchData")}
       </Text>
       <div className={styles.scoreboard}>
         {status ? (

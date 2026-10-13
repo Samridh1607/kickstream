@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@fluentui/react-components": "9.74.9",
+    "@fluentui/react-icons": "2.0.344",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "zustand": "5.0.15"

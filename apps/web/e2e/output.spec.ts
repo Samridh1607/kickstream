@@ -27,7 +27,6 @@ function find(file: string): string {
 
 test("the streamer records the program to a file, changes it while live, and stops", async ({ page, request }) => {
   await page.goto("/studio");
-  await page.getByRole("tab", { name: "Output" }).click();
   await page.getByLabel("Platform").selectOption("file");
   await page.getByRole("button", { name: "Add destination" }).click();
   await expect(page.getByRole("switch", { name: "Send to Record to file" })).toBeVisible();
@@ -36,23 +35,25 @@ test("the streamer records the program to a file, changes it while live, and sto
     await page.getByRole("button", { name: "Go live", exact: true }).click();
     // On a machine with no ffmpeg or no Chromium there is nothing to test.
     const missing = page.getByText(/was not found/);
-    const stream = page.getByRole("region", { name: "Stream" });
-    await expect(stream.getByText("Starting").or(stream.getByText("Live")).or(missing)).toBeVisible();
+    const stream = page.getByRole("region", { name: "Stream", exact: true });
+    // Exact: "Go live" on the button must not count as the Live badge.
+    const liveBadge = stream.getByText("Live", { exact: true });
+    await expect(stream.getByText("Starting", { exact: true }).or(liveBadge).or(missing)).toBeVisible();
     test.skip(await missing.isVisible(), "ffmpeg or a Chromium-based browser is not installed");
 
-    await expect(stream.getByText("Live")).toBeVisible({ timeout: 40_000 });
-    const destination = page.getByRole("region", { name: "Destinations" });
-    await expect(destination.getByText("Live")).toBeVisible({ timeout: 20_000 });
+    await expect(liveBadge).toBeVisible({ timeout: 40_000 });
+    const destination = page.getByRole("region", { name: "Destinations", exact: true });
+    await expect(destination.getByText("Live", { exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole("button", { name: "Add destination" })).toBeDisabled();
 
     // What the streamer does while live reaches the stream: cutting to a scene that has a banner, and showing one.
-    await page.getByRole("button", { name: "Go live with Live match" }).click();
+    await page.getByRole("button", { name: "Switch to Live match" }).click();
     await page.getByRole("tab", { name: "Banner" }).click();
     await page.getByLabel("Banner text").fill("Recorded by the output test");
     await page.getByRole("button", { name: "Show banner" }).click();
     await page.waitForTimeout(4000);
 
-    await page.getByRole("tab", { name: "Output" }).click();
+    await expect(page.getByRole("region", { name: "Stream status" }).getByText("Record to file")).toBeVisible();
     await page.getByRole("button", { name: "Stop" }).click();
     await expect(stream.getByText("Off air")).toBeVisible({ timeout: 15_000 });
 

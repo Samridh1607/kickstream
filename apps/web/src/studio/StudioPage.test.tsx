@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import type { Studio } from "../contracts";
 import { useMatch } from "../stream/store";
 import {
-  destination, envelope, FakeEventSource, FakeEventSourceCtor, moment, narrative, output, status, studio,
+  destination, envelope, FakeEventSource, FakeEventSourceCtor, moment, narrative, output, scene, status, studio,
 } from "../test/fixtures";
 import { renderUi } from "../test/render";
 import { StudioPage } from "./StudioPage";
@@ -73,16 +73,29 @@ test("it lists the scenes, marks the one on air, and links to the program", asyn
   const scenes = within(screen.getByRole("region", { name: "Scenes" }));
   expect(scenes.getByRole("button", { name: "Edit Live match" })).toBeTruthy();
   expect(scenes.getByText("On air")).toBeTruthy();
-  expect(scenes.getByRole("button", { name: "Go live with Break" })).toBeTruthy();
-  expect(scenes.queryByRole("button", { name: "Go live with Live match" })).toBeNull();
+  expect(scenes.getByRole("button", { name: "Switch to Break" })).toBeTruthy();
+  expect(scenes.queryByRole("button", { name: "Switch to Live match" })).toBeNull();
   expect((scenes.getByRole("button", { name: "Delete Live match" }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.getByRole("link", { name: "Open program" }).getAttribute("href")).toBe("/program");
 });
 
-test("going live with a scene activates it", async () => {
+test("switching to a scene activates it", async () => {
   const server = await opened();
-  fireEvent.click(screen.getByRole("button", { name: "Go live with Break" }));
+  fireEvent.click(screen.getByRole("button", { name: "Switch to Break" }));
   await waitFor(() => expect(last(server)).toMatchObject({ url: "/api/studio/scenes/s2/activate", method: "POST" }));
+});
+
+test("each scene shows whose commentary it carries, and the edited scene's can be changed", async () => {
+  const server = await opened(studio({ scenes: [scene({ mode: "analyst" }), scene({ id: "s2", name: "Break", template: "Break" })] }));
+  const scenes = within(screen.getByRole("region", { name: "Scenes" }));
+  expect(scenes.getByText("Analyst")).toBeTruthy();
+  expect(scenes.getByText("Fan (default)")).toBeTruthy();
+  await waitFor(() => expect(stream("/api/matches/").url).toContain("mode=analyst"));
+  const editor = within(screen.getByRole("region", { name: "Editor" }));
+  fireEvent.change(editor.getByLabelText("Commentary"), { target: { value: "fan" } });
+  await waitFor(() => expect(last(server)).toMatchObject({ url: "/api/studio/scenes/s1/mode", method: "PUT", body: { mode: "fan" } }));
+  fireEvent.change(editor.getByLabelText("Commentary"), { target: { value: "" } });
+  await waitFor(() => expect(last(server).body).toEqual({ mode: null }));
 });
 
 test("scenes can be added from a template, duplicated, saved as a template and deleted", async () => {
@@ -215,12 +228,12 @@ test("a running break shows the time left and can be ended", async () => {
   await waitFor(() => expect(last(server)).toMatchObject({ url: "/api/studio/countdown", method: "DELETE" }));
 });
 
-test("program mode, language and the automatic switches are saved as they change", async () => {
+test("default commentary, language and the automatic switches are saved as they change", async () => {
   const server = await opened();
   openTab("Settings");
   fireEvent.change(screen.getByLabelText("Program language"), { target: { value: "hi" } });
   await waitFor(() => expect(last(server).body).toMatchObject({ language: "hi", mode: "fan" }));
-  fireEvent.change(screen.getByLabelText("Program mode"), { target: { value: "analyst" } });
+  fireEvent.change(screen.getByLabelText("Default commentary"), { target: { value: "analyst" } });
   await waitFor(() => expect(last(server).body).toMatchObject({ mode: "analyst" }));
   fireEvent.click(screen.getByRole("switch", { name: "Take a break automatically at half-time" }));
   await waitFor(() => expect(last(server).body).toMatchObject({ auto_half_time_break: true }));
@@ -313,14 +326,39 @@ test("a second edit made before the first is answered is not lost when the first
   await waitFor(() => expect([shown("Show banner"), shown("Show scoreboard")]).toEqual([true, true]));
 });
 
-test("the Output tab follows the output document", async () => {
+test("the Output box is always shown and follows the output document", async () => {
   await opened();
-  openTab("Output");
-  expect(screen.getByText("Connecting to the output…")).toBeTruthy();
+  const box = within(screen.getByRole("region", { name: "Output" }));
+  expect(box.getByText("Connecting to the output…")).toBeTruthy();
   const source = FakeEventSource.instances.find((candidate) => candidate.url === "/api/studio/output/stream")!;
   act(() => {
     source.open();
     source.emitRaw(JSON.stringify(output({ destinations: [destination()] })));
   });
-  expect(screen.getByRole("switch", { name: "Send to YouTube" })).toBeTruthy();
+  expect(box.getByRole("switch", { name: "Send to YouTube" })).toBeTruthy();
+  expect(screen.queryByRole("tab", { name: "Output" })).toBeNull();
+});
+
+test("while live, the top bar shows each stream being sent and how it is doing", async () => {
+  await opened();
+  const source = FakeEventSource.instances.find((candidate) => candidate.url === "/api/studio/output/stream")!;
+  act(() => {
+    source.open();
+    source.emitRaw(JSON.stringify(output({ destinations: [destination()] })));
+  });
+  expect(screen.queryByRole("region", { name: "Stream status" })).toBeNull();
+
+  act(() => source.emitRaw(JSON.stringify(output({
+    revision: 2, state: "live", started_at: 1000,
+    destinations: [
+      destination({ status: "live" }),
+      destination({ id: "d2", name: "Twitch", platform: "twitch", status: "retrying", reason: "connection refused" }),
+      destination({ id: "d3", name: "Facebook", platform: "facebook", enabled: false }),
+    ],
+  }))));
+  const bar = within(screen.getByRole("region", { name: "Stream status" }));
+  expect(bar.getByText("YouTube").nextElementSibling?.textContent).toBe("Live");
+  expect(bar.getByText("Twitch").nextElementSibling?.textContent).toBe("Retrying");
+  expect(bar.getByText("Twitch").parentElement?.title).toBe("connection refused");
+  expect(bar.queryByText("Facebook")).toBeNull();
 });

@@ -7,6 +7,7 @@ export const LANGUAGE_NAMES: Record<Language, string> = { en: "English", es: "Es
 
 const en = {
   appTitle: "Kickstream",
+  matchData: "Match data",
   start: "Start match",
   restart: "Restart match",
   mode: "Viewing mode",
@@ -57,6 +58,7 @@ const en = {
   yourVote: "Your vote",
   voteToSee: "Vote to see the results.",
   askTitle: "Ask the expert",
+  joinTagline: "Vote and ask the expert while you watch",
   yourQuestion: "Your question",
   nickname: "Nickname (optional)",
   send: "Send",
@@ -91,6 +93,7 @@ export type StringKey = keyof typeof en;
 
 const es: Record<StringKey, string> = {
   appTitle: "Kickstream",
+  matchData: "Datos del partido",
   start: "Iniciar partido",
   restart: "Reiniciar partido",
   mode: "Modo de visualización",
@@ -141,6 +144,7 @@ const es: Record<StringKey, string> = {
   yourVote: "Tu voto",
   voteToSee: "Vota para ver los resultados.",
   askTitle: "Pregunta al experto",
+  joinTagline: "Vota y pregunta al experto mientras ves el partido",
   yourQuestion: "Tu pregunta",
   nickname: "Apodo (opcional)",
   send: "Enviar",
@@ -173,6 +177,7 @@ const es: Record<StringKey, string> = {
 
 const hi: Record<StringKey, string> = {
   appTitle: "Kickstream",
+  matchData: "मैच डेटा",
   start: "मैच शुरू करें",
   restart: "मैच फिर शुरू करें",
   mode: "देखने का मोड",
@@ -223,6 +228,7 @@ const hi: Record<StringKey, string> = {
   yourVote: "आपका वोट",
   voteToSee: "नतीजे देखने के लिए वोट करें।",
   askTitle: "विशेषज्ञ से पूछें",
+  joinTagline: "देखते हुए वोट करें और विशेषज्ञ से पूछें",
   yourQuestion: "आपका सवाल",
   nickname: "उपनाम (वैकल्पिक)",
   send: "भेजें",

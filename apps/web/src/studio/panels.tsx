@@ -1,14 +1,38 @@
 import {
-  Badge, Button, Checkbox, Field, Input, makeStyles, Select, Switch, Text, Textarea, tokens,
+  Badge, Button, Checkbox, Field, Input, makeStyles, mergeClasses, Select, Switch, Text, Textarea, tokens, Tooltip,
 } from "@fluentui/react-components";
-import { type ChangeEvent, useEffect, useState } from "react";
+import {
+  AddRegular, ArrowDownRegular, ArrowUpRegular, ClockRegular, CopyRegular, DataTrendingRegular, DeleteRegular,
+  DismissRegular, HourglassRegular, PeopleRegular, PlayRegular, SaveRegular, SlideLayoutRegular, SportSoccerRegular,
+  TrophyRegular,
+} from "@fluentui/react-icons";
+import { type ChangeEvent, type ReactElement, useEffect, useState } from "react";
 import type { Scene, SceneElement, Studio, StudioSettings, Ticker } from "../contracts";
 import { LANGUAGE_NAMES, LANGUAGES, type Language, type Mode, type StringKey, t } from "../i18n";
 import type { FeedMoment, FeedNarrative, MatchData } from "../stream/store";
 import { formatRemaining } from "./format";
 import { lower, nextLayer, raise } from "./geometry";
+import { sceneMode } from "./mode";
 
 const BUILTIN = ["Starting soon", "Live match", "Analyst desk", "Break", "Full-time"];
+const TEMPLATE_ICONS: Record<string, ReactElement> = {
+  "Starting soon": <ClockRegular />, "Live match": <SportSoccerRegular />, "Analyst desk": <DataTrendingRegular />,
+  Break: <HourglassRegular />, "Full-time": <TrophyRegular />,
+};
+
+export const sceneIcon = (scene: Scene) => TEMPLATE_ICONS[scene.template ?? ""] ?? <SlideLayoutRegular />;
+
+/** Whose commentary a scene carries: Fan or Analyst, marked when it only follows the studio's default. */
+export function ModeBadge({ scene, studio }: { scene: Scene; studio: Studio }) {
+  const mode = sceneMode(scene, studio);
+  const label = mode === "fan" ? "Fan" : "Analyst";
+  return (
+    <Badge size="small" appearance={scene.mode ? "tint" : "outline"} color={mode === "fan" ? "brand" : "important"}
+      icon={mode === "fan" ? <PeopleRegular /> : <DataTrendingRegular />}>
+      {scene.mode ? label : `${label} (default)`}
+    </Badge>
+  );
+}
 const ELEMENT_TYPES: SceneElement["type"][] = [
   "scoreboard", "pitch", "narration", "stats", "banner", "ticker", "timeline", "recap", "replay", "countdown", "text", "image", "poll", "qa",
 ];
@@ -17,8 +41,20 @@ const useStyles = makeStyles({
   panel: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM },
   list: { listStyleType: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS },
   item: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXS, padding: tokens.spacingVerticalS, borderRadius: tokens.borderRadiusMedium, backgroundColor: tokens.colorNeutralBackground3 },
+  sceneItem: {
+    display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXS, padding: tokens.spacingVerticalS,
+    borderRadius: tokens.borderRadiusLarge, backgroundColor: tokens.colorNeutralBackground3,
+    border: `${tokens.strokeWidthThick} solid transparent`,
+  },
+  sceneOnAir: { border: `${tokens.strokeWidthThick} solid #D92D20`, backgroundColor: tokens.colorNeutralBackground1 },
+  sceneIcon: {
+    display: "inline-flex", alignItems: "center", justifyContent: "center", width: "32px", height: "32px", flexShrink: 0,
+    borderRadius: tokens.borderRadiusMedium, fontSize: "18px", color: tokens.colorBrandForeground1, backgroundColor: tokens.colorBrandBackground2,
+  },
   row: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: tokens.spacingHorizontalXS },
   grow: { flexGrow: 1 },
+  pick: { flexGrow: 1, justifyContent: "flex-start", minWidth: 0 },
+  title: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS },
 });
 
 // --- scenes ------------------------------------------------------------------------------------
@@ -43,27 +79,39 @@ export function SceneList({ studio, editingId, onEdit, onActivate, onCreate, onD
   };
   return (
     <section className={styles.panel} aria-label="Scenes">
-      <Text as="h2" weight="semibold">Scenes</Text>
+      <div className={styles.title}>
+        <span className={styles.sceneIcon} aria-hidden><SlideLayoutRegular /></span>
+        <Text as="h2" weight="semibold" size={400}>Scenes</Text>
+      </div>
       <ul className={styles.list}>
         {studio.scenes.map((scene) => {
           const onAir = scene.id === studio.active_scene_id;
           return (
-            <li key={scene.id} className={styles.item}>
+            <li key={scene.id} className={mergeClasses(styles.sceneItem, onAir && styles.sceneOnAir)}>
               <div className={styles.row}>
-                <Button className={styles.grow} appearance={scene.id === editingId ? "primary" : "secondary"}
+                <span className={styles.sceneIcon} aria-hidden>{sceneIcon(scene)}</span>
+                <Button className={styles.pick} appearance={scene.id === editingId ? "primary" : "secondary"}
                   aria-label={`Edit ${scene.name}`} onClick={() => onEdit(scene.id)}>
                   {scene.name}
                 </Button>
                 {onAir ? (
                   <Badge color="danger">On air</Badge>
                 ) : (
-                  <Button size="small" aria-label={`Go live with ${scene.name}`} onClick={() => onActivate(scene.id)}>Go live</Button>
+                  <Button size="small" icon={<PlayRegular />} aria-label={`Switch to ${scene.name}`} onClick={() => onActivate(scene.id)}>Switch</Button>
                 )}
               </div>
               <div className={styles.row}>
-                <Button size="small" appearance="subtle" aria-label={`Duplicate ${scene.name}`} onClick={() => onCreate("scene", scene.id)}>Duplicate</Button>
-                <Button size="small" appearance="subtle" aria-label={`Save ${scene.name} as template`} onClick={() => onSaveTemplate(scene.id)}>Save as template</Button>
-                <Button size="small" appearance="subtle" aria-label={`Delete ${scene.name}`} disabled={onAir || studio.scenes.length === 1} onClick={() => onDelete(scene.id)}>Delete</Button>
+                <ModeBadge scene={scene} studio={studio} />
+                <span className={styles.grow} />
+                <Tooltip content="Duplicate" relationship="description">
+                  <Button size="small" appearance="subtle" icon={<CopyRegular />} aria-label={`Duplicate ${scene.name}`} onClick={() => onCreate("scene", scene.id)} />
+                </Tooltip>
+                <Tooltip content="Save as template" relationship="description">
+                  <Button size="small" appearance="subtle" icon={<SaveRegular />} aria-label={`Save ${scene.name} as template`} onClick={() => onSaveTemplate(scene.id)} />
+                </Tooltip>
+                <Tooltip content="Delete" relationship="description">
+                  <Button size="small" appearance="subtle" icon={<DeleteRegular />} aria-label={`Delete ${scene.name}`} disabled={onAir || studio.scenes.length === 1} onClick={() => onDelete(scene.id)} />
+                </Tooltip>
               </div>
             </li>
           );
@@ -79,7 +127,7 @@ export function SceneList({ studio, editingId, onEdit, onActivate, onCreate, onD
           ))}
         </Select>
       </Field>
-      <Button onClick={create}>Add scene</Button>
+      <Button icon={<AddRegular />} onClick={create}>Add scene</Button>
       {studio.templates.length > 0 && (
         <ul className={styles.list} aria-label="Saved templates">
           {studio.templates.map((template) => (
@@ -145,13 +193,13 @@ export function ElementPanel({ scene, selectedId, onSelect, onChange, onUpload }
         {stacked.map((element) => (
           <li key={element.id} className={styles.row}>
             <Checkbox aria-label={`Show ${element.type}`} checked={element.visible} onChange={(_, data) => patch(element.id, { visible: data.checked === true })} />
-            <Button className={styles.grow} size="small" appearance={element.id === selectedId ? "primary" : "subtle"}
+            <Button className={styles.pick} size="small" appearance={element.id === selectedId ? "primary" : "subtle"}
               aria-label={`Select ${element.type}`} onClick={() => onSelect(element.id)}>
               {element.type}
             </Button>
-            <Button size="small" appearance="subtle" aria-label={`Bring ${element.type} forward`} onClick={() => onChange(raise(scene.elements, element.id))}>↑</Button>
-            <Button size="small" appearance="subtle" aria-label={`Send ${element.type} back`} onClick={() => onChange(lower(scene.elements, element.id))}>↓</Button>
-            <Button size="small" appearance="subtle" aria-label={`Remove ${element.type}`} onClick={() => onChange(scene.elements.filter((other) => other.id !== element.id))}>✕</Button>
+            <Button size="small" appearance="subtle" icon={<ArrowUpRegular />} aria-label={`Bring ${element.type} forward`} onClick={() => onChange(raise(scene.elements, element.id))} />
+            <Button size="small" appearance="subtle" icon={<ArrowDownRegular />} aria-label={`Send ${element.type} back`} onClick={() => onChange(lower(scene.elements, element.id))} />
+            <Button size="small" appearance="subtle" icon={<DismissRegular />} aria-label={`Remove ${element.type}`} onClick={() => onChange(scene.elements.filter((other) => other.id !== element.id))} />
           </li>
         ))}
       </ul>
@@ -163,7 +211,7 @@ export function ElementPanel({ scene, selectedId, onSelect, onChange, onUpload }
             ))}
           </Select>
         </Field>
-        <Button onClick={add} disabled={scene.elements.length >= 40}>Add element</Button>
+        <Button icon={<AddRegular />} onClick={add} disabled={scene.elements.length >= 40}>Add element</Button>
       </div>
       {selected?.type === "text" && (
         <>
@@ -356,7 +404,7 @@ export function SettingsPanel({ settings, onSave }: { settings: StudioSettings; 
   const styles = useStyles();
   return (
     <div className={styles.panel}>
-      <Field label="Program mode">
+      <Field label="Default commentary" hint="Used by scenes that do not choose Fan or Analyst themselves.">
         <Select value={settings.mode} onChange={(_, data) => onSave({ ...settings, mode: data.value as Mode })}>
           <option value="fan">Fan</option>
           <option value="analyst">Analyst</option>

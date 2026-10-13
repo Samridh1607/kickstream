@@ -13,6 +13,9 @@ importers:
       '@fluentui/react-components':
         specifier: 9.74.9
         version: 9.74.9(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(scheduler@0.28.0)
+      '@fluentui/react-icons':
+        specifier: 2.0.344
+        version: 2.0.344(react@19.3.0)
       react:
         specifier: 19.3.0
         version: 19.3.0

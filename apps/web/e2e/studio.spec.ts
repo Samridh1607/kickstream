@@ -25,7 +25,7 @@ test("a streamer builds a scene, goes live, and drives the program", async ({ br
     await program.goto("/program");
 
     // Scenes: going live cuts the program.
-    await control.getByRole("button", { name: "Go live with E2E scene" }).click();
+    await control.getByRole("button", { name: "Switch to E2E scene" }).click();
     await expect(control.getByText("On air: E2E scene")).toBeVisible();
     await expect(program.getByTestId("element-scoreboard")).toBeVisible();
     await expect(program.getByRole("button")).toHaveCount(0);
@@ -34,6 +34,8 @@ test("a streamer builds a scene, goes live, and drives the program", async ({ br
     await control.getByRole("button", { name: "Edit E2E scene" }).click();
     const leftBefore = await program.getByTestId("element-scoreboard").evaluate((node) => (node as HTMLElement).style.left);
     const handle = control.getByRole("region", { name: "Editor" }).getByRole("button", { name: "scoreboard element" });
+    // The page bar stays at the top, so the handle must be in view and not beneath it.
+    await handle.scrollIntoViewIfNeeded();
     const box = (await handle.boundingBox())!;
     await control.mouse.move(box.x + 30, box.y + 20);
     await control.mouse.down();

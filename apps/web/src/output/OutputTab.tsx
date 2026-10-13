@@ -1,6 +1,8 @@
-import { Badge, Button, Field, Input, makeStyles, MessageBar, MessageBarBody, Select, Switch, Text, tokens } from "@fluentui/react-components";
+import { Badge, Button, Field, Input, makeStyles, MessageBar, MessageBarBody, Select, Switch, Text, tokens, Tooltip } from "@fluentui/react-components";
+import { AddRegular, DeleteRegular, LiveFilled, RecordRegular, StopFilled } from "@fluentui/react-icons";
 import { useRef, useState } from "react";
 import type { Destination, Output } from "../contracts";
+import { PlatformMark } from "../shell/PlatformMark";
 import { addDestination, goLive, removeDestination, setDestinationEnabled, setQuality, stopOutput } from "./api";
 
 type Platform = Destination["platform"];
@@ -39,6 +41,20 @@ const useStyles = makeStyles({
   row: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: tokens.spacingHorizontalS },
   grow: { flexGrow: 1, minWidth: 0, overflowWrap: "anywhere" },
   list: { listStyleType: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM },
+  pair: {
+    display: "inline-flex", alignItems: "center", gap: tokens.spacingHorizontalXS, padding: `2px ${tokens.spacingHorizontalS} 2px 2px`,
+    borderRadius: tokens.borderRadiusCircular, backgroundColor: tokens.colorNeutralBackground3,
+  },
+  onAir: {
+    display: "inline-flex", alignItems: "center", gap: tokens.spacingHorizontalXS, padding: `2px ${tokens.spacingHorizontalS}`,
+    borderRadius: tokens.borderRadiusCircular, color: "#FFFFFF", backgroundColor: "#D92D20", fontWeight: tokens.fontWeightSemibold,
+  },
+  pulse: {
+    width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#FFFFFF",
+    animationName: { "0%": { opacity: 1 }, "50%": { opacity: 0.25 }, "100%": { opacity: 1 } },
+    animationDuration: "1.4s", animationIterationCount: "infinite",
+  },
+  destination: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS },
 });
 
 /** Minutes and seconds, or hours too once there are any. */
@@ -58,6 +74,32 @@ interface OutputTabProps {
   now: number;
   /** Sends one change and applies the answer. Resolves to true when it was accepted. */
   onRun(request: () => Promise<Output>): Promise<boolean>;
+}
+
+/** While the output is on: how long it has been live, and how each stream it sends to is doing. */
+export function LiveStatus({ output, now }: { output: Output | null; now: number }) {
+  const styles = useStyles();
+  if (!output || output.state === "idle") return null;
+  return (
+    <section className={styles.row} aria-label="Stream status">
+      {output.state === "live" ? (
+        <span className={styles.onAir}>
+          <span className={styles.pulse} />
+          <Text weight="semibold" style={{ color: "inherit" }}>Live</Text>
+          {typeof output.started_at === "number" && <Text style={{ color: "inherit", fontVariantNumeric: "tabular-nums" }}>{elapsed(now - output.started_at)}</Text>}
+        </span>
+      ) : (
+        <Badge color={look(STATE, output.state).color}>{look(STATE, output.state).label}</Badge>
+      )}
+      {output.destinations.filter((item) => item.enabled).map((item) => (
+        <span key={item.id} className={styles.pair} title={item.reason ?? undefined}>
+          <PlatformMark platform={item.platform} size={20} />
+          <Text size={200}>{item.name}</Text>
+          <Badge appearance="tint" color={look(STATUS, item.status).color}>{look(STATUS, item.status).label}</Badge>
+        </span>
+      ))}
+    </section>
+  );
 }
 
 /** Where the program is sent, and the button that sends it. */
@@ -104,9 +146,9 @@ export function OutputTab({ output, now, onRun }: OutputTabProps) {
           {output.state === "live" && typeof output.started_at === "number" && <Text>{elapsed(now - output.started_at)}</Text>}
           <span className={styles.grow} />
           {idle ? (
-            <Button appearance="primary" disabled={busy || !output.destinations.some((item) => item.enabled)} onClick={() => void run(goLive)}>Go live</Button>
+            <Button appearance="primary" icon={<LiveFilled />} disabled={busy || !output.destinations.some((item) => item.enabled)} onClick={() => void run(goLive)}>Go live</Button>
           ) : (
-            <Button disabled={busy || output.state === "stopping"} onClick={() => void run(stopOutput)}>Stop</Button>
+            <Button icon={<StopFilled />} disabled={busy || output.state === "stopping"} onClick={() => void run(stopOutput)}>Stop</Button>
           )}
         </div>
         {output.problem && (
@@ -128,24 +170,31 @@ export function OutputTab({ output, now, onRun }: OutputTabProps) {
         <ul className={styles.list}>
           {output.destinations.map((item) => (
             <li key={item.id} data-testid={`destination-${item.id}`}>
-              <div className={styles.row}>
-                <Text weight="semibold" className={styles.grow}>{item.name}</Text>
+              <div className={styles.destination}>
+                <PlatformMark platform={item.platform} size={32} />
+                <div className={styles.grow}>
+                  <Text weight="semibold" block>{item.name}</Text>
+                  <Text size={200} block>
+                    {look(PLATFORMS, item.platform).label}
+                    {item.platform !== "file" && (
+                      <>
+                        {" · "}
+                        <span>{item.key_hint ? `Key ending ${item.key_hint}` : "Key saved"}</span>
+                      </>
+                    )}
+                  </Text>
+                </div>
                 <Badge color={look(STATUS, item.status).color}>{look(STATUS, item.status).label}</Badge>
               </div>
-              <Text size={200} block>
-                {look(PLATFORMS, item.platform).label}
-                {item.platform !== "file" && (
-                  <>
-                    {" · "}
-                    <span>{item.key_hint ? `Key ending ${item.key_hint}` : "Key saved"}</span>
-                  </>
-                )}
-              </Text>
               {item.reason && <Text size={200} block className={styles.grow}>{item.reason}</Text>}
               <div className={styles.row}>
                 <Switch label={`Send to ${item.name}`} checked={item.enabled} disabled={!idle || busy}
                   onChange={(_, data) => void run(() => setDestinationEnabled(item, data.checked))} />
-                <Button size="small" disabled={!idle || busy} aria-label={`Remove ${item.name}`} onClick={() => void run(() => removeDestination(item.id))}>Remove</Button>
+                <span className={styles.grow} />
+                <Tooltip content="Remove" relationship="description">
+                  <Button size="small" appearance="subtle" icon={<DeleteRegular />} disabled={!idle || busy} aria-label={`Remove ${item.name}`}
+                    onClick={() => void run(() => removeDestination(item.id))} />
+                </Tooltip>
               </div>
             </li>
           ))}
@@ -153,7 +202,10 @@ export function OutputTab({ output, now, onRun }: OutputTabProps) {
       </section>
 
       <section className={styles.section} aria-label="Add a destination">
-        <Text weight="semibold">Add a destination</Text>
+        <div className={styles.destination}>
+          <PlatformMark platform={platform} size={24} />
+          <Text weight="semibold">Add a destination</Text>
+        </div>
         <Field label="Platform">
           <Select value={platform} onChange={(_, data) => {
             setPlatform(data.value as Platform);
@@ -179,7 +231,7 @@ export function OutputTab({ output, now, onRun }: OutputTabProps) {
             </Field>
           </>
         )}
-        <Button disabled={!idle || busy} onClick={() => void add()}>Add destination</Button>
+        <Button icon={<AddRegular />} disabled={!idle || busy} onClick={() => void add()}>Add destination</Button>
       </section>
 
       {output.recordings.length > 0 && (
@@ -188,6 +240,7 @@ export function OutputTab({ output, now, onRun }: OutputTabProps) {
           <ul className={styles.list}>
             {output.recordings.map((item) => (
               <li key={item.file} className={styles.row}>
+                <RecordRegular />
                 <Text className={styles.grow}>{item.file}</Text>
                 <Text size={200}>{megabytes(item.size_bytes)}</Text>
               </li>

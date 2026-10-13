@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Audience } from "../contracts";
 import { LANGUAGE_NAMES, LANGUAGES, type Language, t } from "../i18n";
 import { loadProfile, saveProfile } from "../prefs";
+import { BrandLogo } from "../shell/BrandLogo";
 import { useLiveDocument } from "../stream/useLiveDocument";
 import { askQuestion, AUDIENCE_STREAM, getAudience, upvoteQuestion, votePoll } from "./api";
 import { JoinPanel } from "./JoinPanel";
@@ -10,7 +11,11 @@ import { CHOICES_KEY, type Choices, getVoter, loadChoices, saveChoices, withAske
 
 const useStyles = makeStyles({
   page: { minHeight: "100vh", display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL, padding: tokens.spacingHorizontalL, backgroundColor: tokens.colorNeutralBackground2 },
-  bar: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: tokens.spacingHorizontalM, width: "100%", maxWidth: "640px", margin: "0 auto" },
+  bar: {
+    display: "flex", alignItems: "center", gap: tokens.spacingHorizontalM, width: "100%", maxWidth: "640px", margin: "0 auto", boxSizing: "border-box",
+    padding: tokens.spacingHorizontalM, borderRadius: tokens.borderRadiusXLarge, backgroundColor: tokens.colorNeutralBackground1, boxShadow: tokens.shadow4,
+  },
+  title: { flexGrow: 1, minWidth: 0, display: "flex", flexDirection: "column", lineHeight: 1.15 },
 });
 
 interface LiveProps {
@@ -97,7 +102,11 @@ export function JoinPage({ eventSource, retryMs }: Omit<LiveProps, "language">) 
   return (
     <main className={styles.page}>
       <div className={styles.bar}>
-        <Text as="h1" size={500} weight="semibold">{t(language, "appTitle")}</Text>
+        <BrandLogo size={40} />
+        <div className={styles.title}>
+          <Text as="h1" size={500} weight="semibold" style={{ margin: 0 }}>{t(language, "appTitle")}</Text>
+          <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>{t(language, "joinTagline")}</Text>
+        </div>
         <Select aria-label={t(language, "language")} value={language} onChange={(_, data) => choose(data.value as Language)}>
           {LANGUAGES.map((option) => (
             <option key={option} value={option}>{LANGUAGE_NAMES[option]}</option>

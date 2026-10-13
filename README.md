@@ -1,6 +1,6 @@
 # Kickstream
 
-Kickstream turns a football match event stream into live intelligence, AI narratives, automated recaps and personalized viewing. This repository holds cycle 1: one synthetic match running locally through the full pipeline and watched in a Fluent UI dashboard.
+Kickstream is live-streaming software for football, in the spirit of Streamlabs and StreamYard: compose scenes, go live to YouTube, X, Facebook and Twitch at once, and let fans vote and ask questions. What it puts on screen comes from a match event stream turned into live intelligence, AI narratives and recaps. This repository runs one synthetic match locally through the full pipeline.
 
 ```
 simulator ──► analytics ──► narration ──► overlay ──► gateway ──SSE──► web
@@ -16,10 +16,20 @@ pnpm install
 (cd services/pipeline && uv sync)
 
 pnpm dev:api     # pipeline on http://127.0.0.1:8000
-pnpm dev:web     # dashboard on http://127.0.0.1:5173
+pnpm dev:web     # web app on http://127.0.0.1:5173
 ```
 
-Open the dashboard and press **Start match**. A 90-minute match plays in about three minutes. Add `?speed=120` to the URL to play it faster (1 to 600).
+Open `http://127.0.0.1:5173`, the streaming home, and press **Start match**. A 90-minute match plays in about three minutes. On the **Match data** page (`/match`), add `?speed=120` to the URL to play it faster (1 to 600).
+
+| Page | Use |
+|---|---|
+| `/` | Home: go live or stop, where the stream is going and how each destination is doing, the scenes with a switch for each, the fan page link, and a quick-start checklist |
+| `/studio` | Build and switch scenes, run banners, polls and questions, and manage the Output |
+| `/program` | The clean picture that is streamed |
+| `/match` | The match data: pitch, key moments, narratives and stats, in Fan or Analyst view |
+| `/join` | The fan page to share with viewers |
+
+Every streamer page has the same top bar. While the stream is on, its right side shows how long you have been live and the status of each destination. The sun and moon button switches between light and dark themes.
 
 ## AI narratives
 
@@ -37,27 +47,28 @@ Four Microsoft Agent Framework agents do the writing: a Commentator and a Tactic
 
 ## Studio
 
-A streamer composes the picture at `/studio` and sends `/program` out from its Output tab (see Going live below), or captures it with a streaming tool.
+A streamer composes the picture at `/studio` and sends `/program` out from its **Output** box (see Going live below), or captures it with a streaming tool.
 
 | Page | Use |
 |---|---|
 | `http://127.0.0.1:5173/studio` | Arrange scenes on a 16:9 canvas, switch them, and control banners, the ticker, replays and countdowns |
 | `http://127.0.0.1:5173/program` | The scene that is on air, with no controls. Point a capture tool such as an OBS browser source at this page, at 1920 × 1080 |
 
-- **Scenes** are saved canvases. Five templates are built in: Starting soon, Live match, Analyst desk, Break and Full-time. Drag and resize elements, or select one and use the arrow keys (Shift with the arrow keys resizes).
+- **Scenes** are saved canvases. Five templates are built in: Starting soon, Live match, Analyst desk, Break and Full-time. Drag and resize elements, or select one and use the arrow keys (Shift with the arrow keys resizes). Press **Switch** on a scene, in the studio or on the home page, to put it on air.
+- **Fan and Analyst scenes:** each scene's commentary is Fan, Analyst, or the studio default (set it with the selector above the editor). Live match is a Fan scene and Analyst desk an Analyst scene, so switching between them while live changes the program's narration from the Commentator's to the Tactical Analyst's.
 - **Banners** appear by themselves for goals and red cards. Any narration line can be sent to the banner from the Highlights tab, and the Banner tab takes your own text.
 - **Replays** animate the 20 seconds of play before a key moment on the pitch.
 - **Countdowns**: a start countdown starts the match and cuts to the Live scene at zero; a break cuts to the Break scene and returns to where you were.
 
-Scenes, settings and uploaded images are kept in `.data/` (set `KICKSTREAM_DATA_DIR` to move it). The program page shows the match in the mode and language chosen in the studio's Settings tab.
+Scenes, settings and uploaded images are kept in `.data/` (set `KICKSTREAM_DATA_DIR` to move it). The program page uses the on-air scene's commentary, or the **Default commentary** and language from the studio's Settings tab.
 
 ## Going live
 
-The studio's **Output** tab sends the program to several platforms at once.
+The studio's **Output** box sends the program to several platforms at once.
 
 1. On the platform (YouTube Studio, X Media Studio, Facebook Live Producer, Twitch), create a live stream. It shows a server address and a stream key.
-2. In the Output tab, choose the platform and paste the key. YouTube, Facebook and Twitch addresses are filled in; X gives each account its own, so paste that too. **Record to file** needs neither and writes an MP4 to `.data/recordings/`, which is a good first test.
-3. Press **Go live**. Each destination shows connecting, live, retrying or failed. One failing does not stop the others.
+2. In the Output box, choose the platform and paste the key. YouTube, Facebook and Twitch addresses are filled in; X gives each account its own, so paste that too. **Record to file** needs neither and writes an MP4 to `.data/recordings/`, which is a good first test.
+3. Press **Go live**, in the studio or on the home page. Each destination shows connecting, live, retrying or failed, in the Output box and in the top bar. One failing does not stop the others.
 
 Kickstream opens the program page in a hidden browser, encodes it once with ffmpeg, and copies that stream to every destination. It needs [ffmpeg](https://ffmpeg.org) and a Chromium-based browser (Microsoft Edge is used when present).
 
@@ -73,7 +84,7 @@ Pages follow live data over WebSockets, which the pipeline accepts only from pag
 
 ## Audience
 
-Viewers take part at `/join`, a phone-friendly page you share in your stream description. The same panel is the **Join in** tab on the dashboard.
+Viewers take part at `/join`, a phone-friendly page you share in your stream description. The home page shows its link with a copy button. The same panel is the **Join in** tab on the Match data page.
 
 | Page | Use |
 |---|---|
@@ -95,7 +106,7 @@ Votes are counted once per browser, using a random ID the browser keeps. That st
 | `packages/contracts/` | JSON Schema for every message; the Python and TypeScript types are generated from it |
 | `services/pipeline/kickstream/` | The five stages, the ports they depend on, and the adapters behind those ports |
 | `services/pipeline/kickstream/app.py` | The composition root: the only place adapters are chosen |
-| `apps/web/` | The React and Fluent UI dashboard |
+| `apps/web/` | The React and Fluent UI web app: home, studio, program, match data and fan page |
 | `docs/superpowers/` | Design spec and implementation plan |
 
 Stages talk only through the event bus and the contracts, and never import one another. Moving to Azure means adding adapters for the four ports (event bus, narrative writer, match store, broadcaster) and choosing them in `app.py`.
@@ -104,8 +115,8 @@ Stages talk only through the event bus and the contracts, and never import one a
 
 ```bash
 pnpm test:api                         # pipeline unit and integration tests
-pnpm test:web                         # dashboard unit and component tests
-(cd apps/web && pnpm e2e)             # the dashboard, the studio and the fan page, in a real browser
+pnpm test:web                         # web unit and component tests
+(cd apps/web && pnpm e2e)             # home, studio, output, match data and fan page, in a real browser
 ```
 
 No test calls a live model.

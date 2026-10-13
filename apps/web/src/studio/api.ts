@@ -49,6 +49,8 @@ export const createScene = (source: "builtin" | "template" | "scene", ref: strin
   change("POST", "/scenes", name ? { source, ref, name } : { source, ref });
 export const saveScene = (scene: Pick<Scene, "id" | "name" | "elements">) =>
   change("PUT", `/scenes/${id(scene.id)}`, { name: scene.name, elements: scene.elements });
+/** Whose commentary the scene carries; null follows the studio's mode. */
+export const setSceneMode = (sceneId: string, mode: "fan" | "analyst" | null) => change("PUT", `/scenes/${id(sceneId)}/mode`, { mode });
 export const deleteScene = (sceneId: string) => change("DELETE", `/scenes/${id(sceneId)}`);
 export const activateScene = (sceneId: string) => change("POST", `/scenes/${id(sceneId)}/activate`);
 export const saveTemplate = (sceneId: string, name?: string) =>

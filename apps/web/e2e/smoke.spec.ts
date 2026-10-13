@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test("a seeded match plays through every stage to the full-time recap", async ({ page }) => {
   // 600x plays ninety minutes in nine seconds.
-  await page.goto("/?speed=600");
+  await page.goto("/match?speed=600");
   await page.getByRole("button", { name: /^(Start|Restart) match$/ }).click();
 
   // Ingest -> Interpret -> Explain: a goal becomes a Fan narrative in English.

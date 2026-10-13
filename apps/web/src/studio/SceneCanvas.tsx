@@ -1,5 +1,7 @@
+import { FluentProvider } from "@fluentui/react-components";
 import { type CSSProperties, type KeyboardEvent, type PointerEvent, useRef, useState } from "react";
 import type { Scene, SceneElement } from "../contracts";
+import { darkTheme } from "../theme";
 import { ElementView, type ProgramData } from "./elements";
 import { CANVAS, GRID, moveBy, type Rect, rectOf, resizeBy, sameRect } from "./geometry";
 
@@ -85,8 +87,9 @@ export function SceneCanvas({ scene, data, scale, editable = false, selectedId =
   };
 
   return (
-    <div data-testid="scene-canvas"
-      style={{ position: "relative", overflow: "hidden", width: CANVAS.width * scale, height: CANVAS.height * scale, backgroundColor: "#0B1220" }}
+    // The broadcast is always dark, whatever theme the page around it uses.
+    <FluentProvider theme={darkTheme} data-testid="scene-canvas"
+      style={{ position: "relative", overflow: "hidden", width: CANVAS.width * scale, height: CANVAS.height * scale, backgroundColor: "#0B1220", flexShrink: 0 }}
       onPointerDown={editable ? () => onSelect?.(null) : undefined}>
       <style>{TICKER_KEYFRAMES}</style>
       <div style={{ position: "relative", width: CANVAS.width, height: CANVAS.height, transform: `scale(${scale})`, transformOrigin: "0 0" }}>
@@ -114,6 +117,6 @@ export function SceneCanvas({ scene, data, scale, editable = false, selectedId =
           );
         })}
       </div>
-    </div>
+    </FluentProvider>
   );
 }

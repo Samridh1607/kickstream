@@ -6,6 +6,7 @@ import { useLiveDocument } from "../stream/useLiveDocument";
 import { type CurrentMatchOptions, useCurrentMatch } from "../stream/useCurrentMatch";
 import { startCapture, type StopCapture } from "./capture";
 import { fitScale, nextLayer } from "./geometry";
+import { programMode } from "./mode";
 import { SceneCanvas } from "./SceneCanvas";
 import { useNow, useStudio } from "./useStudio";
 
@@ -49,7 +50,7 @@ function useWindowSize() {
 export function ProgramPage({ eventSource, retryMs, pollMs, capture = startCapture }: CurrentMatchOptions & { capture?: typeof startCapture }) {
   const { studio, offset } = useStudio(eventSource, retryMs);
   const { doc: audience } = useLiveDocument<Audience>(AUDIENCE_STREAM, eventSource, retryMs);
-  const mode = studio?.settings.mode;
+  const mode = studio ? programMode(studio) : undefined;
   const language = studio?.settings.language;
   const profile = useMemo<ViewerProfile | null>(
     () => (mode && language ? { mode, language, club: null, player: null } : null),

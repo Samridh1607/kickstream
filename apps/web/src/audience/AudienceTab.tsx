@@ -1,5 +1,8 @@
 import { Badge, Button, Field, Input, makeStyles, Select, Switch, Text, Textarea, tokens } from "@fluentui/react-components";
-import { useEffect, useState } from "react";
+import {
+  ChatMultipleRegular, DismissRegular, EyeOffRegular, EyeRegular, HistoryRegular, LiveFilled, PollRegular, SparkleRegular,
+} from "@fluentui/react-icons";
+import { type ReactNode, useEffect, useState } from "react";
 import type { Audience } from "../contracts";
 import {
   airDraft, askExpert, clearQa, closePoll, createPoll, discardDraft, hideQuestion, presetPoll, restorePoll, saveDraft,
@@ -19,7 +22,18 @@ const useStyles = makeStyles({
   row: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: tokens.spacingHorizontalS },
   list: { listStyleType: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS },
   wrap: { overflowWrap: "anywhere" },
+  title: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS, "& svg": { fontSize: "18px", color: tokens.colorBrandForeground1 } },
 });
+
+function Title({ icon, children }: { icon: ReactNode; children: string }) {
+  const styles = useStyles();
+  return (
+    <div className={styles.title}>
+      {icon}
+      <Text weight="semibold">{children}</Text>
+    </div>
+  );
+}
 
 interface AudienceTabProps {
   audience: Audience | null;
@@ -63,7 +77,7 @@ export function AudienceTab({ audience, onRun }: AudienceTabProps) {
   return (
     <div className={styles.root}>
       <section className={styles.section} aria-label="New poll">
-        <Text weight="semibold">New poll</Text>
+        <Title icon={<PollRegular />}>New poll</Title>
         <Field label="Poll question">
           <Input value={question} maxLength={140} onChange={(_, data) => setQuestion(data.value)} />
         </Field>
@@ -104,7 +118,7 @@ export function AudienceTab({ audience, onRun }: AudienceTabProps) {
 
       {audience.history.length > 0 && (
         <section className={styles.section} aria-label="Earlier polls">
-          <Text weight="semibold">Earlier polls</Text>
+          <Title icon={<HistoryRegular />}>Earlier polls</Title>
           <ul className={styles.list}>
             {audience.history.map((earlier) => (
               <li key={earlier.id} className={styles.row}>
@@ -118,10 +132,10 @@ export function AudienceTab({ audience, onRun }: AudienceTabProps) {
 
       {audience.qa && (
         <section className={styles.section} aria-label="On air">
-          <Text weight="semibold">On air</Text>
+          <Title icon={<LiveFilled />}>On air</Title>
           <Text className={styles.wrap}>{audience.qa.question}</Text>
           <Text className={styles.wrap}>{audience.qa.answer}</Text>
-          <Button onClick={() => void onRun(clearQa)}>Take off air</Button>
+          <Button icon={<DismissRegular />} onClick={() => void onRun(clearQa)}>Take off air</Button>
         </section>
       )}
 
@@ -133,14 +147,14 @@ export function AudienceTab({ audience, onRun }: AudienceTabProps) {
             <Textarea rows={4} value={answer} maxLength={400} onChange={(_, data) => setAnswer(data.value)} />
           </Field>
           <div className={styles.row}>
-            <Button appearance="primary" disabled={answer.trim() === ""} onClick={() => void air()}>Put on air</Button>
+            <Button appearance="primary" icon={<LiveFilled />} disabled={answer.trim() === ""} onClick={() => void air()}>Put on air</Button>
             <Button onClick={() => void onRun(discardDraft)}>Discard answer</Button>
           </div>
         </section>
       )}
 
       <section className={styles.section} aria-label="Fan questions">
-        <Text weight="semibold">Fan questions</Text>
+        <Title icon={<ChatMultipleRegular />}>Fan questions</Title>
         {audience.questions.length === 0 && <Text size={200}>Questions from fans appear here.</Text>}
         <ul className={styles.list}>
           {audience.questions.map((item) => (
@@ -150,13 +164,13 @@ export function AudienceTab({ audience, onRun }: AudienceTabProps) {
               {item.answer && <Text size={200} block className={styles.wrap}>{item.answer}</Text>}
               <div className={styles.row}>
                 {item.state === "open" && (
-                  <Button size="small" appearance="primary" aria-label={`Ask the expert: ${item.text}`} onClick={() => void onRun(() => askExpert(item.id))}>Ask the expert</Button>
+                  <Button size="small" appearance="primary" aria-label={`Ask the expert: ${item.text}`} icon={<SparkleRegular />} onClick={() => void onRun(() => askExpert(item.id))}>Ask the expert</Button>
                 )}
                 {item.state !== "hidden" && (
-                  <Button size="small" aria-label={`Hide: ${item.text}`} onClick={() => void onRun(() => hideQuestion(item.id))}>Hide</Button>
+                  <Button size="small" aria-label={`Hide: ${item.text}`} icon={<EyeOffRegular />} onClick={() => void onRun(() => hideQuestion(item.id))}>Hide</Button>
                 )}
                 {item.state === "hidden" && (
-                  <Button size="small" aria-label={`Unhide: ${item.text}`} onClick={() => void onRun(() => unhideQuestion(item.id))}>Unhide</Button>
+                  <Button size="small" aria-label={`Unhide: ${item.text}`} icon={<EyeRegular />} onClick={() => void onRun(() => unhideQuestion(item.id))}>Unhide</Button>
                 )}
               </div>
             </li>
