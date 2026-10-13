@@ -4,9 +4,10 @@ import asyncio
 import os
 import secrets
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from http.cookies import CookieError, SimpleCookie
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -18,6 +19,7 @@ from kickstream.adapters.agent_writer import AgentNarrativeWriter
 from kickstream.adapters.chromium_capture import ChromiumCapture
 from kickstream.adapters.clocks import RealClock
 from kickstream.adapters.dir_image_store import DirImageStore
+from kickstream.adapters.fake_rooms import FakeRooms
 from kickstream.adapters.ffmpeg import FfmpegEncoder, FfmpegSender
 from kickstream.adapters.ffmpeg_clips import FfmpegClipCutter
 from kickstream.adapters.json_record_store import JsonRecordStore
@@ -44,6 +46,9 @@ from kickstream.narration.stage import NarrationStage
 from kickstream.output.api import build_output_router
 from kickstream.output.service import OutputService
 from kickstream.overlay.stage import OverlayStage
+from kickstream.people.api import COHOST_COOKIE, build_people_router
+from kickstream.people.service import PeopleService
+from kickstream.ports.calls import CallRooms
 from kickstream.ports.clock import Clock
 from kickstream.ports.output import Encoder, ProgramCapture, Sender
 from kickstream.ports.reels import ClipCutter, ReelProducer
@@ -151,6 +156,78 @@ class BodyLimit:
         await refusal(scope, receive, send)
 
 
+_PROXIED = (b"x-forwarded-for", b"x-forwarded-host", b"forwarded", b"cf-connecting-ip")
+
+
+class PublicHostGate:
+    """On a public address only the guest routes answer, and the studio's only for a co-host.
+
+    Guests reach Kickstream through a tunnel to the web server, and the studio has no sign-in. A
+    request is public when it names a public host or came through any proxy: a tunnel that rewrites
+    Host to the local address must not open the studio.
+    """
+
+    def __init__(self, app, *, public_hosts: Collection[str], is_cohost: Callable[[str], bool]) -> None:
+        self._app = app
+        self._public_hosts = frozenset(public_hosts)
+        self._is_cohost = is_cohost
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] in ("http", "websocket") and self._public_hosts:
+            headers = dict(scope["headers"])
+            if self._is_public(headers) and not self._allowed(scope["path"], headers):
+                if scope["type"] == "websocket":
+                    await receive()
+                    await send({"type": "websocket.close", "code": 1008})
+                else:
+                    await JSONResponse(status_code=404, content={"detail": "Not Found"})(scope, receive, send)
+                return
+        await self._app(scope, receive, send)
+
+    def _is_public(self, headers: dict[bytes, bytes]) -> bool:
+        if any(name in headers for name in _PROXIED):
+            return True
+        named = urlsplit("//" + headers.get(b"host", b"").decode("latin-1")).hostname
+        return named in self._public_hosts
+
+    def _allowed(self, path: str, headers: dict[bytes, bytes]) -> bool:
+        if path.startswith("/api/guest/"):
+            return True
+        cookies = SimpleCookie()
+        try:
+            cookies.load(headers.get(b"cookie", b"").decode("latin-1"))
+        except CookieError:
+            return False
+        morsel = cookies.get(COHOST_COOKIE)
+        return morsel is not None and self._is_cohost(morsel.value)
+
+
+def read_env_file(path: Path) -> dict[str, str]:
+    """`KEY=value` lines from a .env file, if there is one. Surrounding quotes are dropped."""
+    if not path.is_file():
+        return {}
+    found = {}
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key, value = key.strip().removeprefix("export ").strip(), value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        found[key] = value
+    return found
+
+
+def environment(path: Path, base: Mapping[str, str]) -> dict[str, str]:
+    """The settings' sources: the .env file, overridden by the real environment."""
+    return {**read_env_file(path), **base}
+
+
+def _hosts(text: str) -> tuple[str, ...]:
+    return tuple(host.strip().lower() for host in text.split(",") if host.strip())
+
+
 @dataclass(frozen=True)
 class Settings:
     llm_base_url: str | None
@@ -168,6 +245,11 @@ class Settings:
     )
     browser: str | None = None  # a Chromium-based browser; Microsoft Edge is looked for when unset
     ffmpeg: str = "ffmpeg"
+    # A tunnel's hostnames. There, only the guest routes answer. See PublicHostGate.
+    public_hosts: tuple[str, ...] = ()
+    acs_connection_string: str | None = field(default=None, repr=False)
+    # "fake": in-memory rooms, for the end-to-end tests and trying guests without Azure.
+    rooms: str | None = None
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ) -> "Settings":
@@ -178,19 +260,26 @@ class Settings:
             llm_max_calls=int(env.get("KICKSTREAM_LLM_MAX_CALLS", "60")),
             cache_dir=Path(env.get("KICKSTREAM_CACHE_DIR", ".cache/narration")),
             data_dir=Path(env.get("KICKSTREAM_DATA_DIR", ".data")),
-            allowed_hosts=tuple(
-                host.strip().lower()
-                for host in env.get("KICKSTREAM_ALLOWED_HOSTS", "").split(",")
-                if host.strip()
-            ),
+            allowed_hosts=_hosts(env.get("KICKSTREAM_ALLOWED_HOSTS", "")),
             program_url=env.get("KICKSTREAM_PROGRAM_URL") or "http://127.0.0.1:5173/studio?output",
             browser=env.get("KICKSTREAM_BROWSER") or None,
             ffmpeg=env.get("KICKSTREAM_FFMPEG") or "ffmpeg",
+            public_hosts=_hosts(env.get("KICKSTREAM_PUBLIC_HOSTS", "")),
+            acs_connection_string=env.get("KICKSTREAM_ACS_CONNECTION_STRING") or None,
+            rooms=env.get("KICKSTREAM_ROOMS") or None,
         )
 
     @property
     def llm_configured(self) -> bool:
         return bool(self.llm_base_url and self.llm_model and self.llm_api_key)
+
+    @property
+    def socket_hosts(self) -> tuple[str, ...]:
+        return (*self.allowed_hosts, *self.public_hosts)
+
+    @property
+    def public_origin(self) -> str | None:
+        return f"https://{self.public_hosts[0]}" if self.public_hosts else None
 
 
 @dataclass
@@ -202,6 +291,7 @@ class Pipeline:
     studio: StudioService
     output: OutputService
     broadcasts: BroadcastService
+    people: PeopleService
     stages: list
     tasks: list[asyncio.Task] = field(default_factory=list)
 
@@ -209,6 +299,7 @@ class Pipeline:
         self.tasks = [asyncio.create_task(stage.run()) for stage in self.stages]
         self.tasks.append(asyncio.create_task(self.studio.run()))
         self.tasks.append(asyncio.create_task(self.broadcasts.run()))
+        self.tasks.append(asyncio.create_task(self.people.run()))
 
     async def stop(self) -> None:
         await self.broadcasts.stop()
@@ -218,6 +309,12 @@ class Pipeline:
             task.cancel()
         await asyncio.gather(*self.tasks, return_exceptions=True)
         self.tasks = []
+
+
+def _rooms(settings: Settings) -> CallRooms | None:
+    if settings.rooms == "fake":
+        return FakeRooms()
+    return None
 
 
 def build_pipeline(
@@ -232,6 +329,7 @@ def build_pipeline(
     new_sender: Callable[[], Sender] | None = None,
     reel_producer: ReelProducer | None = None,
     cutter: ClipCutter | None = None,
+    rooms: CallRooms | None = None,
 ) -> Pipeline:
     bus, store, broadcaster = InMemoryEventBus(), InMemoryMatchStore(), InProcessBroadcaster()
     primary = writer
@@ -273,6 +371,16 @@ def build_pipeline(
         reels_dir=settings.data_dir / "reels",
         now=now,
     )
+    people = PeopleService(
+        JsonRecordStore(settings.data_dir / "people.json", private=True),
+        rooms if rooms is not None else _rooms(settings),
+        find_broadcast=lambda broadcast_id: next(
+            (item for item in broadcasts.view().broadcasts if item.id == broadcast_id), None
+        ),
+        broadcast_changes=broadcasts.changes,
+        public_origin=settings.public_origin,
+        now=now,
+    )
     # Every stage subscribes in its constructor, so nothing published after this point is missed.
     stages = [
         AnalyticsStage(bus),
@@ -282,7 +390,7 @@ def build_pipeline(
         StudioStage(bus, studio),
         BroadcastStage(bus, broadcasts),
     ]
-    return Pipeline(bus, store, broadcaster, controller, studio, output, broadcasts, stages)
+    return Pipeline(bus, store, broadcaster, controller, studio, output, broadcasts, people, stages)
 
 
 def create_app(
@@ -297,10 +405,11 @@ def create_app(
     new_sender: Callable[[], Sender] | None = None,
     reel_producer: ReelProducer | None = None,
     cutter: ClipCutter | None = None,
+    rooms: CallRooms | None = None,
 ) -> FastAPI:
     # Match IDs are unique to this process, so an ID a browser kept from before a restart is
     # reported as unknown instead of silently naming a different match.
-    settings = settings or Settings.from_env()
+    settings = settings or Settings.from_env(environment(Path(".env"), os.environ))
     pipeline = build_pipeline(
         settings,
         clock_factory=clock_factory,
@@ -312,6 +421,7 @@ def create_app(
         new_sender=new_sender,
         reel_producer=reel_producer,
         cutter=cutter,
+        rooms=rooms,
     )
 
     @asynccontextmanager
@@ -324,6 +434,9 @@ def create_app(
     app.state.pipeline = pipeline
     app.add_middleware(SameOriginWrites)
     app.add_middleware(BodyLimit)
+    app.add_middleware(
+        PublicHostGate, public_hosts=settings.public_hosts, is_cohost=pipeline.people.is_cohost
+    )
 
     @app.exception_handler(Refusal)
     async def refused(_: Request, exc: Refusal) -> JSONResponse:
@@ -340,16 +453,15 @@ def create_app(
             start_match=pipeline.controller.start,
             current_match=lambda: pipeline.controller.current,
             match_exists=pipeline.controller.exists,
-            socket_hosts=settings.allowed_hosts,
+            socket_hosts=settings.socket_hosts,
         )
     )
     app.include_router(
-        build_studio_router(
-            service=pipeline.studio, store=pipeline.store, socket_hosts=settings.allowed_hosts
-        )
+        build_studio_router(service=pipeline.studio, store=pipeline.store, socket_hosts=settings.socket_hosts)
     )
-    app.include_router(build_output_router(service=pipeline.output, socket_hosts=settings.allowed_hosts))
+    app.include_router(build_output_router(service=pipeline.output, socket_hosts=settings.socket_hosts))
     app.include_router(
-        build_broadcasts_router(service=pipeline.broadcasts, socket_hosts=settings.allowed_hosts)
+        build_broadcasts_router(service=pipeline.broadcasts, socket_hosts=settings.socket_hosts)
     )
+    app.include_router(build_people_router(service=pipeline.people, socket_hosts=settings.socket_hosts))
     return app
