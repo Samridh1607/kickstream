@@ -54,13 +54,22 @@ class FakeIdentityClient:
     def __init__(self, expires_on="2026-10-14T10:00:00Z"):
         self.expires_on = expires_on
         self.users = 0
+        self.revoked = []
+        self.fails = None
 
     def create_user_and_token(self, scopes):
         self.users += 1
         return User(f"8:acs:u{self.users}"), Token(f"t{self.users}", self.expires_on)
 
     def get_token(self, user, scopes):
+        if self.fails is not None:
+            raise self.fails
         return Token(f"fresh-{user.properties['id']}", self.expires_on)
+
+    def revoke_tokens(self, user):
+        if self.fails is not None:
+            raise self.fails
+        self.revoked.append(user.properties["id"])
 
 
 def made(rooms=None, identity=None):
@@ -93,6 +102,10 @@ async def test_a_seat_is_a_new_identity_in_the_room_with_its_role():
     ]
 
 
+def test_a_seat_does_not_show_its_token():
+    assert "secret-token" not in repr(Seat("8:acs:u1", "secret-token", EXPIRES))
+
+
 async def test_a_token_is_refreshed_for_the_same_identity():
     adapter, _, _ = made()
     assert await adapter.refresh("8:acs:u1") == Seat("8:acs:u1", "fresh-8:acs:u1", EXPIRES)
@@ -105,10 +118,18 @@ async def test_unseating_and_closing_reach_the_room():
     assert rooms.calls == [("remove", "room-9", ["8:acs:u1"]), ("delete", "room-9")]
 
 
+async def test_unseating_someone_stops_their_tokens_and_can_be_repeated():
+    adapter, _, identity = made()
+    await adapter.unseat("room-9", "8:acs:u1")
+    await adapter.unseat("room-9", "8:acs:u1")
+    assert identity.revoked == ["8:acs:u1", "8:acs:u1"]
+
+
 async def test_unseating_someone_the_service_cannot_find_is_not_a_failure():
-    rooms = FakeRoomsClient()
+    rooms, identity = FakeRoomsClient(), FakeIdentityClient()
     rooms.fails = ResourceNotFoundError(message="Participant not found.")
-    adapter, _, _ = made(rooms=rooms)
+    identity.fails = ResourceNotFoundError(message="Identity not found.")
+    adapter, _, _ = made(rooms=rooms, identity=identity)
     await adapter.unseat("room-9", "8:acs:u1")
 
 
@@ -136,3 +157,13 @@ async def test_a_bad_connection_string_is_reported_without_repeating_it():
     with pytest.raises(RoomsFailure) as failed:
         await adapter.open_room(1_800_000_000.0)
     assert "KICKSTREAM_ACS_CONNECTION_STRING" in str(failed.value) and "topsecret" not in str(failed.value)
+    with pytest.raises(RoomsFailure, match="KICKSTREAM_ACS_CONNECTION_STRING"):
+        await adapter.refresh("8:acs:u1")
+
+
+async def test_an_answer_the_sdk_cannot_read_is_not_blamed_on_the_connection_string():
+    identity = FakeIdentityClient(expires_on="not a time")
+    adapter, _, _ = made(identity=identity)
+    with pytest.raises(RoomsFailure) as failed:
+        await adapter.refresh("8:acs:u1")
+    assert str(failed.value) == "The calling service gave an answer Kickstream could not read."

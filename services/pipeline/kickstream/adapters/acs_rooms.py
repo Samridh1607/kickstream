@@ -22,6 +22,7 @@ _ROLES = {
 }
 _SCOPES = [CommunicationTokenScope.VOIP]
 _BAD_SETTING = "KICKSTREAM_ACS_CONNECTION_STRING is not a valid connection string."
+_UNREADABLE = "The calling service gave an answer Kickstream could not read."
 
 
 def epoch(value) -> float:
@@ -58,12 +59,18 @@ class AcsRooms:
 
     def _rooms(self) -> RoomsClient:
         if self._rooms_client is None:
-            self._rooms_client = self._make_rooms(self._connection_string)
+            try:
+                self._rooms_client = self._make_rooms(self._connection_string)
+            except ValueError as exc:
+                raise RoomsFailure(_BAD_SETTING) from exc
         return self._rooms_client
 
     def _identity(self) -> CommunicationIdentityClient:
         if self._identity_client is None:
-            self._identity_client = self._make_identity(self._connection_string)
+            try:
+                self._identity_client = self._make_identity(self._connection_string)
+            except ValueError as exc:
+                raise RoomsFailure(_BAD_SETTING) from exc
         return self._identity_client
 
     @staticmethod
@@ -74,7 +81,7 @@ class AcsRooms:
         except AzureError as exc:
             raise RoomsFailure(_reason(exc)) from exc
         except ValueError as exc:
-            raise RoomsFailure(_BAD_SETTING) from exc
+            raise RoomsFailure(_UNREADABLE) from exc
 
     async def open_room(self, valid_until: float) -> str:
         until = datetime.fromtimestamp(valid_until, UTC)
@@ -103,6 +110,9 @@ class AcsRooms:
             # Not found means the identity, or its whole room, is already gone: that is what unseating wants.
             with suppress(ResourceNotFoundError):
                 self._rooms().remove_participants(room_id=room_id, participants=[RoomUser(user_id)])
+            # Out of the room, their token still lets them call for up to a day.
+            with suppress(ResourceNotFoundError):
+                self._identity().revoke_tokens(IdentityUser(user_id))
 
         await self._run(work)
 

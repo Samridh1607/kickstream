@@ -1,6 +1,6 @@
 """What the people stage needs from a calling service: rooms, and seats in them with a role."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
 CallRole = Literal["presenter", "attendee", "consumer"]
@@ -9,7 +9,7 @@ CallRole = Literal["presenter", "attendee", "consumer"]
 @dataclass(frozen=True)
 class Seat:
     user_id: str
-    token: str
+    token: str = field(repr=False)
     expires_at: float  # Unix seconds
 
 
@@ -30,7 +30,7 @@ class CallRooms(Protocol):
         """A new token for an identity. Raises RoomsFailure."""
 
     async def unseat(self, room_id: str, user_id: str) -> None:
-        """Take the identity out of the room. An identity that is not in the room is not a failure:
+        """Take the identity out of the room and stop its tokens. An identity that is not in the room is not a failure:
         this may be called again after an earlier success. Raises RoomsFailure."""
 
     async def close_room(self, room_id: str) -> None:
