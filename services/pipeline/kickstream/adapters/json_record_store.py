@@ -7,6 +7,15 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 
+def _write_owner_only(path: Path, text: str) -> None:
+    """Create the file owner-only before any content goes in. A leftover file is removed, never reused."""
+    with contextlib.suppress(FileNotFoundError):
+        path.unlink()
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(text)
+
+
 class JsonRecordStore:
     """A plain record as one JSON file, replaced atomically on every save."""
 
@@ -29,10 +38,11 @@ class JsonRecordStore:
     def save(self, record: dict) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self._path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+        text = json.dumps(record, ensure_ascii=False)
         if self._private:
-            with contextlib.suppress(OSError):
-                os.chmod(temporary, 0o600)
+            _write_owner_only(temporary, text)
+        else:
+            temporary.write_text(text, encoding="utf-8")
         temporary.replace(self._path)
 
     def set_aside(self) -> None:
