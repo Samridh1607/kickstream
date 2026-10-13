@@ -5,7 +5,7 @@ import logging
 import secrets
 import time
 from collections import deque
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine
 from dataclasses import replace
 from pathlib import Path
 
@@ -103,6 +103,7 @@ class OutputService:
         self._state = self._load()
         self._listeners: set[asyncio.Event] = set()
         self._run: asyncio.Task | None = None
+        self._cancelled = False  # the current run has been told to stop, once
         self._token: str | None = None  # the page allowed to send video, one per attempt
         self._video = asyncio.Event()
         self._feed_lost = asyncio.Event()
@@ -184,15 +185,29 @@ class OutputService:
         if missing:
             raise OutputError(503, "output", missing)
         self._apply(lambda _: begun, save=False)
-        self._run = asyncio.create_task(self._supervise())
+        self._cancelled = False
+        run = self._run = asyncio.create_task(self._supervise())
+        run.add_done_callback(lambda _: self._finish(run, None))
 
     async def stop(self) -> None:
         run = self._run
         if run is None:
             return
         self._apply(rules.stopping, save=False)
-        run.cancel()
-        await asyncio.gather(run, return_exceptions=True)
+        if not self._cancelled:  # a second stop waits for the first one's clean-up, it does not interrupt it
+            self._cancelled = True
+            run.cancel()
+        # wait() does not cancel the run if this caller is cancelled, so the clean-up always completes
+        await asyncio.wait({run})
+        self._finish(run, None)
+
+    def _finish(self, run: asyncio.Task, problem: str | None) -> None:
+        """End the run however its task ended, including being cancelled before its first step. Once only."""
+        if self._run is not run:
+            return
+        self._token = None
+        self._run = None
+        self._apply(lambda state: rules.finish(state, problem), save=False)
 
     async def _supervise(self) -> None:
         """Run until stopped. A run that ends by itself is restarted once, then given up on."""
@@ -204,6 +219,9 @@ class OutputService:
                     await self._run_once()
                 except _Ended as ended:
                     reason, retry = str(ended), ended.retry
+                except Exception:
+                    log.exception("the stream stopped unexpectedly")
+                    reason, retry = "The stream stopped unexpectedly.", False
                 now = self._now()
                 if not retry or (last_failure is not None and now - last_failure < self._restart_window_s):
                     problem = reason
@@ -212,9 +230,9 @@ class OutputService:
                 log.warning("the stream stopped (%s); restarting it", reason)
                 self._apply(rules.restarting, save=False)
         finally:
-            self._token = None
-            self._run = None
-            self._apply(lambda state: rules.finish(state, problem), save=False)
+            run = asyncio.current_task()
+            assert run is not None
+            self._finish(run, problem)
 
     async def _run_once(self) -> None:
         """One attempt: start everything, wait for something to end, then end the rest. Always raises."""
@@ -254,11 +272,31 @@ class OutputService:
         except OutputFailure as exc:
             raise _Ended(str(exc), retry=False) from exc
         finally:
-            for task in [*watchers, *relays]:
-                task.cancel()
-            await asyncio.gather(*watchers, *relays, return_exceptions=True)
-            await self._capture.stop()
-            await self._encoder.stop()
+            await self._uninterrupted(self._wind_down(watchers, relays))
+
+    @staticmethod
+    async def _uninterrupted(work: Coroutine) -> None:
+        """Finish `work` even if this task is cancelled meanwhile, then pass the cancellation on."""
+        job = asyncio.ensure_future(work)
+        cancelled = False
+        while not job.done():
+            try:
+                await asyncio.shield(job)
+            except asyncio.CancelledError:
+                cancelled = True
+        await asyncio.gather(job, return_exceptions=True)
+        if cancelled:
+            raise asyncio.CancelledError
+
+    async def _wind_down(self, watchers: list[asyncio.Task], relays: list[asyncio.Task]) -> None:
+        for task in [*watchers, *relays]:
+            task.cancel()
+        await asyncio.gather(*watchers, *relays, return_exceptions=True)
+        for part in (self._capture, self._encoder):
+            try:
+                await part.stop()
+            except Exception as exc:  # one part failing to stop must not leave the other running
+                log.error("could not stop %s (%s)", type(part).__name__, type(exc).__name__)
 
     async def _fan_out(self, quality: Quality, relays: list[asyncio.Task]) -> None:
         """Hand every piece of the encoded stream to every destination's buffer."""
@@ -311,8 +349,14 @@ class OutputService:
             reason = await self._deliver(buffer, sender)
         except OutputFailure as exc:
             reason = str(exc)
+        except Exception as exc:  # never the text or the target: they can hold the stream key
+            log.error("a sender failed unexpectedly (%s)", type(exc).__name__)
+            reason = "The connection failed unexpectedly."
         finally:
-            await sender.stop()
+            try:
+                await sender.stop()
+            except Exception as exc:
+                log.error("a sender could not be stopped (%s)", type(exc).__name__)
             self._list_recording(target)
         return was_live, rules.redact(reason or "The connection closed.", key)
 

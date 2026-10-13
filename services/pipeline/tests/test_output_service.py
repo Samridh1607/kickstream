@@ -253,6 +253,7 @@ async def test_stop_ends_everything_and_lists_the_recording(kit):
     await kit.service.stop()  # stopping when idle does nothing
     kit.service.start()  # and a new run can begin
     await kit.service.stop()
+    assert kit.doc().state == "idle"
 
 
 async def test_only_the_current_run_s_page_may_send_video(kit):
@@ -313,6 +314,7 @@ async def test_destinations_survive_a_restart_with_their_keys_and_nothing_runnin
     assert (again.view().destinations[0].id, again.view().destinations[0].key_hint) == (dest_id, "wxyz")
     again.start()  # the key came back with it
     await again.stop()
+    assert again.view().state == "idle"
     await kit.service.stop()
 
 
@@ -338,3 +340,84 @@ async def test_pages_get_the_document_now_and_after_each_change(kit):
     add_youtube(kit)
     assert [d.name for d in (await anext(stream)).destinations] == ["YouTube"]
     await stream.aclose()
+
+
+async def test_stopping_right_after_starting_leaves_the_service_idle_and_startable(kit):
+    add_youtube(kit)
+    kit.service.start()
+    await kit.service.stop()
+    assert kit.doc().state == "idle" and kit.doc().problem is None
+    assert not kit.service.accepts("token-1")
+    kit.service.start()
+    await kit.service.stop()
+    assert kit.doc().state == "idle"
+
+
+async def test_a_second_stop_during_clean_up_skips_nothing(kit):
+    add_youtube(kit)
+    kit.sender_options = {"stop_takes": 0.05}
+    await kit.live()
+    await until(lambda: len(kit.senders) == 1)
+    first = asyncio.create_task(kit.service.stop())
+    await asyncio.sleep(0.01)
+    second = asyncio.create_task(kit.service.stop())
+    await asyncio.sleep(0.01)
+    kit.service._run.cancel()  # even a cancel from outside (app shutdown) must not cut the clean-up short
+    await asyncio.gather(first, second)
+    assert kit.doc().state == "idle"
+    assert kit.capture.stopped == 1 and kit.encoder.stopped == 1 and kit.senders[0].stopped
+
+
+async def test_cancelling_the_caller_of_stop_does_not_abort_the_clean_up(kit):
+    add_youtube(kit)
+    kit.sender_options = {"stop_takes": 0.05}
+    await kit.live()
+    await until(lambda: len(kit.senders) == 1)
+    caller = asyncio.create_task(kit.service.stop())
+    await asyncio.sleep(0.01)
+    caller.cancel()
+    await asyncio.gather(caller, return_exceptions=True)
+    await until(lambda: kit.doc().state == "idle")
+    assert kit.capture.stopped == 1 and kit.encoder.stopped == 1 and kit.senders[0].stopped
+
+
+@pytest.mark.parametrize("where", ["start", "write", "stop"])
+async def test_a_sender_failing_in_an_unexpected_way_is_retried_like_any_other(kit, where, caplog):
+    add_youtube(kit)
+    kit.service.add_destination("Other", "custom", "rtmp://other.example/app", "other-key-00000000")
+    kit.sender_options = {"fails_in": where, "only": "youtube"}
+    kit.sleeps.gate.clear()  # hold the retry so the failed state can be seen
+    await kit.live()
+    await until(lambda: len(kit.senders) == 2)
+    kit.senders[1].go_live()
+    if where == "stop":
+        kit.senders[0].exit("dropped")
+    await until(lambda: kit.status(0) == "retrying")
+    assert kit.doc().destinations[0].reason and KEY not in kit.doc().destinations[0].reason
+    assert kit.status(1) == "live" and not kit.senders[1].stopped
+    assert KEY not in caplog.text
+    kit.sleeps.gate.set()
+    await until(lambda: len(kit.senders) >= 3)
+    await kit.service.stop()
+
+
+async def test_an_unexpected_error_in_the_run_is_reported_not_swallowed(kit):
+    add_youtube(kit)
+    kit.capture.crash = RuntimeError("browser exploded")
+    kit.service.start()
+    await until(lambda: kit.doc().state == "idle")
+    assert kit.doc().problem == "The stream stopped unexpectedly."
+    assert kit.encoder.stopped == 1
+    kit.capture.crash = None
+    kit.service.start()  # nothing is left wedged
+    await kit.service.stop()
+
+
+async def test_one_part_failing_to_stop_does_not_stop_the_others_being_stopped(kit):
+    add_youtube(kit)
+    kit.capture.stop_raises = True
+    await kit.live()
+    await until(lambda: len(kit.senders) == 1)
+    await kit.service.stop()
+    assert kit.doc().state == "idle"
+    assert kit.capture.stopped == 1 and kit.encoder.stopped == 1 and kit.senders[0].stopped

@@ -35,12 +35,16 @@ class FakeCapture:
         self.stopped = 0
         self.missing: str | None = None
         self.fails: str | None = None
+        self.crash: Exception | None = None
+        self.stop_raises = False
         self._gone = asyncio.Event()
 
     def available(self) -> str | None:
         return self.missing
 
     async def start(self, url: str, width: int, height: int) -> None:
+        if self.crash:
+            raise self.crash
         if self.fails:
             raise OutputFailure(self.fails)
         self._gone = asyncio.Event()
@@ -51,6 +55,8 @@ class FakeCapture:
 
     async def stop(self) -> None:
         self.stopped += 1
+        if self.stop_raises:
+            raise RuntimeError("capture would not stop")
 
     def die(self) -> None:
         self._gone.set()
@@ -98,8 +104,21 @@ def _write_recording(path: Path) -> None:
 
 
 class FakeSender:
-    def __init__(self, made: list, *, exits_with: str | None = None, blocked: bool = False) -> None:
+    def __init__(
+        self,
+        made: list,
+        *,
+        exits_with: str | None = None,
+        blocked: bool = False,
+        stop_takes: float = 0.0,
+        fails_in: str
+        | None = None,  # "start", "write" or "stop": raise something that is not an OutputFailure
+        only: str = "",  # fail only for a destination whose location contains this
+    ) -> None:
         made.append(self)
+        self._stop_takes = stop_takes
+        self._fails_in = fails_in
+        self._only = only
         self.target = None
         self.written: list[bytes] = []
         self.stopped = False
@@ -112,20 +131,31 @@ class FakeSender:
         self.target = target
         self._on_live = on_live
         self._end = asyncio.get_running_loop().create_future()
+        if self._breaks("start"):
+            raise RuntimeError(f"cannot start {target.location}")
         if target.kind == "file":
             _write_recording(Path(target.location))
         if self._exits_with is not None:
             self._end.set_result(self._exits_with)
 
+    def _breaks(self, where: str) -> bool:
+        return self._fails_in == where and self._only in self.target.location
+
     async def write(self, data: bytes) -> None:
         await self._unblocked.wait()
+        if self._breaks("write"):
+            raise BrokenPipeError(f"broken pipe to {self.target.location}")
         self.written.append(data)
 
     async def wait(self) -> str:
         return await asyncio.shield(self._end)
 
     async def stop(self) -> None:
+        if self._stop_takes:
+            await asyncio.sleep(self._stop_takes)
         self.stopped = True
+        if self._breaks("stop"):
+            raise RuntimeError(f"cannot stop {self.target.location}")
 
     def go_live(self) -> None:
         self._on_live()
