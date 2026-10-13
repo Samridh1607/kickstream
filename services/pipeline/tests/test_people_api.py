@@ -216,3 +216,19 @@ def test_a_dotenv_file_fills_in_what_the_environment_leaves_out(tmp_path):
         "KICKSTREAM_PUBLIC_HOSTS": "from-shell",
     }
     assert environment(tmp_path / "missing", {}) == {}
+
+
+def test_an_acs_connection_string_chooses_azure_and_starting_calls_nothing(tmp_path):
+    settings = Settings(
+        None,
+        None,
+        None,
+        cache_dir=tmp_path / "cache",
+        data_dir=tmp_path / "data",
+        acs_connection_string="endpoint=https://example.communication.azure.com/;accesskey=c2VjcmV0",
+    )
+    with TestClient(
+        create_app(settings, clock_factory=lambda speed: InstantClock(), match_prefix="m")
+    ) as client:
+        b = new_broadcast(client)
+        assert client.get(people(b)).json()["service"] == "acs"

@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from kickstream.adapters.acs_rooms import AcsRooms
 from kickstream.adapters.agent_reels import AgentReelProducer
 from kickstream.adapters.agent_writer import AgentNarrativeWriter
 from kickstream.adapters.chromium_capture import ChromiumCapture
@@ -312,6 +313,8 @@ class Pipeline:
 
 
 def _rooms(settings: Settings) -> CallRooms | None:
+    if settings.acs_connection_string:
+        return AcsRooms(settings.acs_connection_string)
     if settings.rooms == "fake":
         return FakeRooms()
     return None
