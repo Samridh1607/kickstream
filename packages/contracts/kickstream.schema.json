@@ -269,6 +269,7 @@
         "id": { "type": "string", "minLength": 1, "maxLength": 64 },
         "name": { "type": "string", "minLength": 1, "maxLength": 60 },
         "template": { "type": ["string", "null"], "default": null },
+        "mode": { "enum": ["fan", "analyst", null], "default": null },
         "elements": { "type": "array", "items": { "$ref": "#/$defs/SceneElement" }, "maxItems": 40 }
       }
     },

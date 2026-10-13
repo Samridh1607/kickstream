@@ -272,6 +272,7 @@ class Scene(BaseModel):
     id: constr(min_length=1, max_length=64)
     name: constr(min_length=1, max_length=60)
     template: str | None = None
+    mode: Literal['fan', 'analyst'] | None = None
     elements: list[SceneElement] = Field(..., max_length=40)
 
 

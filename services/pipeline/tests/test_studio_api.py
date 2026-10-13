@@ -71,6 +71,14 @@ def test_scenes_can_be_created_edited_activated_and_deleted(client):
         400,
         1080 - edited["elements"][0]["height"],
     )
+    assert edited["mode"] == "fan", "an edit that does not mention the mode keeps it"
+
+    doc = client.put(f"/api/studio/scenes/{made['id']}/mode", json={"mode": "analyst"}).json()
+    assert doc["scenes"][-1]["mode"] == "analyst"
+    doc = client.put(f"/api/studio/scenes/{made['id']}/mode", json={"mode": None}).json()
+    assert doc["scenes"][-1]["mode"] is None
+    assert client.put(f"/api/studio/scenes/{made['id']}/mode", json={"mode": "coach"}).status_code == 422
+    assert client.put("/api/studio/scenes/nope/mode", json={"mode": "fan"}).status_code == 404
 
     doc = client.post(f"/api/studio/scenes/{made['id']}/activate").json()
     assert doc["active_scene_id"] == made["id"]

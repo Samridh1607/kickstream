@@ -305,6 +305,7 @@ export interface Scene {
   id: string;
   name: string;
   template?: string | null;
+  mode?: "fan" | "analyst" | null;
   /**
    * @maxItems 40
    */

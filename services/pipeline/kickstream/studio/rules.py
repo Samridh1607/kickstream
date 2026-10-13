@@ -25,6 +25,7 @@ from kickstream.studio.templates import (
     CANVAS_W,
     LIVE_MATCH,
     STARTING_SOON,
+    TEMPLATE_MODES,
     builtin_templates,
 )
 
@@ -148,6 +149,7 @@ def create_scene(doc: Studio, source: str, ref: str, name: str | None = None) ->
         id=new_id(),
         name=_checked_name(name or default_name),
         template=origin.template,
+        mode=origin.mode,
         # Fresh element IDs: a selection or drag is keyed by element ID, and IDs shared between
         # scenes would let it land on another scene's element.
         elements=[element.model_copy(update={"id": new_id()}) for element in origin.elements],
@@ -164,6 +166,12 @@ def replace_scene(doc: Studio, scene_id: str, name: str, elements: list[SceneEle
     updated = current.model_copy(
         update={"name": _checked_name(name), "elements": [normalize_element(element) for element in elements]}
     )
+    return _with(doc, scenes=[updated if scene.id == scene_id else scene for scene in doc.scenes])
+
+
+def set_scene_mode(doc: Studio, scene_id: str, mode: str | None) -> Studio:
+    current = _find(doc.scenes, scene_id, "scene")
+    updated = current.model_copy(update={"mode": mode})
     return _with(doc, scenes=[updated if scene.id == scene_id else scene for scene in doc.scenes])
 
 
@@ -350,11 +358,15 @@ def expire(doc: Studio, now: float) -> tuple[Studio, list[str]]:
 
 
 def sanitize_raw(raw: dict) -> dict:
-    """Drop elements of a type this version does not know, so a file from another version loads."""
+    """Drop elements of a type this version does not know, so a file from another version loads.
+
+    A scene saved before scenes had a mode takes its built-in template's mode.
+    """
 
     def clean(scene: dict) -> dict:
         elements = [element for element in scene.get("elements", []) if element.get("type") in ELEMENT_TYPES]
-        return {**scene, "elements": elements}
+        mode = scene["mode"] if "mode" in scene else TEMPLATE_MODES.get(scene.get("template"))
+        return {**scene, "mode": mode, "elements": elements}
 
     return {
         **raw,

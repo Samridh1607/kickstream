@@ -11,6 +11,9 @@ ANALYST_DESK = "Analyst desk"
 BREAK = "Break"
 FULL_TIME = "Full-time"
 
+# Whose commentary each built-in scene carries; the others follow the studio's mode.
+TEMPLATE_MODES = {LIVE_MATCH: "fan", ANALYST_DESK: "analyst"}
+
 
 def _el(layer: int, type_: str, x: int, y: int, width: int, height: int, **props) -> SceneElement:
     return SceneElement(
@@ -67,7 +70,13 @@ def builtin_templates() -> list[Scene]:
         ],
     }
     return [
-        Scene(id=f"builtin-{name.lower().replace(' ', '-')}", name=name, template=name, elements=elements)
+        Scene(
+            id=f"builtin-{name.lower().replace(' ', '-')}",
+            name=name,
+            template=name,
+            mode=TEMPLATE_MODES.get(name),
+            elements=elements,
+        )
         for name, elements in layouts.items()
     ]
 

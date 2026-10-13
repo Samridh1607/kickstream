@@ -92,6 +92,44 @@ def test_scenes_can_be_made_from_a_template_a_saved_template_or_another_scene():
     assert copied == [e.model_copy(update={"id": ""}) for e in made.elements] and doc.scenes[-1].id != made.id
 
 
+def test_the_live_match_is_the_fan_scene_and_the_analyst_desk_the_analyst_scene():
+    modes = {t.name: t.mode for t in builtin_templates()}
+    assert modes == {STARTING_SOON: None, LIVE_MATCH: "fan", ANALYST_DESK: "analyst", BREAK: None, FULL_TIME: None}
+
+
+def test_a_new_scene_keeps_the_mode_of_what_it_was_made_from():
+    doc = rules.create_scene(default_studio(), "builtin", ANALYST_DESK)
+    assert doc.scenes[-1].mode == "analyst"
+    doc = rules.set_scene_mode(doc, doc.scenes[-1].id, "fan")
+    doc = rules.save_template(doc, doc.scenes[-1].id)
+    doc = rules.create_scene(doc, "template", doc.templates[0].id)
+    assert doc.scenes[-1].mode == "fan"
+
+
+def test_a_scene_mode_can_be_set_or_cleared_and_only_on_that_scene():
+    doc = default_studio()
+    target = scene_id(doc, BREAK)
+    changed = rules.set_scene_mode(doc, target, "analyst")
+    assert [s.mode for s in changed.scenes if s.id != target] == [s.mode for s in doc.scenes if s.id != target]
+    assert next(s.mode for s in changed.scenes if s.id == target) == "analyst"
+    cleared = rules.set_scene_mode(changed, target, None)
+    assert next(s.mode for s in cleared.scenes if s.id == target) is None
+    with refused(404, "scene"):
+        rules.set_scene_mode(doc, "nope", "fan")
+
+
+def test_a_studio_saved_before_scenes_had_a_mode_takes_the_template_modes():
+    raw = default_studio().model_dump()
+    for scene in raw["scenes"]:
+        del scene["mode"]
+    raw["scenes"][1]["template"] = None
+    cleaned = Studio.model_validate(rules.sanitize_raw(raw))
+    assert [s.mode for s in cleaned.scenes] == [None, None, "analyst", None, None]
+    kept = default_studio().model_dump()
+    kept["scenes"][2]["mode"] = None
+    assert Studio.model_validate(rules.sanitize_raw(kept)).scenes[2].mode is None
+
+
 def test_creating_from_something_that_does_not_exist_is_refused():
     doc = default_studio()
     for source, ref in (("builtin", "Halftime show"), ("template", "nope"), ("scene", "nope")):

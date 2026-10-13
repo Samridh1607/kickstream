@@ -28,6 +28,10 @@ class SceneBody(_Body):
     elements: list[SceneElement]
 
 
+class SceneMode(_Body):
+    mode: Literal["fan", "analyst"] | None
+
+
 class NewTemplate(_Body):
     scene_id: str = Field(max_length=64)
     name: str | None = None
@@ -123,6 +127,10 @@ def build_studio_router(
     @router.put("/api/studio/scenes/{scene_id}")
     async def put_scene(scene_id: str, body: SceneBody) -> Studio:
         return await service.apply(lambda doc: rules.replace_scene(doc, scene_id, body.name, body.elements))
+
+    @router.put("/api/studio/scenes/{scene_id}/mode")
+    async def put_scene_mode(scene_id: str, body: SceneMode) -> Studio:
+        return await service.apply(lambda doc: rules.set_scene_mode(doc, scene_id, body.mode))
 
     @router.delete("/api/studio/scenes/{scene_id}")
     async def delete_scene(scene_id: str) -> Studio:
