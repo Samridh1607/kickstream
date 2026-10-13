@@ -94,6 +94,19 @@ async def test_joining_again_with_the_same_link_ends_the_earlier_session():
     assert list(rooms.rooms["room-1"]) == [second.acs_id]
 
 
+async def test_an_earlier_session_that_cannot_be_ended_keeps_the_link_as_it_was():
+    service, rooms, _ = made()
+    await service.invite("b1", "speaker", None)
+    first = await service.join("secret-1", "Sam")
+    seats = rooms.calls.count("seat")
+    rooms.fails = "service unavailable"
+    with pytest.raises(PeopleError) as refused:
+        await service.join("secret-1", "Sam")
+    assert refusal(refused) == (502, "rooms") and "service unavailable" in refused.value.message
+    assert list(rooms.rooms["room-1"]) == [first.acs_id] and rooms.calls.count("seat") == seats
+    assert service.view("b1").invites[0].acs_id == first.acs_id
+
+
 async def test_a_guest_refreshes_their_token_only_after_joining():
     service, _, _ = made()
     await service.invite("b1", "speaker", None)
@@ -112,6 +125,24 @@ async def test_revoking_unseats_the_guest_and_their_link_stops_working():
     doc = await service.revoke("b1", "i1")
     assert doc.invites[0].revoked and rooms.rooms["room-1"] == {}
     assert service.guest("secret-1").valid is False
+
+
+async def test_a_guest_the_calling_service_keeps_is_reported_and_revoking_again_retries():
+    service, rooms, _ = made()
+    await service.invite("b1", "speaker", None)
+    seat = await service.join("secret-1", "Sam")
+    rooms.fails = "service unavailable"
+    with pytest.raises(PeopleError) as refused:
+        await service.revoke("b1", "i1")
+    assert refusal(refused) == (502, "rooms")
+    assert "service unavailable" in refused.value.message and "Press Revoke again" in refused.value.message
+    assert service.view("b1").invites[0].revoked and seat.acs_id in rooms.rooms["room-1"]
+    rooms.fails = None
+    await service.revoke("b1", "i1")
+    assert rooms.rooms["room-1"] == {}
+    unseats = rooms.calls.count("unseat")
+    await service.revoke("b1", "i1")
+    assert rooms.calls.count("unseat") == unseats
 
 
 async def test_the_host_and_program_keep_their_identity_and_get_fresh_tokens():

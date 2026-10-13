@@ -103,6 +103,13 @@ def test_revoking_takes_the_guest_off_stage_and_twice_changes_nothing():
     assert refusal(missing) == (404, "invite")
 
 
+def test_a_guest_taken_out_of_the_call_loses_their_identity_once():
+    state = rules.unseated(rules.revoke(joined(invited()), "b1", "i1"), "b1", "i1")
+    assert view(state).invites[0].acs_id is None
+    assert rules.unseated(state, "b1", "i1") is state
+    assert rules.unseated(state, "b1", "nope") is state
+
+
 def test_a_new_invite_clears_away_revoked_ones():
     state = invited(rules.revoke(invited(), "b1", "i1"), n=2)
     assert [item.id for item in rules.room(state, "b1").invites] == ["i2"]

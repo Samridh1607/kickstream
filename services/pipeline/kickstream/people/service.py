@@ -213,7 +213,13 @@ class PeopleService:
                 try:
                     await self._rooms.unseat(current.room_id, item.user_id)
                 except RoomsFailure as exc:
-                    log.warning("a revoked guest could not be taken out of the room: %s", exc)
+                    raise PeopleError(
+                        502,
+                        "rooms",
+                        "The invite is revoked, but the calling service did not take them out of the call: "
+                        f"{exc} Press Revoke again to try again.",
+                    ) from exc
+                self._apply(lambda state: rules.unseated(state, broadcast_id, invite_id))
         return self.view(broadcast_id)
 
     def set_stage(self, broadcast_id: str, people: list[str]) -> People:
@@ -252,12 +258,14 @@ class PeopleService:
             found = self._find_broadcast(broadcast_id)
             _, item, clean = rules.joinable(self._state, secret, found.state if found else "ended", name)
             room_id = await self._room_id(broadcast_id)
-            seat = await self._call(rooms.seat(room_id, ROLES_IN_THE_ROOM[item.role]))
             if item.user_id:
                 try:
                     await rooms.unseat(room_id, item.user_id)
                 except RoomsFailure as exc:
-                    log.warning("an earlier session could not be taken out of the room: %s", exc)
+                    raise PeopleError(
+                        502, "rooms", f"Your earlier session could not be ended: {exc} Try joining again."
+                    ) from exc
+            seat = await self._call(rooms.seat(room_id, ROLES_IN_THE_ROOM[item.role]))
             self._apply(lambda state: rules.join(state, secret, clean, seat.user_id))
         return self._seat(room_id, seat)
 

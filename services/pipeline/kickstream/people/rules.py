@@ -151,6 +151,15 @@ def revoke(state: PeopleState, broadcast_id: str, invite_id: str) -> PeopleState
     )
 
 
+def unseated(state: PeopleState, broadcast_id: str, invite_id: str) -> PeopleState:
+    """Whoever joined with the link is out of the call room."""
+    current = room(state, broadcast_id)
+    found = next((item for item in current.invites if item.id == invite_id), None)
+    if found is None or found.user_id is None:
+        return state
+    return _put(state, broadcast_id, _with_invite(current, replace(found, user_id=None)))
+
+
 def end(state: PeopleState, broadcast_id: str) -> PeopleState:
     """The broadcast is over: every link stops working, and the room and stage are gone."""
     current = state.rooms.get(broadcast_id)
