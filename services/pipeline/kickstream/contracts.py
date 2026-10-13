@@ -496,3 +496,75 @@ class Broadcasts(BaseModel):
     broadcasts: list[Broadcast] = Field(..., max_length=100)
     current_id: str | None = None
     ai: bool
+
+
+class Invite(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: constr(min_length=1, max_length=64)
+    role: Literal['speaker', 'cohost', 'member']
+    name: str | None = None
+    link: str
+    made_at: float
+    joined_name: str | None = None
+    acs_id: str | None = None
+    present: bool
+    revoked: bool
+
+
+class StagePerson(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: constr(min_length=1, max_length=64)
+    name: str
+    acs_id: str | None = None
+    present: bool
+
+
+class People(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    revision: int
+    server_time: float
+    broadcast_id: str
+    service: Literal['acs', 'fake'] | None = None
+    room_id: str | None = None
+    public_origin: str | None = None
+    invites: list[Invite] = Field(..., max_length=12)
+    stage: list[StagePerson] = Field(..., max_length=4)
+    host_name: str
+    host_acs_id: str | None = None
+
+
+class Guest(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    revision: int
+    server_time: float
+    valid: bool
+    service: Literal['acs', 'fake'] | None = None
+    broadcast_id: str | None = None
+    broadcast_title: str
+    broadcast_state: Literal['ready', 'live', 'ended']
+    role: Literal['speaker', 'cohost', 'member']
+    name: str | None = None
+    joined: bool
+    joined_name: str | None = None
+    room_id: str | None = None
+    on_stage: bool
+    muted_live: bool
+
+
+class CallSeat(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    room_id: str
+    acs_id: str
+    token: str
+    expires_at: float
+    service: Literal['acs', 'fake']

@@ -571,3 +571,81 @@ export interface Broadcasts {
   current_id?: string | null;
   ai: boolean;
 }
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Invite".
+ */
+export interface Invite {
+  id: string;
+  role: "speaker" | "cohost" | "member";
+  name?: string | null;
+  link: string;
+  made_at: number;
+  joined_name?: string | null;
+  acs_id?: string | null;
+  present: boolean;
+  revoked: boolean;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "StagePerson".
+ */
+export interface StagePerson {
+  id: string;
+  name: string;
+  acs_id?: string | null;
+  present: boolean;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "People".
+ */
+export interface People {
+  revision: number;
+  server_time: number;
+  broadcast_id: string;
+  service?: "acs" | "fake" | null;
+  room_id?: string | null;
+  public_origin?: string | null;
+  /**
+   * @maxItems 12
+   */
+  invites: Invite[];
+  /**
+   * @maxItems 4
+   */
+  stage: StagePerson[];
+  host_name: string;
+  host_acs_id?: string | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Guest".
+ */
+export interface Guest {
+  revision: number;
+  server_time: number;
+  valid: boolean;
+  service?: "acs" | "fake" | null;
+  broadcast_id?: string | null;
+  broadcast_title: string;
+  broadcast_state: "ready" | "live" | "ended";
+  role: "speaker" | "cohost" | "member";
+  name?: string | null;
+  joined: boolean;
+  joined_name?: string | null;
+  room_id?: string | null;
+  on_stage: boolean;
+  muted_live: boolean;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "CallSeat".
+ */
+export interface CallSeat {
+  room_id: string;
+  acs_id: string;
+  token: string;
+  expires_at: number;
+  service: "acs" | "fake";
+}

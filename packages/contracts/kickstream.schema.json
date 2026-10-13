@@ -497,6 +497,78 @@
         "current_id": { "type": ["string", "null"], "default": null },
         "ai": { "type": "boolean" }
       }
+    },
+    "Invite": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "role", "link", "made_at", "present", "revoked"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "role": { "enum": ["speaker", "cohost", "member"] },
+        "name": { "type": ["string", "null"], "default": null },
+        "link": { "type": "string" },
+        "made_at": { "type": "number" },
+        "joined_name": { "type": ["string", "null"], "default": null },
+        "acs_id": { "type": ["string", "null"], "default": null },
+        "present": { "type": "boolean" },
+        "revoked": { "type": "boolean" }
+      }
+    },
+    "StagePerson": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "present"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "name": { "type": "string" },
+        "acs_id": { "type": ["string", "null"], "default": null },
+        "present": { "type": "boolean" }
+      }
+    },
+    "People": {
+      "type": "object", "additionalProperties": false,
+      "required": ["revision", "server_time", "broadcast_id", "invites", "stage", "host_name"],
+      "properties": {
+        "revision": { "type": "integer" },
+        "server_time": { "type": "number" },
+        "broadcast_id": { "type": "string" },
+        "service": { "enum": ["acs", "fake", null], "default": null },
+        "room_id": { "type": ["string", "null"], "default": null },
+        "public_origin": { "type": ["string", "null"], "default": null },
+        "invites": { "type": "array", "items": { "$ref": "#/$defs/Invite" }, "maxItems": 12 },
+        "stage": { "type": "array", "items": { "$ref": "#/$defs/StagePerson" }, "maxItems": 4 },
+        "host_name": { "type": "string" },
+        "host_acs_id": { "type": ["string", "null"], "default": null }
+      }
+    },
+    "Guest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["revision", "server_time", "valid", "broadcast_title", "broadcast_state", "role", "joined", "on_stage", "muted_live"],
+      "properties": {
+        "revision": { "type": "integer" },
+        "server_time": { "type": "number" },
+        "valid": { "type": "boolean" },
+        "service": { "enum": ["acs", "fake", null], "default": null },
+        "broadcast_id": { "type": ["string", "null"], "default": null },
+        "broadcast_title": { "type": "string" },
+        "broadcast_state": { "enum": ["ready", "live", "ended"] },
+        "role": { "enum": ["speaker", "cohost", "member"] },
+        "name": { "type": ["string", "null"], "default": null },
+        "joined": { "type": "boolean" },
+        "joined_name": { "type": ["string", "null"], "default": null },
+        "room_id": { "type": ["string", "null"], "default": null },
+        "on_stage": { "type": "boolean" },
+        "muted_live": { "type": "boolean" }
+      }
+    },
+    "CallSeat": {
+      "type": "object", "additionalProperties": false,
+      "required": ["room_id", "acs_id", "token", "expires_at", "service"],
+      "properties": {
+        "room_id": { "type": "string" },
+        "acs_id": { "type": "string" },
+        "token": { "type": "string" },
+        "expires_at": { "type": "number" },
+        "service": { "enum": ["acs", "fake"] }
+      }
     }
   }
 }

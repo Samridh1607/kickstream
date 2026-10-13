@@ -11,6 +11,7 @@ STAGES = {
     "studio",
     "output",
     "broadcasts",
+    "people",
 }
 SHARED = {"contracts", "domain", "ports"}
 
