@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import type { Studio } from "../contracts";
 import { useMatch } from "../stream/store";
 import {
-  broadcast, broadcasts, destination, envelope, FakeEventSource, FakeEventSourceCtor, moment, narrative, output, peopleDoc, scene, status, studio,
+  broadcast, broadcasts, destination, envelope, FakeEventSource, FakeEventSourceCtor, fanZone, moment, narrative, output, peopleDoc, scene, status, studio,
 } from "../test/fixtures";
 import { renderUi } from "../test/render";
 import { StudioPage } from "./StudioPage";
@@ -128,6 +128,17 @@ test("the editor opens on the scene on air, and another scene can be edited with
   expect(editor.queryByRole("button", { name: "scoreboard element" })).toBeNull();
   expect(server.calls).toHaveLength(0);
   expect(within(screen.getByRole("region", { name: "Program preview" })).getByTestId("element-scoreboard")).toBeTruthy();
+});
+
+test("a scene being edited off the program says so and can be put on it from the stage", async () => {
+  const server = await opened();
+  const editor = within(screen.getByRole("region", { name: "Editor" }));
+  expect(editor.getByText("On the program")).toBeTruthy();
+  expect(screen.queryByRole("tab", { name: "People" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Edit Break" }));
+  expect(editor.getByText("Not on the program")).toBeTruthy();
+  fireEvent.click(editor.getByRole("button", { name: "Put Break on the program" }));
+  await waitFor(() => expect(last(server)).toMatchObject({ url: "/api/studio/scenes/s2/activate", method: "POST" }));
 });
 
 test("dragging an element saves that scene and only that scene", async () => {
@@ -382,7 +393,61 @@ test("a broadcast's studio has a People panel, and who is on stage reaches the p
     stream("/api/broadcasts/b1/people/stream").open();
     stream("/api/broadcasts/b1/people/stream").emitRaw(JSON.stringify(peopleDoc({ stage: [{ id: "i1", name: "Sam", acs_id: null, present: true }] })));
   });
+  expect(screen.queryByRole("region", { name: "People" })).toBeNull();
+  openTab("People");
   expect(within(screen.getByRole("region", { name: "People" })).getByRole("button", { name: "Invite" })).toBeTruthy();
+  // Another tab hides the panel without letting go of it, so the streamer's camera call carries on.
+  openTab("Banner");
+  expect(screen.queryByRole("region", { name: "People" })).toBeNull();
+  expect(screen.getByLabelText("Name (optional)").closest("section")?.hidden).toBe(true);
   const preview = within(screen.getByRole("region", { name: "Program preview" }));
   expect(preview.getByTestId("camera-tile").textContent).toContain("Sam");
+});
+
+test("a widget is added to the scene with one click, at its own size, and its settings appear", async () => {
+  const server = await opened();
+  const panel = within(screen.getByRole("tabpanel"));
+  const gallery = within(panel.getByRole("group", { name: "Widgets" }));
+  expect(gallery.getAllByRole("button")).toHaveLength(11);
+  fireEvent.click(gallery.getByRole("button", { name: "Add 3D pitch" }));
+  await waitFor(() => expect(last(server).body.elements).toHaveLength(3));
+  const added = last(server).body.elements[2];
+  expect(added).toMatchObject({ type: "pitch3d", width: 900, height: 560, layer: 3, visible: true, props: { camera: "auto" } });
+  expect(added.x + added.width).toBeLessThanOrEqual(1920);
+  expect(added.y + added.height).toBeLessThanOrEqual(1080);
+
+  fireEvent.click(gallery.getByRole("button", { name: "Add Graph" }));
+  await waitFor(() => expect(last(server).body.elements.at(-1)).toMatchObject({ type: "graph", props: { metric: "momentum" } }));
+});
+
+test("a selected widget's settings change what it shows", async () => {
+  const doc = studio();
+  doc.scenes[0].elements.push(
+    { id: "g", type: "graph", x: 0, y: 0, width: 760, height: 300, layer: 8, visible: true, props: { metric: "momentum" } },
+    { id: "p", type: "player", x: 0, y: 400, width: 520, height: 440, layer: 9, visible: true, props: { player_id: null } },
+  );
+  const server = await opened(doc);
+  const panel = within(screen.getByRole("tabpanel"));
+  fireEvent.click(panel.getByRole("button", { name: "Select graph" }));
+  fireEvent.change(panel.getByLabelText("Over time"), { target: { value: "win_probability" } });
+  await waitFor(() => expect(last(server).body.elements.find((item: any) => item.id === "g").props).toEqual({ metric: "win_probability" }));
+  fireEvent.click(panel.getByRole("button", { name: "Select player" }));
+  fireEvent.change(panel.getByLabelText("Player"), { target: { value: "hbc-9" } });
+  await waitFor(() => expect(last(server).body.elements.find((item: any) => item.id === "p").props).toEqual({ player_id: "hbc-9" }));
+});
+
+test("the Fans tab shows the fan zone, and what it puts on screen appears in the program preview", async () => {
+  await opened();
+  openTab("Fans");
+  expect(screen.getByText("Connecting to the fan zone…")).toBeTruthy();
+  const winner = { id: "sp1", kind: "winner" as const, title: "Winner", text: "Picked from 12 commenters.", name: "Priya K", duration_s: 15, ends_at: 1010 };
+  act(() => {
+    stream("/api/fans/stream").open();
+    stream("/api/fans/stream").emitRaw(JSON.stringify(fanZone({ spotlight: winner })));
+  });
+  expect(within(screen.getByTestId("fan-on-air")).getByText("Priya K")).toBeTruthy();
+  // The scene on air has no spotlight element, so the program gives it a box.
+  const preview = within(screen.getByRole("region", { name: "Program preview" }));
+  expect(preview.getByTestId("spotlight-name").textContent).toBe("🏆 Priya K");
+  expect(within(screen.getByRole("region", { name: "Editor" })).queryByTestId("program-spotlight")).toBeNull();
 });

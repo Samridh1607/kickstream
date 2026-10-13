@@ -9,6 +9,7 @@ INSIGHTS = "insights"
 NARRATIVES = "narratives"
 OVERLAYS = "overlays"
 STATUS = "status"
+AGENTS = "agents"
 
 
 @dataclass(frozen=True)

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchCurrentMatch, streamUrl } from "../api";
 import type { ViewerProfile } from "../contracts";
+import { batched } from "./batch";
 import { connect } from "./client";
 import { useMatch } from "./store";
 
@@ -11,6 +12,12 @@ export interface CurrentMatchOptions {
   retryMs?: number;
   /** How often to check for a new match while there is none, or the current one has finished. */
   pollMs?: number;
+  /**
+   * How long envelopes are gathered before the page draws them together. A match sends hundreds in
+   * a burst when a page joins late; drawing each would leave the page seconds behind. With an
+   * injected source (a test's) each envelope is applied as it arrives.
+   */
+  batchMs?: number;
 }
 
 /**
@@ -19,7 +26,7 @@ export interface CurrentMatchOptions {
  */
 export function useCurrentMatch(
   profile: ViewerProfile | null,
-  { eventSource, retryMs = 2000, pollMs = 3000 }: CurrentMatchOptions = {},
+  { eventSource, retryMs = 2000, pollMs = 3000, batchMs = eventSource ? 0 : 30 }: CurrentMatchOptions = {},
 ) {
   const [matchId, setMatchId] = useState<string | null>(null);
   // Bumped to reopen the stream for the same match after the server refused it.
@@ -56,10 +63,15 @@ export function useCurrentMatch(
   // One stream per (match, profile). Changing either replays the match in the new variant.
   useEffect(() => {
     if (matchId === null || profile === null) return;
-    const { apply, reset, setConnection } = useMatch.getState();
+    const { applyAll, reset, setConnection } = useMatch.getState();
     reset();
-    return connect(streamUrl(matchId, profile), { onEnvelope: apply, onConnection: setConnection }, eventSource);
-  }, [matchId, profile, eventSource, attempt]);
+    const gathered = batched(applyAll, batchMs);
+    const close = connect(streamUrl(matchId, profile), { onEnvelope: gathered.add, onConnection: setConnection }, eventSource);
+    return () => {
+      close();
+      gathered.cancel();
+    };
+  }, [matchId, profile, eventSource, attempt, batchMs]);
 
   // A replaced match: move to the current one.
   useEffect(() => {

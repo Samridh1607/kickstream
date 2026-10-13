@@ -11,9 +11,13 @@ ANALYST_DESK = "Analyst desk"
 BREAK = "Break"
 FULL_TIME = "Full-time"
 INTERVIEW = "Interview"
+MATCH_INTELLIGENCE = "Match intelligence"
+FAN_ZONE = "Fan zone"
+# Offered for new scenes, but not in the studio a new installation starts with.
+EXTRAS = frozenset({INTERVIEW, MATCH_INTELLIGENCE, FAN_ZONE})
 
 # Whose commentary each built-in scene carries; the others follow the studio's mode.
-TEMPLATE_MODES = {LIVE_MATCH: "fan", ANALYST_DESK: "analyst"}
+TEMPLATE_MODES = {LIVE_MATCH: "fan", ANALYST_DESK: "analyst", MATCH_INTELLIGENCE: "analyst", FAN_ZONE: "fan"}
 
 
 def _el(layer: int, type_: str, x: int, y: int, width: int, height: int, **props) -> SceneElement:
@@ -73,6 +77,23 @@ def builtin_templates() -> list[Scene]:
             _el(1, "cameras", 40, 40, 1840, 820, names=True),
             _el(2, "scoreboard", 410, 880, 1100, 120),
         ],
+        MATCH_INTELLIGENCE: [
+            _el(1, "scorecard", 40, 40, 900, 200),
+            _el(2, "pitch3d", 40, 260, 900, 560, camera="auto"),
+            _el(3, "graph", 40, 840, 900, 200, metric="momentum"),
+            _el(4, "prediction", 980, 40, 900, 260, view="outcome"),
+            _el(5, "insight", 980, 320, 900, 300),
+            _el(6, "chart", 980, 640, 440, 400, metric="overview"),
+            _el(7, "player", 1440, 640, 440, 400, player_id=None),
+        ],
+        FAN_ZONE: [
+            _el(1, "scorecard", 40, 40, 900, 200),
+            _el(2, "pitch", 40, 260, 900, 540, pressure=True),
+            _el(3, "comments", 980, 40, 900, 470, lines=4, liked_only=False),
+            _el(4, "poll", 980, 530, 900, 350),
+            _el(5, "superchat", 40, 820, 900, 240, lines=2),
+            _el(6, "spotlight", 980, 900, 900, 160),
+        ],
     }
     return [
         Scene(
@@ -87,7 +108,7 @@ def builtin_templates() -> list[Scene]:
 
 
 def default_studio() -> Studio:
-    starting = [template for template in builtin_templates() if template.name != INTERVIEW]
+    starting = [template for template in builtin_templates() if template.name not in EXTRAS]
     scenes = [template.model_copy(update={"id": f"scene-{n}"}) for n, template in enumerate(starting, 1)]
     return Studio(
         revision=0,

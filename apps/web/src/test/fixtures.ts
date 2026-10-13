@@ -1,4 +1,6 @@
 import type {
+  AgentCatalog, AgentRun, AgentSpec, Explanation, FanComment, FanPoll, FanZone, Highlight, PitchScene, PlayerMetrics, PlayerReport,
+  PlayEvent, Prediction, SuperChat, TacticalInsight, TeamTactics,
   Broadcast, Broadcasts, CallSeat, Destination, Guest, Invite, Output, People, Reel,
   Envelope, KeyMoment, MatchEvent, MatchStatus, Narrative, Overlay, PressureSnapshot, Recap, StatsSnapshot,
   Scene, SceneElement, Studio, TeamSheet, TeamStats,
@@ -202,4 +204,108 @@ export const guestDoc = (over: Partial<Guest> = {}): Guest => ({
 
 export const callSeat = (over: Partial<CallSeat> = {}): CallSeat => ({
   room_id: "room-1", acs_id: "8:fake:2", token: "t1", expires_at: 2000, service: "fake", ...over,
+});
+
+// --- the match agents and the fan zone ---------------------------------------------------------------
+
+export const play = (over: Partial<PlayEvent> = {}): PlayEvent => ({
+  id: "m-1-y1", match_id: "m-1", minute: 12, second: 5, event_id: "m-1-e1", type: "pass", team: "home", player_id: "nbr-9",
+  x: 70, y: 40, zone: "attacking_third", lane: "centre", phase: "final_third", sequence: 4, sequence_length: 3, danger: 0.42,
+  outcome: null, completed: true, player_in_id: null, ...over,
+});
+
+const teamTactics = (over: Partial<TeamTactics> = {}): TeamTactics => ({
+  pressure: 60, tempo: 3.2, field_tilt: 64, avg_sequence: 4.1, lanes: [0.5, 0.3, 0.2], patterns: [], ...over,
+});
+
+export const tactics = (over: Partial<TacticalInsight> = {}): TacticalInsight => ({
+  id: "m-1-t12", match_id: "m-1", minute: 12, home: teamTactics({ patterns: ["high_press"] }), away: teamTactics({ pressure: 20, field_tilt: 36 }),
+  rhythm: "fast", summary: "Northbridge FC are winning the ball high up the pitch. The rhythm is fast.", ...over,
+});
+
+export const prediction = (over: Partial<Prediction> = {}): Prediction => ({
+  id: "m-1-f12", match_id: "m-1", minute: 12, win_home: 0.5, draw: 0.3, win_away: 0.2, next_goal_home: 0.24, next_goal_away: 0.1,
+  possession: "home", cols: 6, rows: 4, danger: Array(24).fill(0),
+  next_actions: [{ action: "pass", probability: 0.7 }, { action: "shot", probability: 0.1 }, { action: "turnover", probability: 0.2 }],
+  ...over,
+});
+
+export const explanation = (over: Partial<Explanation> = {}): Explanation => ({
+  id: "m-1-t12-x-fan", match_id: "m-1", minute: 12, subject_id: "m-1-t12", subject_kind: "tactics", mode: "fan",
+  headline: "Northbridge FC are winning the ball high up the pitch", why: "They are not letting Harbour City settle.",
+  evidence: ["pressure: 60 out of 100", "field tilt: 64%"], source: "scripted", agent: "scripted", team: "home", ...over,
+});
+
+export const pitchScene = (over: Partial<PitchScene> = {}): PitchScene => ({
+  id: "m-1-v1", match_id: "m-1", minute: 12, second: 5, ball: { x: 70, y: 40, z: 0 },
+  trail: [{ x: 50, y: 50, z: 0 }, { x: 60, y: 45, z: 2 }, { x: 70, y: 40, z: 0 }],
+  players: [
+    { id: "nbr-9", team: "home", number: 9, x: 70, y: 40, on_ball: true, estimated: false },
+    { id: "hbc-1", team: "away", number: 1, x: 95, y: 50, on_ball: false, estimated: true },
+  ],
+  columns: [{ x: 66.67, y: 25, width: 16.67, depth: 25, team: "home", intensity: 1 }],
+  lanes: [{ from_x: 50, from_y: 50, to_x: 70, to_y: 40, team: "home", weight: 1 }],
+  camera: "attack_home", focus_x: 70, focus_y: 40, ...over,
+});
+
+export const playerLine = (over: Partial<PlayerMetrics> = {}): PlayerMetrics => ({
+  player_id: "nbr-9", team: "home", name: "Luca Marrowby", number: 9, position: "FW", on_pitch: true, touches: 18, passes: 12,
+  pass_accuracy: 83.3, shots: 3, shots_on_target: 2, goals: 1, xg: 0.62, fouls: 1, yellow_cards: 0, red_cards: 0, rating: 7.8,
+  heat: Array(24).fill(0), ...over,
+});
+
+export const playerReport = (over: Partial<PlayerReport> = {}): PlayerReport => ({
+  id: "m-1-pl12", match_id: "m-1", minute: 12, cols: 6, rows: 4,
+  players: [playerLine(), playerLine({ player_id: "hbc-1", team: "away", name: "Osric Pendlebury", number: 1, position: "GK", rating: 6.4, goals: 0, touches: 4 })],
+  ...over,
+});
+
+export const highlight = (over: Partial<Highlight> = {}): Highlight => ({
+  id: "m-1-h1", match_id: "m-1", minute: 23, kind: "key", category: "goal", team: "home", player_id: "nbr-9",
+  title: "Goal for Northbridge FC: Luca Marrowby", reason: "expected goals 0.42; the score is 1-0.", score: 95, moment_id: "m-1-k1",
+  event_ids: ["m-1-e40"], ...over,
+});
+
+export const agentRun = (over: Partial<AgentRun> = {}): AgentRun => ({
+  id: "m-1-run-prediction-12", match_id: "m-1", minute: 12, agent: "prediction", trigger: "play", produced: "prediction", count: 1,
+  duration_ms: 0.4, source: "scripted", note: "home 50%, draw 30%, away 20%", ...over,
+});
+
+const AGENTS: [AgentSpec["id"], string, string, AgentSpec["id"][]][] = [
+  ["event_interpreter", "Event Interpreter", "Converts video detections into structured events.", []],
+  ["tactical_analyst", "Tactical Analyst", "Detects pressure, rhythm, and tactical patterns.", ["event_interpreter"]],
+  ["prediction", "Prediction Agent", "Forecasts likely next moves or danger areas.", ["event_interpreter"]],
+  ["player_tracking", "Player Tracking Agent", "Follows favorite player and computes personal metrics.", ["event_interpreter"]],
+  ["visualization", "Visualization Agent", "Generates 3D pitch and overlay data.", ["event_interpreter"]],
+  ["highlights", "Highlights Agent", "Selects key moments and hidden events.", ["event_interpreter", "player_tracking"]],
+  ["explainability", "Explainability Agent", 'Writes clear "why this matters" explanations.', ["tactical_analyst", "prediction", "highlights"]],
+];
+
+export const agentCatalog = (off: AgentSpec["id"][] = []): AgentCatalog => ({
+  model: false,
+  agents: AGENTS.map(([id, name, description, upstream]) => ({
+    id, name, description, instructions: `Instructions for the ${name}.`, triggers: ["play"],
+    tools: [{ name: "tool_one", description: `What the ${name} uses.` }], outputs: ["output"], upstream, enabled: !off.includes(id),
+  })),
+});
+
+export const fanComment = (over: Partial<FanComment> = {}): FanComment => ({
+  id: "c1", platform: "x", author: "Priya K", handle: "@priya", text: "What a goal!", likes: 3, at: 990, liked: false,
+  mood: "positive", demo: false, ...over,
+});
+
+export const superchat = (over: Partial<SuperChat> = {}): SuperChat => ({
+  id: "s1", platform: "youtube", name: "Asha", amount: 20, currency: "USD", message: "Go on!", tier: 4, at: 995, demo: false, ...over,
+});
+
+export const fanPoll = (over: Partial<FanPoll> = {}): FanPoll => ({
+  id: "p1", question: "Who wins?", state: "open", opened_at: 900, closes_at: null,
+  options: [{ id: "o1", text: "Home", votes: 3 }, { id: "o2", text: "Away", votes: 1 }], ...over,
+});
+
+export const fanZone = (over: Partial<FanZone> = {}): FanZone => ({
+  revision: 1, server_time: 1000, settings: { source: "demo", auto_superchat: false }, source_state: "demo", problem: null,
+  x_available: false, comments: [], poll: null, poll_on_air: false, superchats: [], spotlight: null, spotlight_queue: [],
+  summary: { text: "No comments yet.", per_minute: 0, total: 0, mood: { positive: 0, neutral: 0, negative: 0 }, topics: [], platforms: [], raised: [] },
+  ...over,
 });

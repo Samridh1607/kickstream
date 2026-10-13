@@ -4,12 +4,15 @@ test("a seeded match plays through every stage to the full-time recap", async ({
   // 600x plays ninety minutes in nine seconds.
   await page.goto("/match?speed=600");
   await page.getByRole("button", { name: /^(Start|Restart) match$/ }).click();
+  // The page opens on the agents; the match dashboard is one of its views.
+  const rail = page.getByRole("navigation", { name: "Match intelligence" });
+  await rail.getByRole("button", { name: "Match", exact: true }).click();
 
   // Ingest -> Interpret -> Explain: a goal becomes a Fan narrative in English.
   await expect(page.getByText(/^GOAL!/).first()).toBeVisible({ timeout: 30_000 });
 
   // Personalize: Analyst mode replays the same moments in the analyst variant.
-  await page.getByRole("tab", { name: "Analyst" }).click();
+  await page.getByRole("tab", { name: "Analyst", exact: true }).click();
   await expect(page.getByText(/The goal reflects the balance of play/).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/^GOAL!/)).toHaveCount(0);
 
@@ -23,7 +26,7 @@ test("a seeded match plays through every stage to the full-time recap", async ({
   await page.getByRole("button", { name: "Cerrar" }).click();
 
   // Render: the overlay tab draws the latest overlay from its JSON.
-  await page.getByRole("tab", { name: "Gráficos" }).click();
+  await rail.getByRole("button", { name: "Gráficos", exact: true }).click();
   await expect(page.getByTestId("overlay-graphic")).toBeVisible();
   const overlay = JSON.parse((await page.getByTestId("overlay-json").textContent()) ?? "{}");
   expect(overlay.match_id).toMatch(/^m[0-9a-f]*-\d+$/);

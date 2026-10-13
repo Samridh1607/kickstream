@@ -15,10 +15,13 @@ from fastapi.responses import JSONResponse
 from starlette.requests import cookie_parser
 
 from kickstream.adapters.acs_rooms import AcsRooms
+from kickstream.adapters.agent_copilot import AgentCopilotWriter
+from kickstream.adapters.agent_explainer import AgentExplainer
 from kickstream.adapters.agent_reels import AgentReelProducer
 from kickstream.adapters.agent_writer import AgentNarrativeWriter
 from kickstream.adapters.chromium_capture import ChromiumCapture
 from kickstream.adapters.clocks import RealClock
+from kickstream.adapters.demo_feed import DemoFeed
 from kickstream.adapters.dir_image_store import DirImageStore
 from kickstream.adapters.fake_rooms import FakeRooms
 from kickstream.adapters.ffmpeg import FfmpegEncoder, FfmpegSender
@@ -27,17 +30,31 @@ from kickstream.adapters.json_record_store import JsonRecordStore
 from kickstream.adapters.json_studio_store import JsonStudioStore
 from kickstream.adapters.memory_bus import InMemoryEventBus
 from kickstream.adapters.memory_store import InMemoryMatchStore
+from kickstream.adapters.scripted_explainer import ScriptedExplainer
 from kickstream.adapters.scripted_reels import ScriptedReelProducer
 from kickstream.adapters.scripted_writer import ScriptedNarrativeWriter
 from kickstream.adapters.sse_broadcaster import InProcessBroadcaster
+from kickstream.adapters.web_search import TavilySearch, WikipediaSearch
+from kickstream.adapters.x_feed import XRecentSearch
+from kickstream.agents.api import build_agents_router
+from kickstream.agents.explain import ExplainService
+from kickstream.agents.registry import AgentSwitches
+from kickstream.agents.stage import AgentsStage
 from kickstream.analytics.stage import AnalyticsStage
 from kickstream.broadcasts.api import build_broadcasts_router
 from kickstream.broadcasts.service import BroadcastService
 from kickstream.broadcasts.stage import BroadcastStage
 from kickstream.control import MatchController
+from kickstream.copilot.api import build_copilot_router
+from kickstream.copilot.service import CopilotService
+from kickstream.copilot.stage import CopilotStage
+from kickstream.copilot.view import MatchArchive
 from kickstream.domain.demo import DEMO_SEED
 from kickstream.domain.errors import Refusal
 from kickstream.domain.teams import AWAY, HOME
+from kickstream.fans.api import build_fans_router
+from kickstream.fans.service import FanService
+from kickstream.fans.stage import FanStage
 from kickstream.gateway.api import build_router
 from kickstream.gateway.recorder import Recorder
 from kickstream.narration.budget import Budget
@@ -51,8 +68,11 @@ from kickstream.people.api import COHOST_COOKIE, build_people_router
 from kickstream.people.service import PeopleService
 from kickstream.ports.calls import CallRooms
 from kickstream.ports.clock import Clock
+from kickstream.ports.copilot import CopilotWriter, WebSearch
+from kickstream.ports.explainer import Explainer
 from kickstream.ports.output import Encoder, ProgramCapture, Sender
 from kickstream.ports.reels import ClipCutter, ReelProducer
+from kickstream.ports.social import SocialFeed
 from kickstream.ports.writer import NarrativeWriter
 from kickstream.studio.api import build_studio_router, find_moment
 from kickstream.studio.rules import sanitize_raw
@@ -234,6 +254,7 @@ class Settings:
     llm_max_calls: int = 60  # per match; a key moment costs 3 calls, a recap 2
     llm_reserve: int = 15  # kept back for goals and recaps
     llm_min_gap_s: float = 2.0  # between non-priority model calls
+    llm_max_explanations: int = 20  # per match; an explanation costs 1 call
     cache_dir: Path = Path(".cache/narration")
     data_dir: Path = Path(".data")  # the studio document and uploaded images
     # Public hostnames pages are served from, when a reverse proxy rewrites Host. See domain/sockets.py.
@@ -248,6 +269,12 @@ class Settings:
     acs_connection_string: str | None = field(default=None, repr=False)
     # "fake": in-memory rooms, for the end-to-end tests and trying guests without Azure.
     rooms: str | None = None
+    # The streamer's own X API access, and the search whose posts are the fans' comments.
+    x_bearer_token: str | None = field(default=None, repr=False)
+    x_query: str | None = None
+    # Ask Copilot's web search: Wikipedia unless a Tavily key is given; "off" turns it off.
+    web_search: str | None = None
+    tavily_api_key: str | None = field(default=None, repr=False)
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ) -> "Settings":
@@ -265,6 +292,10 @@ class Settings:
             public_hosts=_hosts(env.get("KICKSTREAM_PUBLIC_HOSTS", "")),
             acs_connection_string=env.get("KICKSTREAM_ACS_CONNECTION_STRING") or None,
             rooms=env.get("KICKSTREAM_ROOMS") or None,
+            x_bearer_token=env.get("KICKSTREAM_X_BEARER_TOKEN") or None,
+            x_query=env.get("KICKSTREAM_X_QUERY") or None,
+            web_search=env.get("KICKSTREAM_WEB_SEARCH") or None,
+            tavily_api_key=env.get("KICKSTREAM_TAVILY_API_KEY") or None,
         )
 
     @property
@@ -290,6 +321,10 @@ class Pipeline:
     output: OutputService
     broadcasts: BroadcastService
     people: PeopleService
+    agents: AgentSwitches
+    explainer: ExplainService
+    fans: FanService
+    copilot: CopilotService
     stages: list
     tasks: list[asyncio.Task] = field(default_factory=list)
 
@@ -298,6 +333,7 @@ class Pipeline:
         self.tasks.append(asyncio.create_task(self.studio.run()))
         self.tasks.append(asyncio.create_task(self.broadcasts.run()))
         self.tasks.append(asyncio.create_task(self.people.run()))
+        self.tasks.append(asyncio.create_task(self.fans.run()))
 
     async def stop(self) -> None:
         await self.broadcasts.stop()
@@ -307,6 +343,21 @@ class Pipeline:
             task.cancel()
         await asyncio.gather(*self.tasks, return_exceptions=True)
         self.tasks = []
+
+
+def _feeds(settings: Settings) -> dict[str, SocialFeed]:
+    feeds: dict[str, SocialFeed] = {"demo": DemoFeed()}
+    if settings.x_bearer_token and settings.x_query:
+        feeds["x"] = XRecentSearch(settings.x_bearer_token, settings.x_query)
+    return feeds
+
+
+def _search(settings: Settings) -> WebSearch | None:
+    if settings.web_search == "off":
+        return None
+    if settings.tavily_api_key:
+        return TavilySearch(settings.tavily_api_key)
+    return WikipediaSearch()
 
 
 def _rooms(settings: Settings) -> CallRooms | None:
@@ -330,6 +381,10 @@ def build_pipeline(
     reel_producer: ReelProducer | None = None,
     cutter: ClipCutter | None = None,
     rooms: CallRooms | None = None,
+    explainer: Explainer | None = None,
+    feeds: Mapping[str, SocialFeed] | None = None,
+    search: WebSearch | None = None,
+    copilot_writer: CopilotWriter | None = None,
 ) -> Pipeline:
     bus, store, broadcaster = InMemoryEventBus(), InMemoryMatchStore(), InProcessBroadcaster()
     primary = writer
@@ -381,16 +436,53 @@ def build_pipeline(
         public_origin=settings.public_origin,
         now=now,
     )
+    if explainer is None and settings.llm_configured:
+        explainer = AgentExplainer(settings.llm_base_url, settings.llm_model, settings.llm_api_key)
+    explain = ExplainService(ScriptedExplainer(), explainer, max_calls=settings.llm_max_explanations)
+    agents = AgentSwitches(JsonRecordStore(settings.data_dir / "agents.json"))
+    fans = FanService(
+        JsonRecordStore(settings.data_dir / "fans.json"),
+        feeds if feeds is not None else _feeds(settings),
+        now=now,
+    )
+    if copilot_writer is None and settings.llm_configured:
+        copilot_writer = AgentCopilotWriter(settings.llm_base_url, settings.llm_model, settings.llm_api_key)
+    copilot = CopilotService(
+        store,
+        MatchArchive(JsonRecordStore(settings.data_dir / "matches.json")),
+        current_match=lambda: controller.current,
+        match_exists=controller.exists,
+        search=search if search is not None else _search(settings),
+        writer=copilot_writer,
+        now=now,
+    )
     # Every stage subscribes in its constructor, so nothing published after this point is missed.
     stages = [
         AnalyticsStage(bus),
+        AgentsStage(bus, agents, explain),
         NarrationStage(bus, service),
         OverlayStage(bus),
         Recorder(bus, store, broadcaster),
         StudioStage(bus, studio),
         BroadcastStage(bus, broadcasts),
+        FanStage(bus, fans),
+        CopilotStage(bus, copilot),
     ]
-    return Pipeline(bus, store, broadcaster, controller, studio, output, broadcasts, people, stages)
+    return Pipeline(
+        bus,
+        store,
+        broadcaster,
+        controller,
+        studio,
+        output,
+        broadcasts,
+        people,
+        agents,
+        explain,
+        fans,
+        copilot,
+        stages,
+    )
 
 
 def create_app(
@@ -406,6 +498,10 @@ def create_app(
     reel_producer: ReelProducer | None = None,
     cutter: ClipCutter | None = None,
     rooms: CallRooms | None = None,
+    explainer: Explainer | None = None,
+    feeds: Mapping[str, SocialFeed] | None = None,
+    search: WebSearch | None = None,
+    copilot_writer: CopilotWriter | None = None,
 ) -> FastAPI:
     # Match IDs are unique to this process, so an ID a browser kept from before a restart is
     # reported as unknown instead of silently naming a different match.
@@ -422,6 +518,10 @@ def create_app(
         reel_producer=reel_producer,
         cutter=cutter,
         rooms=rooms,
+        explainer=explainer,
+        feeds=feeds,
+        search=search,
+        copilot_writer=copilot_writer,
     )
 
     @asynccontextmanager
@@ -464,4 +564,14 @@ def create_app(
         build_broadcasts_router(service=pipeline.broadcasts, socket_hosts=settings.socket_hosts)
     )
     app.include_router(build_people_router(service=pipeline.people, socket_hosts=settings.socket_hosts))
+    app.include_router(build_copilot_router(service=pipeline.copilot))
+    app.include_router(build_fans_router(service=pipeline.fans, socket_hosts=settings.socket_hosts))
+    app.include_router(
+        build_agents_router(
+            switches=pipeline.agents,
+            store=pipeline.store,
+            match_exists=pipeline.controller.exists,
+            model=pipeline.explainer.has_model,
+        )
+    )
     return app

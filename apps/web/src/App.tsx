@@ -1,5 +1,7 @@
-import { makeStyles, MessageBar, MessageBarBody, Switch, Tab, TabList, tokens } from "@fluentui/react-components";
+import { makeStyles, MessageBar, MessageBarBody, Switch, tokens } from "@fluentui/react-components";
 import { useEffect, useState } from "react";
+import { AgentDetail, AgentOverview, AgentRail, isAgentView, type StudioView } from "./agents/AgentStudio";
+import { type AgentId, fetchAgents, setAgentEnabled } from "./agents/api";
 import { fetchTeams, speedFromLocation, startMatch, type Teams } from "./api";
 import { Header } from "./components/Header";
 import { NarrativeFeed } from "./components/NarrativeFeed";
@@ -10,17 +12,19 @@ import { PreferencesDrawer } from "./components/PreferencesDrawer";
 import { RecapDialog } from "./components/RecapDialog";
 import { StatsPanel } from "./components/StatsPanel";
 import { Timeline } from "./components/Timeline";
-import type { Recap, ViewerProfile } from "./contracts";
+import type { AgentCatalog, Recap, ViewerProfile } from "./contracts";
 import { t } from "./i18n";
 import { loadProfile, saveProfile } from "./prefs";
 import { useMatch } from "./stream/store";
 import { useCurrentMatch } from "./stream/useCurrentMatch";
 
-type View = "match" | "overlay";
-
 const useStyles = makeStyles({
   app: { display: "flex", flexDirection: "column", minHeight: "100vh", backgroundColor: tokens.colorNeutralBackground2 },
-  views: { padding: `0 ${tokens.spacingHorizontalXL}` },
+  // The agents down the left, as in Copilot Studio; on a narrow window they move above the page.
+  shell: {
+    display: "grid", gridTemplateColumns: "232px minmax(0, 1fr)", flexGrow: 1, alignItems: "stretch",
+    "@media (max-width: 900px)": { gridTemplateColumns: "minmax(0, 1fr)" },
+  },
   match: {
     display: "grid", gridTemplateColumns: "minmax(0, 3fr) minmax(0, 2fr)", gap: tokens.spacingHorizontalXL,
     padding: tokens.spacingHorizontalXL, alignItems: "start",
@@ -38,13 +42,17 @@ interface AppProps {
   retryMs?: number;
   /** How often a viewer on a finished match checks whether a new one has started. */
   pollMs?: number;
+  /** The view the page opens on. */
+  initialView?: StudioView;
 }
 
-export function App({ eventSource, retryMs = 2000, pollMs = 3000 }: AppProps) {
+export function App({ eventSource, retryMs = 2000, pollMs = 3000, initialView = "overview" }: AppProps) {
   const styles = useStyles();
   const [profile, setProfile] = useState<ViewerProfile>(loadProfile);
   const [teams, setTeams] = useState<Teams | null>(null);
-  const [view, setView] = useState<View>("match");
+  const [view, setView] = useState<StudioView>(initialView);
+  const [catalog, setCatalog] = useState<AgentCatalog | null>(null);
+  const [agentProblem, setAgentProblem] = useState<string | null>(null);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [showPressure, setShowPressure] = useState(true);
   const [openRecap, setOpenRecap] = useState<Recap | null>(null);
@@ -60,7 +68,17 @@ export function App({ eventSource, retryMs = 2000, pollMs = 3000 }: AppProps) {
 
   useEffect(() => {
     fetchTeams().then(setTeams).catch(() => setTeams(null));
+    fetchAgents().then(setCatalog).catch(() => setAgentProblem("The agents could not be loaded. Their output is still shown as it arrives."));
   }, []);
+
+  const toggleAgent = async (agentId: AgentId, enabled: boolean) => {
+    try {
+      setCatalog(await setAgentEnabled(agentId, enabled));
+      setAgentProblem(null);
+    } catch (caught) {
+      setAgentProblem(caught instanceof Error ? caught.message : "The agent was not changed.");
+    }
+  };
 
   // A new stream replays the match, recaps included; do not reopen one the viewer already saw.
   useEffect(() => {
@@ -88,6 +106,7 @@ export function App({ eventSource, retryMs = 2000, pollMs = 3000 }: AppProps) {
   };
 
   const hasMatch = matchId !== null && connection !== "idle";
+  const shownAgent = isAgentView(view) ? catalog?.agents.find((agent) => agent.id === view) : undefined;
   const selectedNarrative = data.narratives.find((narrative) => narrative.moment_id === selectedId);
   const selectedMoment = data.moments.find((moment) => moment.id === selectedId);
   const selectedOverlay = selectedNarrative && data.overlays.find((overlay) => overlay.sources.includes(selectedNarrative.id));
@@ -108,41 +127,48 @@ export function App({ eventSource, retryMs = 2000, pollMs = 3000 }: AppProps) {
           <MessageBarBody>{t(language, "startFailed")}</MessageBarBody>
         </MessageBar>
       )}
-      <TabList className={styles.views} selectedValue={view} onTabSelect={(_, tab) => setView(tab.value as View)}>
-        <Tab value="match">{t(language, "matchTab")}</Tab>
-        <Tab value="overlay">{t(language, "overlayTab")}</Tab>
-      </TabList>
-      {view === "match" && (
-        <main className={styles.match}>
-          <div className={styles.column}>
-            <div className={styles.panel}>
-              <Switch checked={showPressure} label={t(language, "pressureMap")}
-                onChange={(_, state) => setShowPressure(state.checked)} />
-              <Pitch events={data.events} pressure={data.pressure} status={data.status} showPressure={showPressure} language={language} />
+      <div className={styles.shell}>
+        <AgentRail catalog={catalog} match={data} view={view} language={language} onView={setView} />
+        {view === "overview" && (
+          <AgentOverview catalog={catalog} match={data} language={language} playerId={profile.player ?? null} problem={agentProblem}
+            onFollow={(player) => updateProfile({ ...profile, player })} onView={setView} onToggle={(agentId, enabled) => void toggleAgent(agentId, enabled)} />
+        )}
+        {isAgentView(view) && catalog && shownAgent && (
+          <AgentDetail agent={shownAgent} catalog={catalog} match={data} language={language} playerId={profile.player ?? null} problem={agentProblem}
+            onFollow={(player) => updateProfile({ ...profile, player })} onView={setView} onToggle={(agentId, enabled) => void toggleAgent(agentId, enabled)} />
+        )}
+        {view === "match" && (
+          <main className={styles.match}>
+            <div className={styles.column}>
+              <div className={styles.panel}>
+                <Switch checked={showPressure} label={t(language, "pressureMap")}
+                  onChange={(_, state) => setShowPressure(state.checked)} />
+                <Pitch events={data.events} pressure={data.pressure} status={data.status} showPressure={showPressure} language={language} />
+              </div>
+              <div className={styles.panel}>
+                <Timeline moments={data.moments} recaps={data.recaps} selectedId={selectedId} language={language}
+                  onSelect={select} onOpenRecap={setOpenRecap} />
+              </div>
+              <div className={styles.panel}>
+                <StatsPanel stats={data.stats} status={data.status} language={language} />
+              </div>
             </div>
-            <div className={styles.panel}>
-              <Timeline moments={data.moments} recaps={data.recaps} selectedId={selectedId} language={language}
-                onSelect={select} onOpenRecap={setOpenRecap} />
+            <div className={styles.column}>
+              <div className={`${styles.panel} ${styles.feed}`}>
+                <NarrativeFeed narratives={data.narratives} selectedId={selectedId} language={language} onSelect={select} />
+              </div>
+              <div className={styles.panel}>
+                <PipelinePanel narrative={selectedNarrative} moment={selectedMoment} overlay={selectedOverlay || undefined} profile={profile} />
+              </div>
             </div>
-            <div className={styles.panel}>
-              <StatsPanel stats={data.stats} status={data.status} language={language} />
-            </div>
-          </div>
-          <div className={styles.column}>
-            <div className={`${styles.panel} ${styles.feed}`}>
-              <NarrativeFeed narratives={data.narratives} selectedId={selectedId} language={language} onSelect={select} />
-            </div>
-            <div className={styles.panel}>
-              <PipelinePanel narrative={selectedNarrative} moment={selectedMoment} overlay={selectedOverlay || undefined} profile={profile} />
-            </div>
-          </div>
-        </main>
-      )}
-      {view === "overlay" && (
-        <main>
-          <OverlayTab overlays={data.overlays} language={language} />
-        </main>
-      )}
+          </main>
+        )}
+        {view === "overlay" && (
+          <main>
+            <OverlayTab overlays={data.overlays} language={language} />
+          </main>
+        )}
+      </div>
       <PreferencesDrawer open={preferencesOpen} profile={profile} teams={teams} onChange={updateProfile}
         onClose={() => setPreferencesOpen(false)} />
       <RecapDialog recap={openRecap} language={language} onClose={() => setOpenRecap(null)} />

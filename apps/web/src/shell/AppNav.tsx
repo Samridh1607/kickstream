@@ -2,6 +2,7 @@ import { Button, makeStyles, mergeClasses, Text, tokens, Tooltip } from "@fluent
 import { DataTrendingRegular, HomeRegular, VideoClipMultipleRegular, WeatherMoonRegular, WeatherSunnyRegular } from "@fluentui/react-icons";
 import type { ReactNode } from "react";
 import type { Output } from "../contracts";
+import { AskCopilot } from "../copilot/AskCopilot";
 import { LiveStatus } from "../output/OutputTab";
 import { useIsDark, useThemeChoice } from "../theme";
 import { BrandLogo } from "./BrandLogo";
@@ -75,6 +76,7 @@ export function AppNav({ current, output = null, now = Date.now() / 1000, childr
       {children && <div className={styles.extras}>{children}</div>}
       <div className={styles.end}>
         <LiveStatus output={output} now={now} />
+        <AskCopilot />
         <Tooltip content={dark ? "Light theme" : "Dark theme"} relationship="label">
           <Button appearance="subtle" icon={dark ? <WeatherSunnyRegular /> : <WeatherMoonRegular />} onClick={() => setChoice(dark ? "light" : "dark")} />
         </Tooltip>

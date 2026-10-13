@@ -8,9 +8,11 @@ from kickstream.studio.templates import (
     BREAK,
     CANVAS_H,
     CANVAS_W,
+    FAN_ZONE,
     FULL_TIME,
     INTERVIEW,
     LIVE_MATCH,
+    MATCH_INTELLIGENCE,
     STARTING_SOON,
     builtin_templates,
     default_studio,
@@ -58,7 +60,7 @@ def moment(n=1, kind="goal"):
 # --- templates -------------------------------------------------------------------------------
 
 
-def test_there_are_six_built_in_templates_that_fit_the_canvas():
+def test_there_are_eight_built_in_templates_that_fit_the_canvas():
     templates = builtin_templates()
     assert [t.name for t in templates] == [
         STARTING_SOON,
@@ -67,6 +69,8 @@ def test_there_are_six_built_in_templates_that_fit_the_canvas():
         BREAK,
         FULL_TIME,
         INTERVIEW,
+        MATCH_INTELLIGENCE,
+        FAN_ZONE,
     ]
     for template in templates:
         assert template.template == template.name and template.elements
@@ -109,6 +113,8 @@ def test_the_live_match_is_the_fan_scene_and_the_analyst_desk_the_analyst_scene(
         BREAK: None,
         FULL_TIME: None,
         INTERVIEW: None,
+        MATCH_INTELLIGENCE: "analyst",
+        FAN_ZONE: "fan",
     }
 
 
@@ -484,12 +490,13 @@ def test_elements_of_an_unknown_type_are_dropped_from_a_loaded_file():
     assert len(cleaned.scenes[0].elements) == len(default_studio().scenes[0].elements)
 
 
-def test_poll_and_qa_elements_from_an_older_studio_are_dropped():
+def test_elements_of_a_type_this_version_does_not_know_are_dropped():
     raw = {
         "scenes": [{"id": "s1", "elements": [{"type": "poll"}, {"type": "qa"}, {"type": "text"}]}],
         "templates": [],
     }
-    assert [e["type"] for e in rules.sanitize_raw(raw)["scenes"][0]["elements"]] == ["text"]
+    # Polls are back, as a fan-zone widget; the question board of the old fan page is not.
+    assert [e["type"] for e in rules.sanitize_raw(raw)["scenes"][0]["elements"]] == ["poll", "text"]
 
 
 @pytest.mark.parametrize(
@@ -571,3 +578,40 @@ def test_the_interview_template_puts_the_cameras_first_and_new_studios_start_wit
     assert INTERVIEW not in {scene.name for scene in default_studio().scenes}
     doc = rules.create_scene(default_studio(), "builtin", INTERVIEW)
     assert doc.scenes[-1].name == INTERVIEW
+
+
+@pytest.mark.parametrize(
+    "type_, given, kept",
+    [
+        ("chart", {}, {"metric": "overview"}),
+        ("chart", {"metric": "tactics", "colour": "red"}, {"metric": "tactics"}),
+        ("chart", {"metric": "vibes"}, {"metric": "overview"}),
+        ("graph", {"metric": "win_probability"}, {"metric": "win_probability"}),
+        ("graph", {"metric": 7}, {"metric": "momentum"}),
+        ("prediction", {"view": "next_goal"}, {"view": "next_goal"}),
+        ("pitch3d", {"camera": "drone"}, {"camera": "auto"}),
+        ("player", {"player_id": "nbr-9"}, {"player_id": "nbr-9"}),
+        ("player", {"player_id": ""}, {"player_id": None}),
+        ("player", {"player_id": 9}, {"player_id": None}),
+        ("comments", {"lines": 99, "liked_only": "yes"}, {"lines": 8, "liked_only": False}),
+        ("comments", {"liked_only": True}, {"lines": 4, "liked_only": True}),
+        ("superchat", {"lines": 0}, {"lines": 1}),
+        ("scorecard", {"anything": 1}, {}),
+        ("poll", {"anything": 1}, {}),
+        ("spotlight", {"anything": 1}, {}),
+        ("insight", {"anything": 1}, {}),
+    ],
+)
+def test_a_widget_keeps_only_its_own_properties_within_their_ranges(type_, given, kept):
+    made = rules.normalize_element(
+        SceneElement(id="w", type=type_, x=0, y=0, width=400, height=200, layer=1, visible=True, props=given)
+    )
+    assert made.props == kept
+
+
+def test_the_extra_templates_are_offered_but_a_new_studio_does_not_start_with_them():
+    doc = rules.create_scene(default_studio(), "builtin", FAN_ZONE)
+    made = doc.scenes[-1]
+    assert (made.name, made.mode) == (FAN_ZONE, "fan")
+    assert {e.type for e in made.elements} >= {"comments", "poll", "superchat", "spotlight"}
+    assert MATCH_INTELLIGENCE not in [s.template for s in default_studio().scenes]

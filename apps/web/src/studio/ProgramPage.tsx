@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Scene, Studio, ViewerProfile } from "../contracts";
+import type { FanZone, Scene, Studio, ViewerProfile } from "../contracts";
+import { FANS_STREAM } from "../fans/api";
 import { type ProgramCallOptions, useProgramCall } from "../people/useProgramCall";
 import { useMatch } from "../stream/store";
+import { useLiveDocument } from "../stream/useLiveDocument";
 import { type CurrentMatchOptions, useCurrentMatch } from "../stream/useCurrentMatch";
 import { startCapture, type StopCapture } from "./capture";
 import type { CameraTile } from "./elements";
@@ -28,9 +30,24 @@ export function withCamerasFallback(scene: Scene, cameras: readonly CameraTile[]
   return { ...scene, elements: [...scene.elements, fallback] };
 }
 
+const SPOTLIGHT_BOX = { x: 460, y: 780, width: 1000, height: 220 };
+const POLL_BOX = { x: 1240, y: 300, width: 640, height: 440 };
+
+/** A spotlight or a poll put on air from the fan zone must be seen: give each a box in a scene with none for it. */
+export function withFanFallbacks(scene: Scene, fans: FanZone | null | undefined): Scene {
+  if (!fans) return scene;
+  const has = (type: "spotlight" | "poll") => scene.elements.some((element) => element.type === type && element.visible);
+  const added = [];
+  if (fans.poll && fans.poll_on_air && !has("poll")) added.push({ id: "__poll", type: "poll" as const, ...POLL_BOX });
+  if (fans.spotlight && !has("spotlight")) added.push({ id: "__spotlight", type: "spotlight" as const, ...SPOTLIGHT_BOX });
+  if (added.length === 0) return scene;
+  const top = nextLayer(scene.elements);
+  return { ...scene, elements: [...scene.elements, ...added.map((box, index) => ({ ...box, layer: top + index, visible: true, props: {} }))] };
+}
+
 /** Whatever is on air must be visible: add a default box for each thing the scene has no element for. */
-export function withFallbacks(scene: Scene, studio: Studio, cameras: readonly CameraTile[] = []): Scene {
-  return withCamerasFallback(withReplayFallback(scene, studio), cameras);
+export function withFallbacks(scene: Scene, studio: Studio, cameras: readonly CameraTile[] = [], fans: FanZone | null = null): Scene {
+  return withFanFallbacks(withCamerasFallback(withReplayFallback(scene, studio), cameras), fans);
 }
 
 function useWindowSize() {
@@ -65,6 +82,7 @@ export function ProgramPage({
   const now = useNow() + offset;
   const size = useWindowSize();
   const guests = useProgramCall({ eventSource, retryMs, newCall, seat, connectAudio, rejoinMs });
+  const { doc: fans } = useLiveDocument<FanZone>(FANS_STREAM, eventSource, retryMs);
 
   // Opened by the pipeline's hidden browser with a token, the page offers to record itself. It
   // waits for the studio document, so the stream never begins on an empty frame. The pipeline
@@ -113,8 +131,8 @@ export function ProgramPage({
     <div data-testid="program"
       style={{ position: "fixed", inset: 0, display: "grid", placeItems: "center", overflow: "hidden", backgroundColor: "#000000", cursor: "none" }}>
       {studio && active && (
-        <SceneCanvas scene={withFallbacks(active, studio, guests.cameras)} scale={fitScale(size.width, size.height)}
-          data={{ match, studio, now, language: studio.settings.language, cameras: guests.cameras, renderVideo: guests.renderVideo }} />
+        <SceneCanvas scene={withFallbacks(active, studio, guests.cameras, fans)} scale={fitScale(size.width, size.height)}
+          data={{ match, studio, now, language: studio.settings.language, fans, cameras: guests.cameras, renderVideo: guests.renderVideo }} />
       )}
     </div>
   );

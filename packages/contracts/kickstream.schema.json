@@ -240,7 +240,7 @@
       "required": ["id", "type", "match_id", "minute", "highlighted", "payload"],
       "properties": {
         "id": { "type": "integer" },
-        "type": { "enum": ["match_status", "match_event", "stats", "pressure", "key_moment", "narrative", "recap", "overlay"] },
+        "type": { "enum": ["match_status", "match_event", "stats", "pressure", "key_moment", "narrative", "recap", "overlay", "play", "tactics", "prediction", "explanation", "pitch_scene", "players", "highlight", "agent_run"] },
         "match_id": { "type": "string" },
         "minute": { "type": "integer" },
         "highlighted": { "type": "boolean" },
@@ -252,7 +252,7 @@
       "required": ["id", "type", "x", "y", "width", "height", "layer", "visible", "props"],
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "type": { "enum": ["scoreboard", "pitch", "narration", "stats", "banner", "ticker", "timeline", "recap", "replay", "countdown", "text", "image", "cameras"] },
+        "type": { "enum": ["scoreboard", "pitch", "narration", "stats", "banner", "ticker", "timeline", "recap", "replay", "countdown", "text", "image", "cameras", "scorecard", "chart", "graph", "prediction", "insight", "pitch3d", "player", "comments", "poll", "superchat", "spotlight"] },
         "x": { "type": "integer" },
         "y": { "type": "integer" },
         "width": { "type": "integer" },
@@ -568,6 +568,471 @@
         "token": { "type": "string" },
         "expires_at": { "type": "number" },
         "service": { "enum": ["acs", "fake"] }
+      }
+    },
+    "PlayEvent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "match_id", "minute", "second", "event_id", "type", "x", "y", "zone", "lane", "phase", "sequence", "sequence_length", "danger"],
+      "properties": {
+        "id": { "type": "string" },
+        "match_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "second": { "type": "integer" },
+        "event_id": { "type": "string" },
+        "type": { "enum": ["kickoff", "pass", "shot", "goal", "save", "foul", "yellow_card", "red_card", "corner", "substitution", "half_time", "full_time"] },
+        "team": { "enum": ["home", "away", null], "default": null },
+        "player_id": { "type": ["string", "null"], "default": null },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "zone": { "enum": ["defensive_third", "middle_third", "attacking_third"] },
+        "lane": { "enum": ["left", "centre", "right"] },
+        "phase": { "enum": ["build_up", "progression", "final_third", "set_piece", "transition", "defending", "restart"] },
+        "sequence": { "type": "integer" },
+        "sequence_length": { "type": "integer" },
+        "danger": { "type": "number", "minimum": 0, "maximum": 1 },
+        "outcome": { "enum": ["goal", "saved", "off_target", "blocked", null], "default": null },
+        "completed": { "type": ["boolean", "null"], "default": null },
+        "player_in_id": { "type": ["string", "null"], "default": null }
+      }
+    },
+    "TeamTactics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pressure", "tempo", "field_tilt", "avg_sequence", "lanes", "patterns"],
+      "properties": {
+        "pressure": { "type": "number" },
+        "tempo": { "type": "number" },
+        "field_tilt": { "type": "number" },
+        "avg_sequence": { "type": "number" },
+        "lanes": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+        "patterns": { "type": "array", "maxItems": 4, "items": { "enum": ["high_press", "wing_overload_left", "wing_overload_right", "central_play", "counter_attack", "patient_build_up", "direct_play", "low_block"] } }
+      }
+    },
+    "TacticalInsight": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "match_id", "minute", "home", "away", "rhythm", "summary"],
+      "properties": {
+        "id": { "type": "string" },
+        "match_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "home": { "$ref": "#/$defs/TeamTactics" },
+        "away": { "$ref": "#/$defs/TeamTactics" },
+        "rhythm": { "enum": ["slow", "steady", "fast", "frantic"] },
+        "summary": { "type": "string" }
+      }
+    },
+    "NextAction": {
+      "type": "object", "additionalProperties": false,
+      "required": ["action", "probability"],
+      "properties": {
+        "action": { "enum": ["pass", "shot", "turnover"] },
+        "probability": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "Prediction": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "match_id", "minute", "win_home", "draw", "win_away", "next_goal_home", "next_goal_away", "cols", "rows", "danger", "next_actions"],
+      "properties": {
+        "id": { "type": "string" },
+        "match_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "win_home": { "type": "number", "minimum": 0, "maximum": 1 },
+        "draw": { "type": "number", "minimum": 0, "maximum": 1 },
+        "win_away": { "type": "number", "minimum": 0, "maximum": 1 },
+        "next_goal_home": { "type": "number", "minimum": 0, "maximum": 1 },
+        "next_goal_away": { "type": "number", "minimum": 0, "maximum": 1 },
+        "possession": { "enum": ["home", "away", null], "default": null },
+        "next_actions": { "type": "array", "items": { "$ref": "#/$defs/NextAction" }, "maxItems": 3 },
+        "cols": { "type": "integer" },
+        "rows": { "type": "integer" },
+        "danger": { "type": "array", "items": { "type": "number" } }
+      }
+    },
+    "Explanation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "match_id", "minute", "subject_id", "subject_kind", "mode", "headline", "why", "evidence", "source", "agent"],
+      "properties": {
+        "id": { "type": "string" },
+        "match_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "subject_id": { "type": "string" },
+        "subject_kind": { "enum": ["tactics", "prediction", "highlight"] },
+        "mode": { "enum": ["fan", "analyst"] },
+        "headline": { "type": "string", "minLength": 1 },
+        "why": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "array", "items": { "type": "string" } },
+        "source": { "enum": ["agent", "scripted"] },
+        "agent": { "type": "string" },
+        "team": { "enum": ["home", "away", null], "default": null }
+      }
+    },
+    "Point3": {
+      "type": "object", "additionalProperties": false,
+      "required": ["x", "y", "z"],
+      "properties": { "x": { "type": "number" }, "y": { "type": "number" }, "z": { "type": "number" } }
+    },
+    "ScenePlayer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "team", "number", "x", "y", "on_ball", "estimated"],
+      "properties": {
+        "id": { "type": "string" },
+        "team": { "enum": ["home", "away"] },
+        "number": { "type": "integer" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "on_ball": { "type": "boolean" },
+        "estimated": { "type": "boolean" }
+      }
+    },
+    "DangerColumn": {
+      "type": "object", "additionalProperties": false,
+      "required": ["x", "y", "width", "depth", "team", "intensity"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number" },
+        "depth": { "type": "number" },
+        "team": { "enum": ["home", "away"] },
+        "intensity": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "PassLane": {
+      "type": "object", "additionalProperties": false,
+      "required": ["from_x", "from_y", "to_x", "to_y", "team", "weight"],
+      "properties": {
+        "from_x": { "type": "number" },
+        "from_y": { "type": "number" },
+        "to_x": { "type": "number" },
+        "to_y": { "type": "number" },
+        "team": { "enum": ["home", "away"] },
+        "weight": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "PitchScene": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "match_id", "minute", "second", "ball", "trail", "players", "columns", "lanes", "camera", "focus_x", "focus_y"],
+      "properties": {
+        "id": { "type": "string" },
+        "match_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "second": { "type": "integer" },
+        "ball": { "$ref": "#/$defs/Point3" },
+        "trail": { "type": "array", "items": { "$ref": "#/$defs/Point3" }, "maxItems": 12 },
+        "players": { "type": "array", "items": { "$ref": "#/$defs/ScenePlayer" }, "maxItems": 30 },
+        "columns": { "type": "array", "items": { "$ref": "#/$defs/DangerColumn" }, "maxItems": 24 },
+        "lanes": { "type": "array", "items": { "$ref": "#/$defs/PassLane" }, "maxItems": 8 },
+        "camera": { "enum": ["broadcast", "tactical", "attack_home", "attack_away"] },
+        "focus_x": { "type": "number" },
+        "focus_y": { "type": "number" }
+      }
+    },
+    "PlayerMetrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["player_id", "team", "name", "number", "position", "on_pitch", "touches", "passes", "pass_accuracy", "shots", "shots_on_target", "goals", "xg", "fouls", "yellow_cards", "red_cards", "rating", "heat"],
+      "properties": {
+        "player_id": { "type": "string" },
+        "team": { "enum": ["home", "away"] },
+        "name": { "type": "string" },
+        "number": { "type": "integer" },
+        "position": { "enum": ["GK", "DF", "MF", "FW"] },
+        "on_pitch": { "type": "boolean" },
+        "touches": { "type": "integer" },
+        "passes": { "type": "integer" },
+        "pass_accuracy": { "type": "number" },
+        "shots": { "type": "integer" },
+        "shots_on_target": { "type": "integer" },
+        "goals": { "type": "integer" },
+        "xg": { "type": "number" },
+        "fouls": { "type": "integer" },
+        "yellow_cards": { "type": "integer" },
+        "red_cards": { "type": "integer" },
+        "rating": { "type": "number", "minimum": 0, "maximum": 10 },
+        "heat": { "type": "array", "items": { "type": "number" } }
+      }
+    },
+    "PlayerReport": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "match_id", "minute", "cols", "rows", "players"],
+      "properties": {
+        "id": { "type": "string" },
+        "match_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "cols": { "type": "integer" },
+        "rows": { "type": "integer" },
+        "players": { "type": "array", "items": { "$ref": "#/$defs/PlayerMetrics" }, "maxItems": 40 }
+      }
+    },
+    "Highlight": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "match_id", "minute", "kind", "category", "team", "title", "reason", "score", "event_ids"],
+      "properties": {
+        "id": { "type": "string" },
+        "match_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "kind": { "enum": ["key", "hidden"] },
+        "category": { "enum": ["goal", "red_card", "big_chance", "momentum_swing", "sustained_pressure", "long_sequence", "big_save", "dangerous_turnover", "tactical_foul", "unsung_player"] },
+        "team": { "enum": ["home", "away"] },
+        "player_id": { "type": ["string", "null"], "default": null },
+        "title": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 },
+        "score": { "type": "number", "minimum": 0, "maximum": 100 },
+        "moment_id": { "type": ["string", "null"], "default": null },
+        "event_ids": { "type": "array", "items": { "type": "string" }, "maxItems": 20 }
+      }
+    },
+    "AgentRun": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "match_id", "minute", "agent", "trigger", "produced", "count", "duration_ms", "source", "note"],
+      "properties": {
+        "id": { "type": "string" },
+        "match_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "agent": { "enum": ["event_interpreter", "tactical_analyst", "prediction", "explainability", "visualization", "player_tracking", "highlights"] },
+        "trigger": { "type": "string" },
+        "produced": { "type": "string" },
+        "count": { "type": "integer", "minimum": 0 },
+        "duration_ms": { "type": "number", "minimum": 0 },
+        "source": { "enum": ["agent", "scripted"] },
+        "note": { "type": "string" }
+      }
+    },
+    "AgentTool": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "description"],
+      "properties": { "name": { "type": "string" }, "description": { "type": "string" } }
+    },
+    "AgentSpec": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "description", "instructions", "triggers", "tools", "outputs", "upstream", "enabled"],
+      "properties": {
+        "id": { "enum": ["event_interpreter", "tactical_analyst", "prediction", "explainability", "visualization", "player_tracking", "highlights"] },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "instructions": { "type": "string" },
+        "triggers": { "type": "array", "items": { "type": "string" } },
+        "tools": { "type": "array", "items": { "$ref": "#/$defs/AgentTool" } },
+        "outputs": { "type": "array", "items": { "type": "string" } },
+        "upstream": { "type": "array", "items": { "enum": ["event_interpreter", "tactical_analyst", "prediction", "explainability", "visualization", "player_tracking", "highlights"] } },
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "AgentCatalog": {
+      "type": "object", "additionalProperties": false,
+      "required": ["agents", "model"],
+      "properties": {
+        "agents": { "type": "array", "items": { "$ref": "#/$defs/AgentSpec" } },
+        "model": { "type": "boolean" }
+      }
+    },
+    "MatchIntelligence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["match_id", "minute", "plays", "explanations", "highlights", "runs"],
+      "properties": {
+        "match_id": { "type": "string" },
+        "minute": { "type": "integer" },
+        "plays": { "type": "array", "items": { "$ref": "#/$defs/PlayEvent" }, "maxItems": 10 },
+        "tactics": { "anyOf": [{ "$ref": "#/$defs/TacticalInsight" }, { "type": "null" }], "default": null },
+        "prediction": { "anyOf": [{ "$ref": "#/$defs/Prediction" }, { "type": "null" }], "default": null },
+        "explanations": { "type": "array", "items": { "$ref": "#/$defs/Explanation" }, "maxItems": 6 },
+        "pitch": { "anyOf": [{ "$ref": "#/$defs/PitchScene" }, { "type": "null" }], "default": null },
+        "player": { "anyOf": [{ "$ref": "#/$defs/PlayerMetrics" }, { "type": "null" }], "default": null },
+        "highlights": { "type": "array", "items": { "$ref": "#/$defs/Highlight" }, "maxItems": 40 },
+        "runs": { "type": "array", "items": { "$ref": "#/$defs/AgentRun" }, "maxItems": 20 }
+      }
+    },
+    "FanComment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "platform", "author", "text", "likes", "at", "liked", "mood", "demo"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "platform": { "enum": ["x", "youtube", "twitch", "facebook", "other"] },
+        "author": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "handle": { "type": ["string", "null"], "default": null },
+        "text": { "type": "string", "minLength": 1, "maxLength": 280 },
+        "likes": { "type": "integer", "minimum": 0 },
+        "at": { "type": "number" },
+        "liked": { "type": "boolean" },
+        "mood": { "enum": ["positive", "neutral", "negative"] },
+        "demo": { "type": "boolean" }
+      }
+    },
+    "FanPollOption": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "text", "votes"],
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "votes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "FanPoll": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "question", "options", "state", "opened_at"],
+      "properties": {
+        "id": { "type": "string" },
+        "question": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "options": { "type": "array", "items": { "$ref": "#/$defs/FanPollOption" }, "minItems": 2, "maxItems": 6 },
+        "state": { "enum": ["open", "closed"] },
+        "opened_at": { "type": "number" },
+        "closes_at": { "type": ["number", "null"], "default": null }
+      }
+    },
+    "SuperChat": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "platform", "name", "amount", "currency", "message", "tier", "at", "demo"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "platform": { "enum": ["x", "youtube", "twitch", "facebook", "other"] },
+        "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "amount": { "type": "number", "minimum": 0.01 },
+        "currency": { "type": "string", "minLength": 3, "maxLength": 3 },
+        "message": { "type": "string", "maxLength": 200 },
+        "tier": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "at": { "type": "number" },
+        "demo": { "type": "boolean" }
+      }
+    },
+    "Spotlight": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "title", "text", "duration_s"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "enum": ["comment", "superchat", "message", "winner", "poll_result"] },
+        "title": { "type": "string", "maxLength": 80 },
+        "text": { "type": "string", "maxLength": 280 },
+        "name": { "type": ["string", "null"], "default": null },
+        "detail": { "type": ["string", "null"], "default": null },
+        "tier": { "type": ["integer", "null"], "default": null },
+        "duration_s": { "type": "integer", "minimum": 3, "maximum": 60 },
+        "ends_at": { "type": ["number", "null"], "default": null }
+      }
+    },
+    "FanMood": {
+      "type": "object", "additionalProperties": false,
+      "required": ["positive", "neutral", "negative"],
+      "properties": { "positive": { "type": "number" }, "neutral": { "type": "number" }, "negative": { "type": "number" } }
+    },
+    "FanTopic": {
+      "type": "object", "additionalProperties": false,
+      "required": ["label", "count"],
+      "properties": { "label": { "type": "string" }, "count": { "type": "integer" } }
+    },
+    "FanShare": {
+      "type": "object", "additionalProperties": false,
+      "required": ["platform", "count"],
+      "properties": { "platform": { "enum": ["x", "youtube", "twitch", "facebook", "other"] }, "count": { "type": "integer" } }
+    },
+    "FanRaised": {
+      "type": "object", "additionalProperties": false,
+      "required": ["currency", "amount"],
+      "properties": { "currency": { "type": "string" }, "amount": { "type": "number" } }
+    },
+    "FanSummary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["text", "per_minute", "total", "mood", "topics", "platforms", "raised"],
+      "properties": {
+        "text": { "type": "string" },
+        "per_minute": { "type": "number" },
+        "total": { "type": "integer" },
+        "mood": { "$ref": "#/$defs/FanMood" },
+        "topics": { "type": "array", "items": { "$ref": "#/$defs/FanTopic" }, "maxItems": 6 },
+        "platforms": { "type": "array", "items": { "$ref": "#/$defs/FanShare" }, "maxItems": 5 },
+        "raised": { "type": "array", "items": { "$ref": "#/$defs/FanRaised" }, "maxItems": 5 }
+      }
+    },
+    "FanSettings": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "auto_superchat"],
+      "properties": {
+        "source": { "enum": ["off", "demo", "x"] },
+        "auto_superchat": { "type": "boolean" }
+      }
+    },
+    "FanZone": {
+      "type": "object", "additionalProperties": false,
+      "required": ["revision", "server_time", "settings", "source_state", "x_available", "comments", "summary", "poll_on_air", "superchats", "spotlight_queue"],
+      "properties": {
+        "revision": { "type": "integer" },
+        "server_time": { "type": "number" },
+        "settings": { "$ref": "#/$defs/FanSettings" },
+        "source_state": { "enum": ["off", "demo", "live", "failing"] },
+        "problem": { "type": ["string", "null"], "default": null },
+        "x_available": { "type": "boolean" },
+        "comments": { "type": "array", "items": { "$ref": "#/$defs/FanComment" }, "maxItems": 200 },
+        "summary": { "$ref": "#/$defs/FanSummary" },
+        "poll": { "anyOf": [{ "$ref": "#/$defs/FanPoll" }, { "type": "null" }], "default": null },
+        "poll_on_air": { "type": "boolean" },
+        "superchats": { "type": "array", "items": { "$ref": "#/$defs/SuperChat" }, "maxItems": 50 },
+        "spotlight": { "anyOf": [{ "$ref": "#/$defs/Spotlight" }, { "type": "null" }], "default": null },
+        "spotlight_queue": { "type": "array", "items": { "$ref": "#/$defs/Spotlight" }, "maxItems": 10 }
+      }
+    },
+    "CopilotFact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["label", "value"],
+      "properties": { "label": { "type": "string" }, "value": { "type": "string" } }
+    },
+    "CopilotCompare": {
+      "type": "object", "additionalProperties": false,
+      "required": ["label", "home", "away"],
+      "properties": { "label": { "type": "string" }, "home": { "type": "string" }, "away": { "type": "string" } }
+    },
+    "CopilotItem": {
+      "type": "object", "additionalProperties": false,
+      "required": ["when", "title", "detail"],
+      "properties": {
+        "when": { "type": "string" },
+        "title": { "type": "string" },
+        "detail": { "type": "string" },
+        "team": { "enum": ["home", "away", null], "default": null }
+      }
+    },
+    "CopilotCard": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "title", "facts", "compare", "items"],
+      "properties": {
+        "kind": { "enum": ["match", "player", "head_to_head", "play", "history"] },
+        "title": { "type": "string" },
+        "subtitle": { "type": ["string", "null"], "default": null },
+        "home": { "type": ["string", "null"], "default": null },
+        "away": { "type": ["string", "null"], "default": null },
+        "team": { "enum": ["home", "away", null], "default": null },
+        "facts": { "type": "array", "items": { "$ref": "#/$defs/CopilotFact" }, "maxItems": 12 },
+        "compare": { "type": "array", "items": { "$ref": "#/$defs/CopilotCompare" }, "maxItems": 10 },
+        "items": { "type": "array", "items": { "$ref": "#/$defs/CopilotItem" }, "maxItems": 12 }
+      }
+    },
+    "CopilotSource": {
+      "type": "object", "additionalProperties": false,
+      "required": ["title", "url", "snippet"],
+      "properties": {
+        "title": { "type": "string" },
+        "url": { "type": "string" },
+        "snippet": { "type": "string" }
+      }
+    },
+    "CopilotAnswer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "question", "intent", "answer", "cards", "sources", "followups", "source", "searched"],
+      "properties": {
+        "id": { "type": "string" },
+        "question": { "type": "string" },
+        "intent": { "enum": ["match", "prediction", "tactics", "player", "head_to_head", "play", "history", "web", "help"] },
+        "answer": { "type": "string", "minLength": 1 },
+        "cards": { "type": "array", "items": { "$ref": "#/$defs/CopilotCard" }, "maxItems": 3 },
+        "sources": { "type": "array", "items": { "$ref": "#/$defs/CopilotSource" }, "maxItems": 5 },
+        "followups": { "type": "array", "items": { "type": "string" }, "maxItems": 4 },
+        "source": { "enum": ["agent", "scripted"] },
+        "searched": { "type": "boolean" },
+        "problem": { "type": ["string", "null"], "default": null }
+      }
+    },
+    "CopilotInfo": {
+      "type": "object", "additionalProperties": false,
+      "required": ["model", "search", "matches_remembered"],
+      "properties": {
+        "model": { "type": "boolean" },
+        "search": { "type": "string" },
+        "matches_remembered": { "type": "integer" }
       }
     }
   }

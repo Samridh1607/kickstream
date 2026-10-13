@@ -1,7 +1,7 @@
 from kickstream.contracts import Envelope, ViewerProfile
 from kickstream.ports.store import LogItem
 
-_HIGHLIGHTABLE = {"key_moment", "narrative"}
+_HIGHLIGHTABLE = {"key_moment", "narrative", "highlight"}
 
 
 def to_envelope(item: LogItem, profile: ViewerProfile) -> Envelope | None:

@@ -258,7 +258,23 @@ export interface ViewerProfile {
  */
 export interface Envelope {
   id: number;
-  type: "match_status" | "match_event" | "stats" | "pressure" | "key_moment" | "narrative" | "recap" | "overlay";
+  type:
+    | "match_status"
+    | "match_event"
+    | "stats"
+    | "pressure"
+    | "key_moment"
+    | "narrative"
+    | "recap"
+    | "overlay"
+    | "play"
+    | "tactics"
+    | "prediction"
+    | "explanation"
+    | "pitch_scene"
+    | "players"
+    | "highlight"
+    | "agent_run";
   match_id: string;
   minute: number;
   highlighted: boolean;
@@ -285,7 +301,18 @@ export interface SceneElement {
     | "countdown"
     | "text"
     | "image"
-    | "cameras";
+    | "cameras"
+    | "scorecard"
+    | "chart"
+    | "graph"
+    | "prediction"
+    | "insight"
+    | "pitch3d"
+    | "player"
+    | "comments"
+    | "poll"
+    | "superchat"
+    | "spotlight";
   x: number;
   y: number;
   width: number;
@@ -649,4 +676,629 @@ export interface CallSeat {
   token: string;
   expires_at: number;
   service: "acs" | "fake";
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "PlayEvent".
+ */
+export interface PlayEvent {
+  id: string;
+  match_id: string;
+  minute: number;
+  second: number;
+  event_id: string;
+  type:
+    | "kickoff"
+    | "pass"
+    | "shot"
+    | "goal"
+    | "save"
+    | "foul"
+    | "yellow_card"
+    | "red_card"
+    | "corner"
+    | "substitution"
+    | "half_time"
+    | "full_time";
+  team?: "home" | "away" | null;
+  player_id?: string | null;
+  x: number;
+  y: number;
+  zone: "defensive_third" | "middle_third" | "attacking_third";
+  lane: "left" | "centre" | "right";
+  phase: "build_up" | "progression" | "final_third" | "set_piece" | "transition" | "defending" | "restart";
+  sequence: number;
+  sequence_length: number;
+  danger: number;
+  outcome?: "goal" | "saved" | "off_target" | "blocked" | null;
+  completed?: boolean | null;
+  player_in_id?: string | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "TeamTactics".
+ */
+export interface TeamTactics {
+  pressure: number;
+  tempo: number;
+  field_tilt: number;
+  avg_sequence: number;
+  /**
+   * @minItems 3
+   * @maxItems 3
+   */
+  lanes: [number, number, number, ...number[]];
+  /**
+   * @maxItems 4
+   */
+  patterns: (
+    | "high_press"
+    | "wing_overload_left"
+    | "wing_overload_right"
+    | "central_play"
+    | "counter_attack"
+    | "patient_build_up"
+    | "direct_play"
+    | "low_block"
+  )[];
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "TacticalInsight".
+ */
+export interface TacticalInsight {
+  id: string;
+  match_id: string;
+  minute: number;
+  home: TeamTactics;
+  away: TeamTactics;
+  rhythm: "slow" | "steady" | "fast" | "frantic";
+  summary: string;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "NextAction".
+ */
+export interface NextAction {
+  action: "pass" | "shot" | "turnover";
+  probability: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Prediction".
+ */
+export interface Prediction {
+  id: string;
+  match_id: string;
+  minute: number;
+  win_home: number;
+  draw: number;
+  win_away: number;
+  next_goal_home: number;
+  next_goal_away: number;
+  possession?: "home" | "away" | null;
+  /**
+   * @maxItems 3
+   */
+  next_actions: NextAction[];
+  cols: number;
+  rows: number;
+  danger: number[];
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Explanation".
+ */
+export interface Explanation {
+  id: string;
+  match_id: string;
+  minute: number;
+  subject_id: string;
+  subject_kind: "tactics" | "prediction" | "highlight";
+  mode: "fan" | "analyst";
+  headline: string;
+  why: string;
+  evidence: string[];
+  source: "agent" | "scripted";
+  agent: string;
+  team?: "home" | "away" | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Point3".
+ */
+export interface Point3 {
+  x: number;
+  y: number;
+  z: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "ScenePlayer".
+ */
+export interface ScenePlayer {
+  id: string;
+  team: "home" | "away";
+  number: number;
+  x: number;
+  y: number;
+  on_ball: boolean;
+  estimated: boolean;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "DangerColumn".
+ */
+export interface DangerColumn {
+  x: number;
+  y: number;
+  width: number;
+  depth: number;
+  team: "home" | "away";
+  intensity: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "PassLane".
+ */
+export interface PassLane {
+  from_x: number;
+  from_y: number;
+  to_x: number;
+  to_y: number;
+  team: "home" | "away";
+  weight: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "PitchScene".
+ */
+export interface PitchScene {
+  id: string;
+  match_id: string;
+  minute: number;
+  second: number;
+  ball: Point3;
+  /**
+   * @maxItems 12
+   */
+  trail: Point3[];
+  /**
+   * @maxItems 30
+   */
+  players: ScenePlayer[];
+  /**
+   * @maxItems 24
+   */
+  columns: DangerColumn[];
+  /**
+   * @maxItems 8
+   */
+  lanes: PassLane[];
+  camera: "broadcast" | "tactical" | "attack_home" | "attack_away";
+  focus_x: number;
+  focus_y: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "PlayerMetrics".
+ */
+export interface PlayerMetrics {
+  player_id: string;
+  team: "home" | "away";
+  name: string;
+  number: number;
+  position: "GK" | "DF" | "MF" | "FW";
+  on_pitch: boolean;
+  touches: number;
+  passes: number;
+  pass_accuracy: number;
+  shots: number;
+  shots_on_target: number;
+  goals: number;
+  xg: number;
+  fouls: number;
+  yellow_cards: number;
+  red_cards: number;
+  rating: number;
+  heat: number[];
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "PlayerReport".
+ */
+export interface PlayerReport {
+  id: string;
+  match_id: string;
+  minute: number;
+  cols: number;
+  rows: number;
+  /**
+   * @maxItems 40
+   */
+  players: PlayerMetrics[];
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Highlight".
+ */
+export interface Highlight {
+  id: string;
+  match_id: string;
+  minute: number;
+  kind: "key" | "hidden";
+  category:
+    | "goal"
+    | "red_card"
+    | "big_chance"
+    | "momentum_swing"
+    | "sustained_pressure"
+    | "long_sequence"
+    | "big_save"
+    | "dangerous_turnover"
+    | "tactical_foul"
+    | "unsung_player";
+  team: "home" | "away";
+  player_id?: string | null;
+  title: string;
+  reason: string;
+  score: number;
+  moment_id?: string | null;
+  /**
+   * @maxItems 20
+   */
+  event_ids: string[];
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "AgentRun".
+ */
+export interface AgentRun {
+  id: string;
+  match_id: string;
+  minute: number;
+  agent:
+    | "event_interpreter"
+    | "tactical_analyst"
+    | "prediction"
+    | "explainability"
+    | "visualization"
+    | "player_tracking"
+    | "highlights";
+  trigger: string;
+  produced: string;
+  count: number;
+  duration_ms: number;
+  source: "agent" | "scripted";
+  note: string;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "AgentTool".
+ */
+export interface AgentTool {
+  name: string;
+  description: string;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "AgentSpec".
+ */
+export interface AgentSpec {
+  id:
+    | "event_interpreter"
+    | "tactical_analyst"
+    | "prediction"
+    | "explainability"
+    | "visualization"
+    | "player_tracking"
+    | "highlights";
+  name: string;
+  description: string;
+  instructions: string;
+  triggers: string[];
+  tools: AgentTool[];
+  outputs: string[];
+  upstream: (
+    | "event_interpreter"
+    | "tactical_analyst"
+    | "prediction"
+    | "explainability"
+    | "visualization"
+    | "player_tracking"
+    | "highlights"
+  )[];
+  enabled: boolean;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "AgentCatalog".
+ */
+export interface AgentCatalog {
+  agents: AgentSpec[];
+  model: boolean;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "MatchIntelligence".
+ */
+export interface MatchIntelligence {
+  match_id: string;
+  minute: number;
+  /**
+   * @maxItems 10
+   */
+  plays: PlayEvent[];
+  tactics?: TacticalInsight | null;
+  prediction?: Prediction | null;
+  /**
+   * @maxItems 6
+   */
+  explanations: Explanation[];
+  pitch?: PitchScene | null;
+  player?: PlayerMetrics | null;
+  /**
+   * @maxItems 40
+   */
+  highlights: Highlight[];
+  /**
+   * @maxItems 20
+   */
+  runs: AgentRun[];
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "FanComment".
+ */
+export interface FanComment {
+  id: string;
+  platform: "x" | "youtube" | "twitch" | "facebook" | "other";
+  author: string;
+  handle?: string | null;
+  text: string;
+  likes: number;
+  at: number;
+  liked: boolean;
+  mood: "positive" | "neutral" | "negative";
+  demo: boolean;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "FanPollOption".
+ */
+export interface FanPollOption {
+  id: string;
+  text: string;
+  votes: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "FanPoll".
+ */
+export interface FanPoll {
+  id: string;
+  question: string;
+  /**
+   * @minItems 2
+   * @maxItems 6
+   */
+  options: [FanPollOption, FanPollOption, ...FanPollOption[]];
+  state: "open" | "closed";
+  opened_at: number;
+  closes_at?: number | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "SuperChat".
+ */
+export interface SuperChat {
+  id: string;
+  platform: "x" | "youtube" | "twitch" | "facebook" | "other";
+  name: string;
+  amount: number;
+  currency: string;
+  message: string;
+  tier: number;
+  at: number;
+  demo: boolean;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Spotlight".
+ */
+export interface Spotlight {
+  id: string;
+  kind: "comment" | "superchat" | "message" | "winner" | "poll_result";
+  title: string;
+  text: string;
+  name?: string | null;
+  detail?: string | null;
+  tier?: number | null;
+  duration_s: number;
+  ends_at?: number | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "FanMood".
+ */
+export interface FanMood {
+  positive: number;
+  neutral: number;
+  negative: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "FanTopic".
+ */
+export interface FanTopic {
+  label: string;
+  count: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "FanShare".
+ */
+export interface FanShare {
+  platform: "x" | "youtube" | "twitch" | "facebook" | "other";
+  count: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "FanRaised".
+ */
+export interface FanRaised {
+  currency: string;
+  amount: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "FanSummary".
+ */
+export interface FanSummary {
+  text: string;
+  per_minute: number;
+  total: number;
+  mood: FanMood;
+  /**
+   * @maxItems 6
+   */
+  topics: FanTopic[];
+  /**
+   * @maxItems 5
+   */
+  platforms: FanShare[];
+  /**
+   * @maxItems 5
+   */
+  raised: FanRaised[];
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "FanSettings".
+ */
+export interface FanSettings {
+  source: "off" | "demo" | "x";
+  auto_superchat: boolean;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "FanZone".
+ */
+export interface FanZone {
+  revision: number;
+  server_time: number;
+  settings: FanSettings;
+  source_state: "off" | "demo" | "live" | "failing";
+  problem?: string | null;
+  x_available: boolean;
+  /**
+   * @maxItems 200
+   */
+  comments: FanComment[];
+  summary: FanSummary;
+  poll?: FanPoll | null;
+  poll_on_air: boolean;
+  /**
+   * @maxItems 50
+   */
+  superchats: SuperChat[];
+  spotlight?: Spotlight | null;
+  /**
+   * @maxItems 10
+   */
+  spotlight_queue: Spotlight[];
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "CopilotFact".
+ */
+export interface CopilotFact {
+  label: string;
+  value: string;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "CopilotCompare".
+ */
+export interface CopilotCompare {
+  label: string;
+  home: string;
+  away: string;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "CopilotItem".
+ */
+export interface CopilotItem {
+  when: string;
+  title: string;
+  detail: string;
+  team?: "home" | "away" | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "CopilotCard".
+ */
+export interface CopilotCard {
+  kind: "match" | "player" | "head_to_head" | "play" | "history";
+  title: string;
+  subtitle?: string | null;
+  home?: string | null;
+  away?: string | null;
+  team?: "home" | "away" | null;
+  /**
+   * @maxItems 12
+   */
+  facts: CopilotFact[];
+  /**
+   * @maxItems 10
+   */
+  compare: CopilotCompare[];
+  /**
+   * @maxItems 12
+   */
+  items: CopilotItem[];
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "CopilotSource".
+ */
+export interface CopilotSource {
+  title: string;
+  url: string;
+  snippet: string;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "CopilotAnswer".
+ */
+export interface CopilotAnswer {
+  id: string;
+  question: string;
+  intent: "match" | "prediction" | "tactics" | "player" | "head_to_head" | "play" | "history" | "web" | "help";
+  answer: string;
+  /**
+   * @maxItems 3
+   */
+  cards: CopilotCard[];
+  /**
+   * @maxItems 5
+   */
+  sources: CopilotSource[];
+  /**
+   * @maxItems 4
+   */
+  followups: string[];
+  source: "agent" | "scripted";
+  searched: boolean;
+  problem?: string | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "CopilotInfo".
+ */
+export interface CopilotInfo {
+  model: boolean;
+  search: string;
+  matches_remembered: number;
 }

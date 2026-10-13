@@ -243,7 +243,7 @@ class Envelope(BaseModel):
         extra='forbid',
     )
     id: int
-    type: Literal['match_status', 'match_event', 'stats', 'pressure', 'key_moment', 'narrative', 'recap', 'overlay']
+    type: Literal['match_status', 'match_event', 'stats', 'pressure', 'key_moment', 'narrative', 'recap', 'overlay', 'play', 'tactics', 'prediction', 'explanation', 'pitch_scene', 'players', 'highlight', 'agent_run']
     match_id: str
     minute: int
     highlighted: bool
@@ -255,7 +255,7 @@ class SceneElement(BaseModel):
         extra='forbid',
     )
     id: constr(min_length=1, max_length=64)
-    type: Literal['scoreboard', 'pitch', 'narration', 'stats', 'banner', 'ticker', 'timeline', 'recap', 'replay', 'countdown', 'text', 'image', 'cameras']
+    type: Literal['scoreboard', 'pitch', 'narration', 'stats', 'banner', 'ticker', 'timeline', 'recap', 'replay', 'countdown', 'text', 'image', 'cameras', 'scorecard', 'chart', 'graph', 'prediction', 'insight', 'pitch3d', 'player', 'comments', 'poll', 'superchat', 'spotlight']
     x: int
     y: int
     width: int
@@ -568,3 +568,497 @@ class CallSeat(BaseModel):
     token: str
     expires_at: float
     service: Literal['acs', 'fake']
+
+
+class PlayEvent(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    match_id: str
+    minute: int
+    second: int
+    event_id: str
+    type: Literal['kickoff', 'pass', 'shot', 'goal', 'save', 'foul', 'yellow_card', 'red_card', 'corner', 'substitution', 'half_time', 'full_time']
+    team: Literal['home', 'away'] | None = None
+    player_id: str | None = None
+    x: float
+    y: float
+    zone: Literal['defensive_third', 'middle_third', 'attacking_third']
+    lane: Literal['left', 'centre', 'right']
+    phase: Literal['build_up', 'progression', 'final_third', 'set_piece', 'transition', 'defending', 'restart']
+    sequence: int
+    sequence_length: int
+    danger: confloat(ge=0.0, le=1.0)
+    outcome: Literal['goal', 'saved', 'off_target', 'blocked'] | None = None
+    completed: bool | None = None
+    player_in_id: str | None = None
+
+
+class TeamTactics(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    pressure: float
+    tempo: float
+    field_tilt: float
+    avg_sequence: float
+    lanes: list[float] = Field(..., max_length=3, min_length=3)
+    patterns: list[Literal['high_press', 'wing_overload_left', 'wing_overload_right', 'central_play', 'counter_attack', 'patient_build_up', 'direct_play', 'low_block']] = (
+        Field(..., max_length=4)
+    )
+
+
+class TacticalInsight(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    match_id: str
+    minute: int
+    home: TeamTactics
+    away: TeamTactics
+    rhythm: Literal['slow', 'steady', 'fast', 'frantic']
+    summary: str
+
+
+class NextAction(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    action: Literal['pass', 'shot', 'turnover']
+    probability: confloat(ge=0.0, le=1.0)
+
+
+class Prediction(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    match_id: str
+    minute: int
+    win_home: confloat(ge=0.0, le=1.0)
+    draw: confloat(ge=0.0, le=1.0)
+    win_away: confloat(ge=0.0, le=1.0)
+    next_goal_home: confloat(ge=0.0, le=1.0)
+    next_goal_away: confloat(ge=0.0, le=1.0)
+    possession: Literal['home', 'away'] | None = None
+    next_actions: list[NextAction] = Field(..., max_length=3)
+    cols: int
+    rows: int
+    danger: list[float]
+
+
+class Explanation(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    match_id: str
+    minute: int
+    subject_id: str
+    subject_kind: Literal['tactics', 'prediction', 'highlight']
+    mode: Literal['fan', 'analyst']
+    headline: constr(min_length=1)
+    why: constr(min_length=1)
+    evidence: list[str]
+    source: Literal['agent', 'scripted']
+    agent: str
+    team: Literal['home', 'away'] | None = None
+
+
+class Point3(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    x: float
+    y: float
+    z: float
+
+
+class ScenePlayer(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    team: Literal['home', 'away']
+    number: int
+    x: float
+    y: float
+    on_ball: bool
+    estimated: bool
+
+
+class DangerColumn(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    x: float
+    y: float
+    width: float
+    depth: float
+    team: Literal['home', 'away']
+    intensity: confloat(ge=0.0, le=1.0)
+
+
+class PassLane(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    from_x: float
+    from_y: float
+    to_x: float
+    to_y: float
+    team: Literal['home', 'away']
+    weight: confloat(ge=0.0, le=1.0)
+
+
+class PitchScene(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    match_id: str
+    minute: int
+    second: int
+    ball: Point3
+    trail: list[Point3] = Field(..., max_length=12)
+    players: list[ScenePlayer] = Field(..., max_length=30)
+    columns: list[DangerColumn] = Field(..., max_length=24)
+    lanes: list[PassLane] = Field(..., max_length=8)
+    camera: Literal['broadcast', 'tactical', 'attack_home', 'attack_away']
+    focus_x: float
+    focus_y: float
+
+
+class PlayerMetrics(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    player_id: str
+    team: Literal['home', 'away']
+    name: str
+    number: int
+    position: Literal['GK', 'DF', 'MF', 'FW']
+    on_pitch: bool
+    touches: int
+    passes: int
+    pass_accuracy: float
+    shots: int
+    shots_on_target: int
+    goals: int
+    xg: float
+    fouls: int
+    yellow_cards: int
+    red_cards: int
+    rating: confloat(ge=0.0, le=10.0)
+    heat: list[float]
+
+
+class PlayerReport(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    match_id: str
+    minute: int
+    cols: int
+    rows: int
+    players: list[PlayerMetrics] = Field(..., max_length=40)
+
+
+class Highlight(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    match_id: str
+    minute: int
+    kind: Literal['key', 'hidden']
+    category: Literal['goal', 'red_card', 'big_chance', 'momentum_swing', 'sustained_pressure', 'long_sequence', 'big_save', 'dangerous_turnover', 'tactical_foul', 'unsung_player']
+    team: Literal['home', 'away']
+    player_id: str | None = None
+    title: constr(min_length=1)
+    reason: constr(min_length=1)
+    score: confloat(ge=0.0, le=100.0)
+    moment_id: str | None = None
+    event_ids: list[str] = Field(..., max_length=20)
+
+
+class AgentRun(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    match_id: str
+    minute: int
+    agent: Literal['event_interpreter', 'tactical_analyst', 'prediction', 'explainability', 'visualization', 'player_tracking', 'highlights']
+    trigger: str
+    produced: str
+    count: conint(ge=0)
+    duration_ms: confloat(ge=0.0)
+    source: Literal['agent', 'scripted']
+    note: str
+
+
+class AgentTool(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    name: str
+    description: str
+
+
+class AgentSpec(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: Literal['event_interpreter', 'tactical_analyst', 'prediction', 'explainability', 'visualization', 'player_tracking', 'highlights']
+    name: str
+    description: str
+    instructions: str
+    triggers: list[str]
+    tools: list[AgentTool]
+    outputs: list[str]
+    upstream: list[Literal['event_interpreter', 'tactical_analyst', 'prediction', 'explainability', 'visualization', 'player_tracking', 'highlights']]
+    enabled: bool
+
+
+class AgentCatalog(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    agents: list[AgentSpec]
+    model: bool
+
+
+class MatchIntelligence(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    match_id: str
+    minute: int
+    plays: list[PlayEvent] = Field(..., max_length=10)
+    tactics: TacticalInsight | None = None
+    prediction: Prediction | None = None
+    explanations: list[Explanation] = Field(..., max_length=6)
+    pitch: PitchScene | None = None
+    player: PlayerMetrics | None = None
+    highlights: list[Highlight] = Field(..., max_length=40)
+    runs: list[AgentRun] = Field(..., max_length=20)
+
+
+class FanComment(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: constr(min_length=1, max_length=80)
+    platform: Literal['x', 'youtube', 'twitch', 'facebook', 'other']
+    author: constr(min_length=1, max_length=60)
+    handle: str | None = None
+    text: constr(min_length=1, max_length=280)
+    likes: conint(ge=0)
+    at: float
+    liked: bool
+    mood: Literal['positive', 'neutral', 'negative']
+    demo: bool
+
+
+class FanPollOption(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    text: constr(min_length=1, max_length=60)
+    votes: conint(ge=0)
+
+
+class FanPoll(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    question: constr(min_length=1, max_length=140)
+    options: list[FanPollOption] = Field(..., max_length=6, min_length=2)
+    state: Literal['open', 'closed']
+    opened_at: float
+    closes_at: float | None = None
+
+
+class SuperChat(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: constr(min_length=1, max_length=80)
+    platform: Literal['x', 'youtube', 'twitch', 'facebook', 'other']
+    name: constr(min_length=1, max_length=60)
+    amount: confloat(ge=0.01)
+    currency: constr(min_length=3, max_length=3)
+    message: constr(max_length=200)
+    tier: conint(ge=1, le=5)
+    at: float
+    demo: bool
+
+
+class Spotlight(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    kind: Literal['comment', 'superchat', 'message', 'winner', 'poll_result']
+    title: constr(max_length=80)
+    text: constr(max_length=280)
+    name: str | None = None
+    detail: str | None = None
+    tier: int | None = None
+    duration_s: conint(ge=3, le=60)
+    ends_at: float | None = None
+
+
+class FanMood(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    positive: float
+    neutral: float
+    negative: float
+
+
+class FanTopic(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    label: str
+    count: int
+
+
+class FanShare(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    platform: Literal['x', 'youtube', 'twitch', 'facebook', 'other']
+    count: int
+
+
+class FanRaised(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    currency: str
+    amount: float
+
+
+class FanSummary(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    text: str
+    per_minute: float
+    total: int
+    mood: FanMood
+    topics: list[FanTopic] = Field(..., max_length=6)
+    platforms: list[FanShare] = Field(..., max_length=5)
+    raised: list[FanRaised] = Field(..., max_length=5)
+
+
+class FanSettings(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    source: Literal['off', 'demo', 'x']
+    auto_superchat: bool
+
+
+class FanZone(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    revision: int
+    server_time: float
+    settings: FanSettings
+    source_state: Literal['off', 'demo', 'live', 'failing']
+    problem: str | None = None
+    x_available: bool
+    comments: list[FanComment] = Field(..., max_length=200)
+    summary: FanSummary
+    poll: FanPoll | None = None
+    poll_on_air: bool
+    superchats: list[SuperChat] = Field(..., max_length=50)
+    spotlight: Spotlight | None = None
+    spotlight_queue: list[Spotlight] = Field(..., max_length=10)
+
+
+class CopilotFact(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    label: str
+    value: str
+
+
+class CopilotCompare(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    label: str
+    home: str
+    away: str
+
+
+class CopilotItem(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    when: str
+    title: str
+    detail: str
+    team: Literal['home', 'away'] | None = None
+
+
+class CopilotCard(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['match', 'player', 'head_to_head', 'play', 'history']
+    title: str
+    subtitle: str | None = None
+    home: str | None = None
+    away: str | None = None
+    team: Literal['home', 'away'] | None = None
+    facts: list[CopilotFact] = Field(..., max_length=12)
+    compare: list[CopilotCompare] = Field(..., max_length=10)
+    items: list[CopilotItem] = Field(..., max_length=12)
+
+
+class CopilotSource(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    title: str
+    url: str
+    snippet: str
+
+
+class CopilotAnswer(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    question: str
+    intent: Literal['match', 'prediction', 'tactics', 'player', 'head_to_head', 'play', 'history', 'web', 'help']
+    answer: constr(min_length=1)
+    cards: list[CopilotCard] = Field(..., max_length=3)
+    sources: list[CopilotSource] = Field(..., max_length=5)
+    followups: list[str] = Field(..., max_length=4)
+    source: Literal['agent', 'scripted']
+    searched: bool
+    problem: str | None = None
+
+
+class CopilotInfo(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    model: bool
+    search: str
+    matches_remembered: int

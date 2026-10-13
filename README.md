@@ -5,6 +5,8 @@ Kickstream is live-streaming software for football, in the spirit of Streamlabs 
 ```
 simulator ──► analytics ──► narration ──► overlay ──► gateway ──SSE──► web
  Ingest       Interpret     Explain       Render      Personalize
+     └──────► agents ─────────────────────────────────────┘
+              seven match agents
 ```
 
 ## Run it
@@ -27,7 +29,7 @@ Open `http://127.0.0.1:5173`, the streaming home, press **Create a broadcast**, 
 | `/broadcasts/{id}` | One broadcast: its stats, recording player, key moments, sessions and reels |
 | `/broadcasts/{id}/studio` | That broadcast's studio: build and switch scenes, see the program as it goes out, run banners, and go live with it |
 | `/studio` | Opens the studio of the broadcast on air, or else of the current one; with neither, asks you to choose or create one |
-| `/match` | The match data: pitch, key moments, narratives and stats, in Fan or Analyst view |
+| `/match` | Match intelligence: the seven match agents and what each has found, with the match dashboard and overlay JSON as two of its views |
 | `/guest/{secret}` | A guest's page, opened from an invite link: check the camera and microphone, give a name, and join |
 
 Every streamer page has the same top bar. While the stream is on, its right side shows how long you have been live and the status of each destination. The sun and moon button switches between light and dark themes.
@@ -57,13 +59,104 @@ A streamer composes the picture in the studio, watches it in the **Program** pre
 | `http://127.0.0.1:5173/broadcasts/{id}/studio` | Arrange scenes on a 16:9 canvas, switch them, and control banners, the ticker, replays, countdowns and invite guests |
 | `http://127.0.0.1:5173/studio?output` | The scene that is on air, full window, with no controls. This is what Go live streams. To use another tool instead, such as an OBS browser source, point it here at 1920 × 1080 |
 
-- **Scenes** are saved canvases. Six templates are built in: Starting soon, Live match, Analyst desk, Break, Full-time and Interview. Drag and resize elements, or select one and use the arrow keys (Shift with the arrow keys resizes). Press **Switch** on a scene to put it on air.
+- **Scenes** are saved canvases. Eight templates are built in: Starting soon, Live match, Analyst desk, Break, Full-time, Interview, Match intelligence and Fan zone. Drag and resize elements, or select one and use the arrow keys (Shift with the arrow keys resizes). Press **Switch** on a scene to put it on air.
 - **Fan and Analyst scenes:** each scene's commentary is Fan, Analyst, or the studio default (set it with the selector above the editor). Live match is a Fan scene and Analyst desk an Analyst scene, so switching between them while live changes the program's narration from the Commentator's to the Tactical Analyst's.
 - **Banners** appear by themselves for goals and red cards. Any narration line can be sent to the banner from the Highlights tab, and the Banner tab takes your own text.
 - **Replays** animate the 20 seconds of play before a key moment on the pitch.
 - **Countdowns**: a start countdown starts the match and cuts to the Live scene at zero; a break cuts to the Break scene and returns to where you were.
 
+- **Widgets**: under **Add to this scene** on the Elements tab, one click adds a score card, chart, graph, prediction, "why it matters" card, 3D pitch, player card, comments, poll, superchats or spotlight. Added to the scene on air, it appears on the program at once. Select a widget to choose what it shows.
+- **Motion**: an element fades and rises in, fades out when removed, and glides when moved or resized; numbers count and bars ease to each new value. With the operating system's *reduce motion* setting on, they change at once.
+
 Scenes, settings and uploaded images are kept in `.data/` (set `KICKSTREAM_DATA_DIR` to move it). The program uses the on-air scene's commentary, or the **Default commentary** and language from the studio's Settings tab.
+
+## Match agents
+
+Seven agents work on every match. Each is declared the way a Copilot Studio agent is, with instructions, triggers, tools and the agents it is connected to, and the `/match` page shows each one that way, with its live output and its runs.
+
+| Agent | What it does |
+|---|---|
+| Event Interpreter | Converts each detection into a structured event: third, flank, phase of play, possession sequence and danger |
+| Tactical Analyst | Once a match minute: each side's pressure, tempo, field tilt and patterns (high press, wing overload, counter-attack and others), and the rhythm of the game |
+| Prediction Agent | Once a minute: win, draw and loss, each side's chance of scoring in the next ten minutes, what the side on the ball does next, and a danger grid |
+| Explainability Agent | Writes "why this matters", in Fan and Analyst wording, when the patterns change, the odds move by 12 points or a hidden event is found |
+| Visualization Agent | The data for the 3D pitch: the ball's flight, the players, danger columns, pass lanes and a camera hint |
+| Player Tracking Agent | Every player's touches, passing, shots, expected goals, rating and heat map; the page and the player card follow the one you choose |
+| Highlights Agent | Ranks the key moments, and finds hidden events: long passing moves, good saves, balls won high, tactical fouls and unsung players |
+
+Three things to know:
+
+- **There is no video here.** The synthetic match feed stands in for a detector's output. A real detector would publish to the same `events` topic.
+- **Only the ball and the player on it are known positions.** The Visualization Agent places the other players from the formation and the ball, and the 3D pitch draws them dashed and says so.
+- **The agents compute; one writes.** Only the Explainability Agent produces prose. Without a model it writes from templates. With the `KICKSTREAM_LLM_*` variables set, a Microsoft Agent Framework agent writes instead, for at most 20 explanations a match, falling back to the templates on any failure. Its text is English only.
+
+Any agent can be switched off on its page; the agents that listen to it then have less to work on. The switches are kept in `.data/agents.json`.
+
+| Endpoint | Use |
+|---|---|
+| `GET /api/agents` | The catalogue: each agent's instructions, triggers, tools, outputs, connections and whether it is on |
+| `PUT /api/agents/{id}` | `{enabled}`: switch one on or off |
+| `GET /api/matches/{id}/intelligence` | The latest output of every agent in one document; `?mode=analyst` for the analyst wording, `?player=` for the tracked player |
+| `GET /api/matches/{id}/stream`, `/socket` | The match stream, which also carries `play`, `tactics`, `prediction`, `explanation`, `pitch_scene`, `players`, `highlight` and `agent_run`. A page that joins late is replayed only the newest pitch scene and player report |
+
+## Ask Copilot
+
+The **Ask Copilot** button in the top bar of every streamer page opens a chat pane. It answers from the match being played and from the finished matches Kickstream has seen, and shows what it found as cards.
+
+| Ask about | For example | It answers from |
+|---|---|---|
+| The match | "What is the score?", "Who will win from here?", "What are the tactics?" | The score and stats, the Prediction Agent and the Tactical Analyst |
+| A player's record | "Tell me about Bellweather", "Who is the best player so far?", "Who scored?" | The Player Tracking Agent, and the player's totals over earlier matches |
+| Head to head | "Show me the head to head", "Compare Bellweather and Marrowby", "Compare the two best players" | Wins and results on record with today's numbers, or two players side by side |
+| A play card | "Show the last goal's play card", "Show a hidden highlight" | The Highlights Agent's pick, its commentary and the touches that led to it |
+| Play history | "Show the play history", "Bellweather play history", "What were the previous results?" | The match's key moments, one player's plays, or the results on record |
+
+- **The record is what Kickstream has seen.** The two clubs are fictional, so a head to head or a player's record counts the matches finished on this installation, kept in `.data/matches.json` (the newest 50). Before the first one finishes, it says there is nothing on record.
+- **Web search** is a switch under the question box, off until you turn it on. It is used only for a question the match cannot answer, and it sends that question to the search service. The default is Wikipedia, which needs no key; with `KICKSTREAM_TAVILY_API_KEY` set, Tavily searches the whole web instead. `KICKSTREAM_WEB_SEARCH=off` turns it off. The Tavily adapter is tested against its documented response shape and has not been run against Tavily itself.
+- **Wording**: without a model, answers are assembled from the recorded numbers. With the `KICKSTREAM_LLM_*` variables set, a Microsoft Agent Framework agent words each answer from those same facts and the web results, for at most 40 answers a match, falling back to the assembled answer on any failure. The cards never come from the model.
+- Answers are in English. The conversation is kept while the page is open.
+
+| Endpoint | Use |
+|---|---|
+| `GET /api/copilot` | Whether a model words the answers, which search service is used, and how many matches are on record |
+| `POST /api/copilot/ask` | `{question, mode?, web?, match_id?}`: the answer, its cards, any web sources and questions to ask next. Without `match_id` it answers about the current match |
+
+## Fan zone
+
+The studio's **Fans** tab is where the audience comes in. Fans stay on the platforms; their comments reach Kickstream through a source.
+
+- **Comments**: the newest 200, each with its platform. **Like** one to keep it and mark it on screen, or put it on the spotlight.
+- **Quick summary**: comments a minute, the mood, the topics most mentioned, each platform's share and what superchats have raised, with one sentence saying so. The mood is read from a short word list; it is a guide, not a measure.
+- **Poll**: one at a time, two to six options, timed or closed by hand. Fans vote by commenting the option's number; one vote per account, the last one counting. Switch **On screen** to show it.
+- **Superchats**: the supporter's name, amount and message, coloured by size. Fans pay on the platform; Kickstream shows who did and takes no money itself. Add one by hand when a payment reached you another way.
+- **Quick actions**: a custom message, pick a winner (from the commenters, the poll's voters or the supporters), show the poll's result, thank the last supporter, clear the screen.
+
+One thing is on screen at a time and the rest wait their turn. A spotlight or poll put on screen appears on any scene; a scene with a Spotlight or Poll widget shows it there.
+
+| Source | Use |
+|---|---|
+| Demo feed | Made-up fans, for trying the fan zone. Everything from it is marked **Demo**, in the studio and on the program. This is the source a new installation starts on |
+| X | Recent posts matching a search, read with your own X API access. Set the two variables below; how often X may be asked depends on your access tier. This adapter is tested against X's documented response shape and has not been run against X itself |
+| Any other platform | A bridge of your own posts comments and superchats to `POST /api/fans/ingest` |
+
+| Variable | Meaning |
+|---|---|
+| `KICKSTREAM_X_BEARER_TOKEN` | An X API v2 app-only bearer token |
+| `KICKSTREAM_X_QUERY` | The search whose posts are the comments, for example `#MyStream -is:retweet` |
+
+| Endpoint | Use |
+|---|---|
+| `GET /api/fans`, `/stream`, `/socket` | The fan zone, once or live |
+| `PUT /api/fans/settings` | `{source, auto_superchat}`: `off`, `demo` or `x`, and whether each new superchat goes on screen by itself |
+| `POST /api/fans/comments/{id}/like`, `/spotlight` | Like a comment, or put it on screen |
+| `POST /api/fans/poll`, `/poll/close`, `/poll/announce`; `PUT /api/fans/poll/air`; `DELETE /api/fans/poll` | Run a poll: `{question, options, minutes?}` |
+| `POST /api/fans/superchats`, `/superchats/{id}/spotlight` | Add one by hand: `{name, amount, currency, message}`; thank one on screen |
+| `POST /api/fans/spotlight`, `DELETE /api/fans/spotlight` | A custom message: `{title?, text, duration_s?}`; take off what is on screen |
+| `POST /api/fans/winner` | `{pool}`: `commenters`, `voters` or `supporters` |
+| `POST /api/fans/ingest` | `{comments: [{id, platform, author, text, handle?, likes?}], superchats: [{id, platform, name, amount, currency, message?}]}` |
+| `DELETE /api/fans` | Clear comments, the poll and superchats |
+
+The fan zone is kept in `.data/fans.json`. What fans write is cut to length and only ever shown as plain text.
 
 ## Going live
 
@@ -109,7 +202,7 @@ On an ended broadcast's page, **Generate reels** cuts up to four 15-second verti
 
 ## Guests
 
-In a broadcast's studio, the **People** panel invites guests by link, as on StreamYard. Each invite has a role:
+In a broadcast's studio, the **People** tab invites guests by link, as on StreamYard. Each invite has a role:
 
 | Role | Camera and mic | On stage | Studio |
 |---|---|---|---|
@@ -155,6 +248,9 @@ A co-host can do everything you can in the studio: go live, end or delete the br
 | `services/pipeline/kickstream/` | The five stages, the ports they depend on, and the adapters behind those ports |
 | `services/pipeline/kickstream/app.py` | The composition root: the only place adapters are chosen |
 | `services/pipeline/kickstream/people/` | Invites, the stage and call rooms for guests |
+| `services/pipeline/kickstream/agents/` | The seven match agents, one module each, and the orchestrator that routes payloads to them |
+| `services/pipeline/kickstream/fans/` | The fan zone: comments, the summary, polls, superchats and the spotlight |
+| `services/pipeline/kickstream/copilot/` | Ask Copilot: placing a question, answering it from the match and the archive, and the archive of finished matches |
 | `apps/web/` | The React and Fluent UI web app: home, broadcasts, studio, program and match data |
 | `docs/superpowers/` | Design spec and implementation plan |
 
@@ -165,11 +261,11 @@ Stages talk only through the event bus and the contracts, and never import one a
 ```bash
 pnpm test:api                         # pipeline unit and integration tests
 pnpm test:web                         # web unit and component tests
-(cd apps/web && pnpm e2e)             # home, broadcasts and reels, studio, output, guests and match data, in a real browser
+(cd apps/web && pnpm e2e)             # home, broadcasts and reels, studio, output, guests, agents, fan zone, Ask Copilot and match data, in a real browser
 (cd apps/web && pnpm e2e:acs)         # guests over Azure; runs only with KICKSTREAM_ACS_CONNECTION_STRING in .env
 ```
 
-No test calls a live model.
+No test calls a live model or a live platform.
 
 The browser tests start their own pipeline (port 8010) and dev server (port 5183) with a fresh data directory, so they never touch a Kickstream you have running.
 

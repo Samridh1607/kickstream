@@ -46,6 +46,14 @@ async def test_one_match_flows_through_all_five_stages(tmp_path):
         "narrative",
         "recap",
         "overlay",
+        "play",
+        "tactics",
+        "prediction",
+        "explanation",
+        "pitch_scene",
+        "players",
+        "highlight",
+        "agent_run",
     }
 
     moments = [item.payload for item in log if item.type == "key_moment"]

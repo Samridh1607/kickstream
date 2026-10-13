@@ -9,6 +9,7 @@ const PUBLIC_HOST = "guests.example";
 
 test("the streamer invites guests by link, puts a speaker on stage, and revokes the invite", async ({ page, browser, request }) => {
   await openStudio(page, request, `Guests test ${Date.now()}`);
+  await page.getByRole("tab", { name: "People" }).click();
   const people = page.getByRole("region", { name: "People" });
   await people.getByLabel("Name (optional)").fill("Sam");
   await people.getByRole("button", { name: "Invite", exact: true }).click();

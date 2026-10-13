@@ -2,11 +2,12 @@ import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 
 import { Pitch } from "../components/Pitch";
 import { StatsPanel } from "../components/StatsPanel";
 import { Timeline } from "../components/Timeline";
-import type { Banner, MatchEvent, Replay, SceneElement, Studio } from "../contracts";
+import type { Banner, FanZone, MatchEvent, Replay, SceneElement, Studio } from "../contracts";
 import { type Language, t } from "../i18n";
 import type { MatchData } from "../stream/store";
 import { fetchReplay, imageUrl } from "./api";
 import { countdownLabel, formatRemaining, tickerItems } from "./format";
+import { isWidget, WidgetView } from "./widgets";
 
 /** Someone on stage, as the cameras element draws them. */
 export interface CameraTile {
@@ -22,6 +23,8 @@ export interface ProgramData {
   studio: Studio;
   now: number;
   language: Language;
+  /** The fan zone: comments, the poll, superchats and the spotlight. Absent until it has loaded. */
+  fans?: FanZone | null;
   /** The people on stage, in order. */
   cameras?: readonly CameraTile[];
   /** Puts a person's video into the element; returns what takes it out. Absent where there is no call. */
@@ -226,6 +229,9 @@ function CamerasView({ data, names }: { data: ProgramData; names: boolean }) {
 export function ElementView({ element, data }: { element: SceneElement; data: ProgramData }) {
   const { match, studio, language } = data;
   const props = element.props as Record<string, unknown>;
+  if (isWidget(element.type)) {
+    return <WidgetView element={{ ...element, type: element.type }} data={{ match, fans: data.fans ?? null, now: data.now, language }} />;
+  }
   switch (element.type) {
     case "scoreboard":
       return <Scoreboard match={match} />;

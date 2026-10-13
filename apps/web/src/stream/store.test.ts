@@ -1,5 +1,6 @@
 import {
-  envelope, matchEvent, moment, narrative, overlay, pressure, recap, stats, status,
+  agentRun, envelope, explanation, highlight, matchEvent, moment, narrative, overlay, pitchScene, play, playerReport, prediction, pressure,
+  recap, stats, status, tactics,
 } from "../test/fixtures";
 import { EMPTY, latestOverlays, reduce, useMatch } from "./store";
 
@@ -87,4 +88,51 @@ test("the match clock follows the newest envelope and never runs backwards", () 
   expect(data.minute).toBe(37);
   data = reduce(data, { ...envelope(3, "narrative", narrative()), minute: 23 });
   expect(data.minute).toBe(37);
+});
+
+test("what the match agents find lands in its own slices", () => {
+  const data = apply(
+    envelope(1, "play", play()),
+    envelope(2, "tactics", tactics()),
+    envelope(3, "prediction", prediction()),
+    envelope(4, "explanation", explanation({ id: "x1" })),
+    envelope(5, "explanation", explanation({ id: "x2" })),
+    envelope(6, "pitch_scene", pitchScene()),
+    envelope(7, "players", playerReport()),
+    envelope(8, "highlight", highlight(), true),
+    envelope(9, "agent_run", agentRun({ id: "r1" })),
+    envelope(10, "agent_run", agentRun({ id: "r2" })),
+  );
+  expect(data.plays).toHaveLength(1);
+  expect(data.tactics?.rhythm).toBe("fast");
+  expect(data.prediction?.win_home).toBe(0.5);
+  expect(data.explanations.map((item) => item.id)).toEqual(["x2", "x1"]); // newest first
+  expect(data.pitch?.camera).toBe("attack_home");
+  expect(data.players?.players).toHaveLength(2);
+  expect(data.highlights).toEqual([{ ...highlight(), highlighted: true }]);
+  expect(data.runs.map((run) => run.id)).toEqual(["r2", "r1"]);
+});
+
+test("stats and predictions build one point a minute for the graphs, in order, whichever arrives first", () => {
+  const data = apply(
+    envelope(1, "prediction", prediction({ minute: 2, win_home: 0.6, draw: 0.25, win_away: 0.15 })),
+    envelope(2, "stats", { ...stats({ xg: 0.4 }, { xg: 0.1 }, 0.3), minute: 2 }),
+    envelope(3, "stats", { ...stats({ xg: 0.2 }, { xg: 0.1 }, -0.1), minute: 1 }),
+    envelope(4, "stats", { ...stats({ xg: 0.5 }, { xg: 0.1 }, 0.5), minute: 2 }),
+  );
+  expect(data.series).toEqual([
+    { minute: 1, momentum: -0.1, xgHome: 0.2, xgAway: 0.1, winHome: null, draw: null, winAway: null },
+    { minute: 2, momentum: 0.5, xgHome: 0.5, xgAway: 0.1, winHome: 0.6, draw: 0.25, winAway: 0.15 },
+  ]);
+});
+
+test("only the latest structured events and runs are kept", () => {
+  const many = Array.from({ length: 100 }, (_, index) => [
+    envelope(index * 2 + 1, "play", play({ id: `y${index}` })), envelope(index * 2 + 2, "agent_run", agentRun({ id: `r${index}` })),
+  ]).flat();
+  const data = apply(...many);
+  expect(data.plays).toHaveLength(40);
+  expect(data.plays.at(-1)?.id).toBe("y99");
+  expect(data.runs).toHaveLength(80);
+  expect(data.runs[0].id).toBe("r99");
 });

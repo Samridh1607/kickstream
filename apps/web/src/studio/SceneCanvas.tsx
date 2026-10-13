@@ -1,6 +1,7 @@
 import { FluentProvider } from "@fluentui/react-components";
 import { type CSSProperties, type KeyboardEvent, type PointerEvent, useRef, useState } from "react";
 import type { Scene, SceneElement } from "../contracts";
+import { EASE, leave, MotionStyles, rise, usePresence } from "../motion/motion";
 import { darkTheme } from "../theme";
 import { ElementView, type ProgramData } from "./elements";
 import { CANVAS, GRID, moveBy, type Rect, rectOf, resizeBy, sameRect } from "./geometry";
@@ -28,7 +29,9 @@ interface Gesture {
 const ARROWS: Record<string, [number, number]> = {
   ArrowLeft: [-GRID, 0], ArrowRight: [GRID, 0], ArrowUp: [0, -GRID], ArrowDown: [0, GRID],
 };
-const TICKER_KEYFRAMES = "@keyframes kickstream-ticker { from { transform: translateX(0); } to { transform: translateX(-100%); } }";
+// An element moved or resized from the studio glides to its new place on the program.
+const GLIDE = `left 450ms ${EASE}, top 450ms ${EASE}, width 450ms ${EASE}, height 450ms ${EASE}, opacity 300ms ease`;
+const elementId = (element: SceneElement) => element.id;
 const HANDLE: CSSProperties = { position: "absolute", inset: 0, cursor: "move", touchAction: "none", background: "transparent" };
 const CORNER: CSSProperties = {
   position: "absolute", right: -14, bottom: -14, width: 40, height: 40, borderRadius: 8, cursor: "nwse-resize",
@@ -44,6 +47,8 @@ export function SceneCanvas({ scene, data, scale, editable = false, selectedId =
   const [draft, setDraft] = useState<{ id: string; rect: Rect } | null>(null);
   const gesture = useRef<Gesture | null>(null);
   const drawn = scene.elements.filter((element) => editable || element.visible).sort((a, b) => a.layer - b.layer);
+  // An element taken off the scene stays for a moment, to fade out instead of vanishing.
+  const shown = usePresence(drawn, elementId);
 
   const commit = (id: string, rect: Rect) =>
     onChange?.(scene.elements.map((element) => (element.id === id ? { ...element, ...rect } : element)));
@@ -91,16 +96,21 @@ export function SceneCanvas({ scene, data, scale, editable = false, selectedId =
     <FluentProvider theme={darkTheme} data-testid="scene-canvas"
       style={{ position: "relative", overflow: "hidden", width: CANVAS.width * scale, height: CANVAS.height * scale, backgroundColor: "#0B1220", flexShrink: 0 }}
       onPointerDown={editable ? () => onSelect?.(null) : undefined}>
-      <style>{TICKER_KEYFRAMES}</style>
+      <MotionStyles />
       <div style={{ position: "relative", width: CANVAS.width, height: CANVAS.height, transform: `scale(${scale})`, transformOrigin: "0 0" }}>
-        {drawn.map((element) => {
-          const rect = draft?.id === element.id ? draft.rect : rectOf(element);
+        {shown.map(({ item: element, leaving }) => {
+          const dragged = draft?.id === element.id;
+          const rect = dragged ? draft.rect : rectOf(element);
           const selected = element.id === selectedId;
           return (
-            <div key={element.id} data-testid={`element-${element.type}`} data-element-id={element.id}
-              style={{ position: "absolute", left: rect.x, top: rect.y, width: rect.width, height: rect.height, zIndex: element.layer, opacity: editable && !element.visible ? 0.35 : 1 }}>
+            <div key={element.id} data-testid={`element-${element.type}`} data-element-id={element.id} className="ks-motion"
+              style={{
+                position: "absolute", left: rect.x, top: rect.y, width: rect.width, height: rect.height, zIndex: element.layer,
+                opacity: editable && !element.visible ? 0.35 : 1, transition: dragged ? "none" : GLIDE,
+                animation: leaving ? leave : rise(), pointerEvents: leaving ? "none" : undefined,
+              }}>
               <ElementView element={element} data={data} />
-              {editable && (
+              {editable && !leaving && (
                 <>
                   <span style={LABEL}>{element.type}</span>
                   <div role="button" tabIndex={0} aria-label={`${element.type} element`} aria-pressed={selected}

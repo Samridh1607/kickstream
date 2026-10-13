@@ -41,6 +41,10 @@ REPLAY_SECONDS = 8.0
 REPLAY_WINDOW_SECONDS = 20  # match time shown by a replay, ending at the moment
 DEFAULT_BANNER_SECONDS = 8
 HALF_TIME_BREAK_MINUTES = 2
+CHART_METRICS = ("overview", "possession", "shots", "xg", "tactics")
+GRAPH_METRICS = ("momentum", "xg", "win_probability")
+PREDICTION_VIEWS = ("outcome", "next_goal", "next_action")
+PITCH_CAMERAS = ("auto", "broadcast", "tactical")
 ELEMENT_TYPES = frozenset(typing.get_args(SceneElement.model_fields["type"].annotation))
 
 
@@ -97,6 +101,21 @@ def _normalize_props(type_: str, props: dict) -> dict:
         }
     if type_ == "cameras":
         return {"names": props.get("names", True) is not False}
+    if type_ == "chart":
+        return {"metric": _choice_prop(props, "metric", "overview", CHART_METRICS)}
+    if type_ == "graph":
+        return {"metric": _choice_prop(props, "metric", "momentum", GRAPH_METRICS)}
+    if type_ == "prediction":
+        return {"view": _choice_prop(props, "view", "outcome", PREDICTION_VIEWS)}
+    if type_ == "pitch3d":
+        return {"camera": _choice_prop(props, "camera", "auto", PITCH_CAMERAS)}
+    if type_ == "player":
+        player_id = props.get("player_id")
+        return {"player_id": player_id[:64] if isinstance(player_id, str) and player_id else None}
+    if type_ == "comments":
+        return {"lines": _int_prop(props, "lines", 4, 1, 8), "liked_only": props.get("liked_only") is True}
+    if type_ == "superchat":
+        return {"lines": _int_prop(props, "lines", 3, 1, 6)}
     return {}
 
 

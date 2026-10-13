@@ -38,7 +38,7 @@ beforeEach(() => {
 });
 
 async function joined(matchId = "m-1", query = "mode=fan&lang=en") {
-  renderUi(<App eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} />);
+  renderUi(<App eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} initialView="match" />);
   await waitFor(() => expect(lastUrl()).toBe(`/api/matches/${matchId}/stream?${query}`), { timeout: 10_000 });
   const source = FakeEventSource.last;
   act(() => {
@@ -61,7 +61,7 @@ test("a viewer who opens the dashboard joins the running match", async () => {
 
 test("with no match running, starting one connects to it", async () => {
   const calls = serve({ current: [null], started: "m-5" });
-  renderUi(<App eventSource={FakeEventSourceCtor} />);
+  renderUi(<App eventSource={FakeEventSourceCtor} initialView="match" />);
   await screen.findByText("No match is running. Start one to begin.");
   expect(FakeEventSource.instances).toHaveLength(0);
   fireEvent.click(screen.getByRole("button", { name: "Start match" }));
@@ -71,7 +71,7 @@ test("with no match running, starting one connects to it", async () => {
 
 test("a failed start tells the viewer", async () => {
   serve({ current: [null], failStart: true });
-  renderUi(<App eventSource={FakeEventSourceCtor} />);
+  renderUi(<App eventSource={FakeEventSourceCtor} initialView="match" />);
   fireEvent.click(await screen.findByRole("button", { name: "Start match" }));
   expect(await screen.findByText("The match could not be started. Try again.")).toBeTruthy();
 });
@@ -139,7 +139,7 @@ test("selecting a narrative shows how it was made", async () => {
 test("the overlay tab shows broadcast JSON for the match", async () => {
   serve({ current: ["m-1"] });
   const source = await joined();
-  fireEvent.click(screen.getByRole("tab", { name: "Overlay" }));
+  fireEvent.click(screen.getByRole("button", { name: "Overlay" }));
   expect(screen.getByText("Overlays appear here once the match starts.")).toBeTruthy();
   const lowerThird = {
     id: "m-1-o1", match_id: "m-1", minute: 23, kind: "lower_third", language: "en", duration_ms: 6000,
@@ -158,7 +158,7 @@ test("the match clock advances between goals", async () => {
 
 test("if the server is not up yet, the dashboard keeps trying until it is", async () => {
   serve({ current: ["m-1"], currentFailures: 2 });
-  renderUi(<App eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} />);
+  renderUi(<App eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} initialView="match" />);
   await screen.findByText("Reconnecting");
   await waitFor(() => expect(lastUrl()).toBe("/api/matches/m-1/stream?mode=fan&lang=en"));
 });
