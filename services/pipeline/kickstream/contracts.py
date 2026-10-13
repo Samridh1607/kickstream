@@ -412,3 +412,41 @@ class Audience(BaseModel):
     questions: list[Question] = Field(..., max_length=250)
     draft: Draft | None = None
     qa: QaOnAir | None = None
+
+
+class Destination(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: constr(min_length=1, max_length=64)
+    name: constr(min_length=1, max_length=40)
+    platform: Literal['youtube', 'x', 'facebook', 'twitch', 'custom', 'file']
+    url: constr(max_length=300)
+    enabled: bool
+    key_hint: constr(max_length=4)
+    status: Literal['idle', 'connecting', 'live', 'retrying', 'failed']
+    reason: str | None = None
+    live_since: float | None = None
+
+
+class Recording(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    file: constr(min_length=1, max_length=80)
+    size_bytes: conint(ge=0)
+    made_at: float
+
+
+class Output(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    revision: int
+    server_time: float
+    destinations: list[Destination] = Field(..., max_length=10)
+    quality: Literal['720p30', '1080p30']
+    state: Literal['idle', 'starting', 'live', 'stopping']
+    started_at: float | None = None
+    problem: str | None = None
+    recordings: list[Recording] = Field(..., max_length=20)

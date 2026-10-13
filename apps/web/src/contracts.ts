@@ -472,3 +472,47 @@ export interface Audience {
   draft?: Draft | null;
   qa?: QaOnAir | null;
 }
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Destination".
+ */
+export interface Destination {
+  id: string;
+  name: string;
+  platform: "youtube" | "x" | "facebook" | "twitch" | "custom" | "file";
+  url: string;
+  enabled: boolean;
+  key_hint: string;
+  status: "idle" | "connecting" | "live" | "retrying" | "failed";
+  reason?: string | null;
+  live_since?: number | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Recording".
+ */
+export interface Recording {
+  file: string;
+  size_bytes: number;
+  made_at: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Output".
+ */
+export interface Output {
+  revision: number;
+  server_time: number;
+  /**
+   * @maxItems 10
+   */
+  destinations: Destination[];
+  quality: "720p30" | "1080p30";
+  state: "idle" | "starting" | "live" | "stopping";
+  started_at?: number | null;
+  problem?: string | null;
+  /**
+   * @maxItems 20
+   */
+  recordings: Recording[];
+}

@@ -410,6 +410,47 @@
         "draft": { "anyOf": [{ "$ref": "#/$defs/Draft" }, { "type": "null" }], "default": null },
         "qa": { "anyOf": [{ "$ref": "#/$defs/QaOnAir" }, { "type": "null" }], "default": null }
       }
+    },
+    "Destination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "platform", "url", "enabled", "key_hint", "status"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "platform": { "enum": ["youtube", "x", "facebook", "twitch", "custom", "file"] },
+        "url": { "type": "string", "maxLength": 300 },
+        "enabled": { "type": "boolean" },
+        "key_hint": { "type": "string", "maxLength": 4 },
+        "status": { "enum": ["idle", "connecting", "live", "retrying", "failed"] },
+        "reason": { "type": ["string", "null"], "default": null },
+        "live_since": { "type": ["number", "null"], "default": null }
+      }
+    },
+    "Recording": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "size_bytes", "made_at"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "made_at": { "type": "number" }
+      }
+    },
+    "Output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "server_time", "destinations", "quality", "state", "recordings"],
+      "properties": {
+        "revision": { "type": "integer" },
+        "server_time": { "type": "number" },
+        "destinations": { "type": "array", "items": { "$ref": "#/$defs/Destination" }, "maxItems": 10 },
+        "quality": { "enum": ["720p30", "1080p30"] },
+        "state": { "enum": ["idle", "starting", "live", "stopping"] },
+        "started_at": { "type": ["number", "null"], "default": null },
+        "problem": { "type": ["string", "null"], "default": null },
+        "recordings": { "type": "array", "items": { "$ref": "#/$defs/Recording" }, "maxItems": 20 }
+      }
     }
   }
 }

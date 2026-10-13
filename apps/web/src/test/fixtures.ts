@@ -1,5 +1,5 @@
 import type {
-  Audience, Poll, Question,
+  Audience, Destination, Output, Poll, Question,
   Envelope, KeyMoment, MatchEvent, MatchStatus, Narrative, Overlay, PressureSnapshot, Recap, StatsSnapshot,
   Scene, SceneElement, Studio, TeamSheet, TeamStats,
 } from "../contracts";
@@ -153,4 +153,14 @@ export const fanQuestion = (over: Partial<Question> = {}): Question => ({
 
 export const audience = (over: Partial<Audience> = {}): Audience => ({
   revision: 1, server_time: 1000, poll: null, poll_on_air: false, history: [], questions: [], draft: null, qa: null, ...over,
+});
+
+export const destination = (over: Partial<Destination> = {}): Destination => ({
+  id: "d1", name: "YouTube", platform: "youtube", url: "rtmp://a.rtmp.youtube.com/live2", enabled: true,
+  key_hint: "wxyz", status: "idle", reason: null, live_since: null, ...over,
+});
+
+export const output = (over: Partial<Output> = {}): Output => ({
+  revision: 1, server_time: 1000, destinations: [], quality: "720p30", state: "idle", started_at: null,
+  problem: null, recordings: [], ...over,
 });
