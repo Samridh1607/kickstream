@@ -37,7 +37,7 @@ Four Microsoft Agent Framework agents do the writing: a Commentator and a Tactic
 
 ## Studio
 
-A streamer composes the picture at `/studio` and captures `/program`.
+A streamer composes the picture at `/studio` and sends `/program` out from its Output tab (see Going live below), or captures it with a streaming tool.
 
 | Page | Use |
 |---|---|
@@ -51,7 +51,23 @@ A streamer composes the picture at `/studio` and captures `/program`.
 
 Scenes, settings and uploaded images are kept in `.data/` (set `KICKSTREAM_DATA_DIR` to move it). The program page shows the match in the mode and language chosen in the studio's Settings tab.
 
-Kickstream does not send video anywhere itself yet. To go live, capture `/program` with a streaming tool.
+## Going live
+
+The studio's **Output** tab sends the program to several platforms at once.
+
+1. On the platform (YouTube Studio, X Media Studio, Facebook Live Producer, Twitch), create a live stream. It shows a server address and a stream key.
+2. In the Output tab, choose the platform and paste the key. YouTube, Facebook and Twitch addresses are filled in; X gives each account its own, so paste that too. **Record to file** needs neither and writes an MP4 to `.data/recordings/`, which is a good first test.
+3. Press **Go live**. Each destination shows connecting, live, retrying or failed. One failing does not stop the others.
+
+Kickstream opens the program page in a hidden browser, encodes it once with ffmpeg, and copies that stream to every destination. It needs [ffmpeg](https://ffmpeg.org) and a Chromium-based browser (Microsoft Edge is used when present).
+
+| Variable | Meaning |
+|---|---|
+| `KICKSTREAM_PROGRAM_URL` | Where the hidden browser opens the program page (default `http://127.0.0.1:5173/program`) |
+| `KICKSTREAM_BROWSER` | Path to a Chromium-based browser, when Edge is not wanted or not found |
+| `KICKSTREAM_FFMPEG` | Path to ffmpeg, when it is not on the `PATH` |
+
+Stream keys are kept in `.data/output-keys.json` and are never sent back to a page. The studio has no sign-in, so anyone who can reach it can stream to your channels: keep the pipeline reachable from your machine only. The stream carries no sound yet. Do not run the pipeline with `--reload` when going live; on Windows it cannot start ffmpeg that way.
 
 Pages follow live data over WebSockets, which the pipeline accepts only from pages on the host it was reached at. Behind a reverse proxy that rewrites the `Host` header, list the public hostnames in `KICKSTREAM_ALLOWED_HOSTS` (comma-separated, for example `kick.example,www.kick.example`).
 

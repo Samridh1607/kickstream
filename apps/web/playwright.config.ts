@@ -7,7 +7,8 @@ const NO_MODEL = { KICKSTREAM_LLM_BASE_URL: "", KICKSTREAM_LLM_MODEL: "", KICKST
 const API = "http://127.0.0.1:8010";
 const WEB = "http://127.0.0.1:5183";
 // A fresh data directory for every run, so one run's scenes, polls and questions never meet the next.
-const TEST_SERVER = { ...NO_MODEL, KICKSTREAM_DATA_DIR: `.data-e2e/${Date.now()}` };
+// The hidden browser must open the program page on the tests' own dev server, not a developer's.
+const TEST_SERVER = { ...NO_MODEL, KICKSTREAM_DATA_DIR: `.data-e2e/${Date.now()}`, KICKSTREAM_PROGRAM_URL: `${WEB}/program` };
 
 export default defineConfig({
   testDir: "e2e",
