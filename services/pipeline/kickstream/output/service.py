@@ -331,10 +331,9 @@ class OutputService:
 
     async def _attempt(self, destination_id: str, buffer: _Buffer) -> tuple[bool, str]:
         """Run one sender until it ends. Returns whether it was ever live, and why it ended."""
-        destination = next(d for d in self._state.doc.destinations if d.id == destination_id)
-        key = self._state.keys.get(destination_id, "")
-        target = rules.target_for(destination, key, self._recordings_dir, self._now())
-        sender = self._new_sender()
+        sender: Sender | None = None
+        target: Target | None = None
+        key = ""
         was_live = False
 
         def on_live() -> None:
@@ -342,9 +341,13 @@ class OutputService:
             was_live = True
             self._mark(destination_id, "live")
 
-        self._mark(destination_id, "connecting")
         reason = ""
         try:
+            destination = next(d for d in self._state.doc.destinations if d.id == destination_id)
+            key = self._state.keys.get(destination_id, "")
+            target = rules.target_for(destination, key, self._recordings_dir, self._now())
+            sender = self._new_sender()
+            self._mark(destination_id, "connecting")
             await sender.start(target, on_live)
             reason = await self._deliver(buffer, sender)
         except OutputFailure as exc:
@@ -353,12 +356,17 @@ class OutputService:
             log.error("a sender failed unexpectedly (%s)", type(exc).__name__)
             reason = "The connection failed unexpectedly."
         finally:
+            await self._uninterrupted(self._clean_up(sender, target))
+        return was_live, rules.redact(reason or "The connection closed.", key)
+
+    async def _clean_up(self, sender: Sender | None, target: Target | None) -> None:
+        if sender is not None:
             try:
                 await sender.stop()
             except Exception as exc:
                 log.error("a sender could not be stopped (%s)", type(exc).__name__)
+        if target is not None:
             self._list_recording(target)
-        return was_live, rules.redact(reason or "The connection closed.", key)
 
     async def _deliver(self, buffer: _Buffer, sender: Sender) -> str:
         """Pass the stream on until the sender ends or falls too far behind. Returns why."""

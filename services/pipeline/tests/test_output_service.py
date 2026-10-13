@@ -421,3 +421,41 @@ async def test_one_part_failing_to_stop_does_not_stop_the_others_being_stopped(k
     await kit.service.stop()
     assert kit.doc().state == "idle"
     assert kit.capture.stopped == 1 and kit.encoder.stopped == 1 and kit.senders[0].stopped
+
+
+@pytest.mark.parametrize("platform", ["youtube", "file"])
+async def test_stopping_while_a_dropped_sender_is_being_stopped_still_stops_it(kit, platform):
+    if platform == "youtube":
+        add_youtube(kit)
+    else:
+        kit.service.add_destination("Recording", "file", "", "")
+    kit.sender_options = {"stop_takes": 0.05}
+    await kit.live()
+    await until(lambda: len(kit.senders) == 1)
+    kit.senders[0].exit("dropped")
+    await asyncio.sleep(0.01)  # the relay is now inside its sender's slow stop
+    await kit.service.stop()
+    assert kit.senders[0].stopped and kit.doc().state == "idle"
+    assert kit.capture.stopped == 1 and kit.encoder.stopped == 1
+    assert len(kit.doc().recordings) == (1 if platform == "file" else 0)
+
+
+async def test_a_sender_that_cannot_even_be_made_is_retried(tmp_path):
+    made: list[FakeSender] = []
+    calls = []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("no sender for rtmp://x/" + KEY)
+        return FakeSender(made)
+
+    kit = Kit(tmp_path, new_sender=flaky)
+    add_youtube(kit)
+    kit.sleeps.gate.clear()
+    await kit.live()
+    await until(lambda: kit.status() == "retrying")
+    assert kit.doc().destinations[0].reason and KEY not in kit.doc().destinations[0].reason
+    kit.sleeps.gate.set()
+    await until(lambda: len(made) == 1 and kit.status() == "connecting")
+    await kit.service.stop()
