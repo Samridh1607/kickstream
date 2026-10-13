@@ -17,13 +17,29 @@ needs_browser = pytest.mark.skipif(
 )
 SLEEPER = [sys.executable, "-c", "import time; time.sleep(120)"]
 
-CAPTURES = """<!doctype html><title>t</title><script>
+CAPTURES = """<!doctype html><title>t</title><body style="margin:0"><div id="tick" style="height:100vh"></div><script>
+// A still page may send no picture at all; this one changes, as the real program does with its clock.
+setInterval(() => { tick.style.background = `hsl(${Date.now() % 360} 50% 30%)`; }, 100);
+const wanted = new URLSearchParams(location.search).get("size") || "1280x720";
 window.__kickstreamStartCapture = async () => {
-  if (window.innerWidth !== 1280 || window.innerHeight !== 720) throw new Error(`size ${innerWidth}x${innerHeight}`);
+  const [width, height] = wanted.split("x").map(Number);
+  if (window.devicePixelRatio !== 1) throw new Error(`pixel ratio ${devicePixelRatio}`);
+  if (window.innerWidth !== width || window.innerHeight !== height) throw new Error(`page ${innerWidth}x${innerHeight}`);
   const stream = await navigator.mediaDevices.getDisplayMedia({
-    video: true, audio: false, preferCurrentTab: true, selfBrowserSurface: "include" });
-  const surface = stream.getVideoTracks()[0].getSettings().displaySurface;
+    video: { width, height, frameRate: 30 }, audio: false, preferCurrentTab: true, selfBrowserSurface: "include" });
+  const track = stream.getVideoTracks()[0];
+  const surface = track.getSettings().displaySurface;
   if (surface !== "browser") throw new Error(`surface ${surface}`);
+  // What is really recorded: the settings are final once the track has produced a frame.
+  const probe = document.createElement("video");
+  probe.muted = true;
+  probe.srcObject = new MediaStream([track]);
+  await probe.play();
+  for (let waited = 0; !probe.videoWidth && waited < 8000; waited += 50) await new Promise((resolve) => setTimeout(resolve, 50));
+  const got = track.getSettings();
+  const seen = `${got.width}x${got.height} (video ${probe.videoWidth}x${probe.videoHeight})`;
+  if (got.width !== width || got.height !== height || probe.videoWidth !== width || probe.videoHeight !== height)
+    throw new Error(`captured ${seen}`);
 };
 </script>"""
 REFUSES = "<!doctype html><script>window.__kickstreamStartCapture = async () => { throw new Error('no camera here'); };</script>"
@@ -156,4 +172,11 @@ async def test_a_proxy_in_the_environment_is_not_used_for_the_browser_connection
         monkeypatch.setenv(name, "http://127.0.0.1:9")
     capture = ChromiumCapture()
     await capture.start(f"{pages}/captures", 1280, 720)
+    await capture.stop()
+
+
+@needs_browser
+async def test_the_picture_recorded_is_exactly_the_chosen_size_at_full_hd_too(pages):
+    capture = ChromiumCapture()
+    await capture.start(f"{pages}/captures?size=1920x1080", 1920, 1080)
     await capture.stop()

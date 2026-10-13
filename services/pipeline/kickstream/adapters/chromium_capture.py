@@ -59,6 +59,9 @@ def browser_args(profile: Path, width: int, height: int) -> list[str]:
         "--autoplay-policy=no-user-gesture-required",
         f"--window-size={width},{height}",
         "--hide-scrollbars",
+        "--force-device-scale-factor=1",
+        # Tab capture otherwise adds a bar that takes 47 pixels off the top of the page after recording starts.
+        "--disable-infobars",
         "--no-first-run",
         "--no-default-browser-check",
         "--disable-extensions",
@@ -144,7 +147,7 @@ class ChromiumCapture:
             address = await self._within(
                 browser_late, asyncio.to_thread(_page_socket, port, max(0.1, min(5.0, self._left())))
             )
-            # Kept open for the life of the capture: the page size set below lasts only as long as it.
+            # Kept open for the life of the capture.
             self._devtools = await self._within(
                 browser_late,
                 websockets.connect(
@@ -157,18 +160,9 @@ class ChromiumCapture:
                     close_timeout=1,
                 ),
             )
-            await self._within(
-                browser_late,
-                self._call(
-                    "Emulation.setDeviceMetricsOverride",
-                    width=width,
-                    height=height,
-                    deviceScaleFactor=1,
-                    mobile=False,
-                ),
-            )
             await self._within(browser_late, self._call("Page.navigate", url=url))
             await self._within(page_late, self._until_ready())
+            await self._within(browser_late, self._size_content(width, height))
             # A page may only ask to be captured in answer to a user's action; this stands in for one.
             started = await self._within(
                 record_late,
@@ -183,6 +177,37 @@ class ChromiumCapture:
         except (OSError, TimeoutError, NotImplementedError, websockets.WebSocketException) as exc:
             await self.stop()
             raise OutputFailure(f"The hidden browser could not be started ({type(exc).__name__}).") from exc
+
+    async def _size_content(self, width: int, height: int) -> None:
+        """Make the page's own area exactly width x height, at a pixel ratio of 1.
+
+        The window the browser was given includes its own frame, so its page area comes out smaller than
+        asked, and tab capture records that area. Emulating the size instead would lay the page out for
+        one size while recording another, so the window is resized by what the frame takes.
+        """
+        window = (await self._call("Browser.getWindowForTarget"))["windowId"]
+        for _ in range(3):
+            inner = (
+                await self._call(
+                    "Runtime.evaluate",
+                    expression="[innerWidth, innerHeight]",
+                    returnByValue=True,
+                )
+            )["result"]["value"]
+            lack_w, lack_h = width - inner[0], height - inner[1]
+            if lack_w == 0 and lack_h == 0:
+                return
+            bounds = (await self._call("Browser.getWindowBounds", windowId=window))["bounds"]
+            await self._call(
+                "Browser.setWindowBounds",
+                windowId=window,
+                bounds={
+                    "windowState": "normal",
+                    "width": bounds["width"] + lack_w,
+                    "height": bounds["height"] + lack_h,
+                },
+            )
+        raise OutputFailure("The hidden browser could not be given the chosen picture size.")
 
     async def _debugging_port(self) -> int:
         """The browser writes the port it chose into its profile once it is listening."""
