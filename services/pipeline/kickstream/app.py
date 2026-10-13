@@ -15,8 +15,10 @@ from fastapi.responses import JSONResponse
 
 from kickstream.adapters.agent_expert import AgentExpertWriter
 from kickstream.adapters.agent_writer import AgentNarrativeWriter
+from kickstream.adapters.chromium_capture import ChromiumCapture
 from kickstream.adapters.clocks import RealClock
 from kickstream.adapters.dir_image_store import DirImageStore
+from kickstream.adapters.ffmpeg import FfmpegEncoder, FfmpegSender
 from kickstream.adapters.json_record_store import JsonRecordStore
 from kickstream.adapters.json_studio_store import JsonStudioStore
 from kickstream.adapters.memory_bus import InMemoryEventBus
@@ -38,9 +40,12 @@ from kickstream.narration.budget import Budget
 from kickstream.narration.cache import DiskCache
 from kickstream.narration.service import NarrationService
 from kickstream.narration.stage import NarrationStage
+from kickstream.output.api import build_output_router
+from kickstream.output.service import OutputService
 from kickstream.overlay.stage import OverlayStage
 from kickstream.ports.clock import Clock
 from kickstream.ports.expert import ExpertWriter
+from kickstream.ports.output import Encoder, ProgramCapture, Sender
 from kickstream.ports.writer import NarrativeWriter
 from kickstream.studio.api import build_studio_router, find_moment
 from kickstream.studio.rules import sanitize_raw
@@ -157,6 +162,9 @@ class Settings:
     data_dir: Path = Path(".data")  # the studio document and uploaded images
     # Public hostnames pages are served from, when a reverse proxy rewrites Host. See domain/sockets.py.
     allowed_hosts: tuple[str, ...] = ()
+    program_url: str = "http://127.0.0.1:5173/program"  # where the hidden browser finds the program page
+    browser: str | None = None  # a Chromium-based browser; Microsoft Edge is looked for when unset
+    ffmpeg: str = "ffmpeg"
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ) -> "Settings":
@@ -172,6 +180,9 @@ class Settings:
                 for host in env.get("KICKSTREAM_ALLOWED_HOSTS", "").split(",")
                 if host.strip()
             ),
+            program_url=env.get("KICKSTREAM_PROGRAM_URL") or "http://127.0.0.1:5173/program",
+            browser=env.get("KICKSTREAM_BROWSER") or None,
+            ffmpeg=env.get("KICKSTREAM_FFMPEG") or "ffmpeg",
         )
 
     @property
@@ -188,6 +199,7 @@ class Pipeline:
     studio: StudioService
     audience: AudienceService
     tracker: MatchTracker
+    output: OutputService
     stages: list
     tasks: list[asyncio.Task] = field(default_factory=list)
 
@@ -197,6 +209,7 @@ class Pipeline:
         self.tasks.append(asyncio.create_task(self.audience.run()))
 
     async def stop(self) -> None:
+        await self.output.stop()
         await self.controller.stop()
         for task in self.tasks:
             task.cancel()
@@ -213,6 +226,9 @@ def build_pipeline(
     match_prefix: str = "m",
     now: Callable[[], float] = time.time,
     expert: ExpertWriter | None = None,
+    capture: ProgramCapture | None = None,
+    encoder: Encoder | None = None,
+    new_sender: Callable[[], Sender] | None = None,
 ) -> Pipeline:
     bus, store, broadcaster = InMemoryEventBus(), InMemoryMatchStore(), InProcessBroadcaster()
     primary = writer
@@ -242,6 +258,16 @@ def build_pipeline(
         context=tracker.context,
         language=lambda: studio.settings.language,
     )
+    output = OutputService(
+        JsonRecordStore(settings.data_dir / "output.json"),
+        JsonRecordStore(settings.data_dir / "output-keys.json", private=True),
+        capture=capture or ChromiumCapture(settings.browser),
+        encoder=encoder or FfmpegEncoder(settings.ffmpeg),
+        new_sender=new_sender or (lambda: FfmpegSender(settings.ffmpeg)),
+        program_url=settings.program_url,
+        recordings_dir=settings.data_dir / "recordings",
+        now=now,
+    )
     # Every stage subscribes in its constructor, so nothing published after this point is missed.
     stages = [
         AnalyticsStage(bus),
@@ -251,7 +277,7 @@ def build_pipeline(
         StudioStage(bus, studio),
         AudienceStage(bus, tracker),
     ]
-    return Pipeline(bus, store, broadcaster, controller, studio, audience, tracker, stages)
+    return Pipeline(bus, store, broadcaster, controller, studio, audience, tracker, output, stages)
 
 
 def create_app(
@@ -262,6 +288,9 @@ def create_app(
     match_prefix: str | None = None,
     now: Callable[[], float] = time.time,
     expert: ExpertWriter | None = None,
+    capture: ProgramCapture | None = None,
+    encoder: Encoder | None = None,
+    new_sender: Callable[[], Sender] | None = None,
 ) -> FastAPI:
     # Match IDs are unique to this process, so an ID a browser kept from before a restart is
     # reported as unknown instead of silently naming a different match.
@@ -273,6 +302,9 @@ def create_app(
         match_prefix=match_prefix or f"m{secrets.token_hex(3)}",
         now=now,
         expert=expert,
+        capture=capture,
+        encoder=encoder,
+        new_sender=new_sender,
     )
 
     @asynccontextmanager
@@ -314,4 +346,5 @@ def create_app(
             service=pipeline.audience, teams=pipeline.tracker.teams, socket_hosts=settings.allowed_hosts
         )
     )
+    app.include_router(build_output_router(service=pipeline.output, socket_hosts=settings.allowed_hosts))
     return app
