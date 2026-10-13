@@ -3,9 +3,12 @@ import json
 import shutil
 import socket
 import subprocess
+import sys
+import time
 
 import pytest
 
+from kickstream.adapters import ffmpeg
 from kickstream.adapters.ffmpeg import FfmpegEncoder, FfmpegSender, encoder_args, sender_args
 from kickstream.ports.output import Quality, Target
 from tests.output_fakes import until
@@ -110,9 +113,25 @@ async def test_a_destination_that_refuses_the_connection_ends_the_sender_with_a_
 
 
 @needs_ffmpeg
-async def test_stopping_ends_a_sender_that_will_not_finish_by_itself(tmp_path):
+async def test_a_sender_whose_input_ends_finishes_by_itself(tmp_path):
     sender = FfmpegSender(grace_s=0.5)
     await sender.start(Target("file", str(tmp_path / "never.mp4")), lambda: None)
     await asyncio.wait_for(sender.stop(), 5)
     await asyncio.wait_for(sender.wait(), 5)
     await sender.stop()  # twice is harmless
+
+
+async def test_stopping_kills_a_sender_that_ignores_the_end_of_its_input(monkeypatch):
+    # A stand-in that keeps running after its input closes; no ffmpeg needed.
+    monkeypatch.setattr(ffmpeg, "sender_args", lambda target: ["-c", "import time; time.sleep(60)"])
+    sender = FfmpegSender(sys.executable, grace_s=0.3)
+    await sender.start(Target("file", "unused.mp4"), lambda: None)
+    process = sender._process
+    await asyncio.sleep(0.5)  # let it start
+    assert process.returncode is None
+    began = time.monotonic()
+    await asyncio.wait_for(sender.stop(), 5)
+    assert time.monotonic() - began < 3
+    assert process.returncode is not None  # really gone, not just abandoned
+    await asyncio.wait_for(sender.wait(), 5)
+    await asyncio.wait_for(sender.stop(), 5)  # twice is harmless
