@@ -115,6 +115,19 @@ def test_a_new_invite_clears_away_revoked_ones():
     assert [item.id for item in rules.room(state, "b1").invites] == ["i2"]
 
 
+def test_a_revoked_guest_still_in_the_call_keeps_their_invite_and_its_place():
+    state = rules.revoke(joined(invited(n=1)), "b1", "i1")
+    state = rules.revoke(invited(state, n=2), "b1", "i2")
+    state = invited(state, n=3)
+    assert [item.id for item in rules.room(state, "b1").invites] == ["i1", "i3"]
+    for n in range(4, rules.MAX_INVITES + 2):
+        state = invited(state, n=n)
+    assert len(view(state).invites) == rules.MAX_INVITES
+    with pytest.raises(PeopleError) as full:
+        invited(state, n=99)
+    assert refusal(full) == (409, "invites")
+
+
 def test_the_stage_takes_the_host_and_joined_guests_in_order():
     state = rules.seat_host(joined(invited()), "b1", "Alex", "8:acs:host")
     stage = view(rules.set_stage(state, "b1", ["i1", HOST]), {"i1"}).stage

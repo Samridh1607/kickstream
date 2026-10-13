@@ -116,13 +116,14 @@ def invite(
     secret: str,
     now: float,
 ) -> PeopleState:
-    """A new invite link for a role. Revoked invites are cleared away to make room."""
+    """A new invite link for a role. Revoked invites are cleared away to make room, except those
+    whose guest is still in the call, so revoking them can be tried again."""
     if broadcast_state == "ended":
         raise PeopleError(409, "broadcast", "This broadcast has ended, so it takes no more guests.")
     if role not in ROLES:
         raise PeopleError(422, "role", "Choose Speaker, Co-host or Member.")
     current = room(state, broadcast_id)
-    kept = tuple(item for item in current.invites if not item.revoked)
+    kept = tuple(item for item in current.invites if not item.revoked or item.user_id is not None)
     if len(kept) >= MAX_INVITES:
         raise PeopleError(
             409, "invites", f"A broadcast can have at most {MAX_INVITES} invites. Revoke one first."

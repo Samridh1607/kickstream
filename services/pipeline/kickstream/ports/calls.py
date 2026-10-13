@@ -30,7 +30,8 @@ class CallRooms(Protocol):
         """A new token for an identity. Raises RoomsFailure."""
 
     async def unseat(self, room_id: str, user_id: str) -> None:
-        """Take the identity out of the room. Raises RoomsFailure."""
+        """Take the identity out of the room. An identity that is not in the room is not a failure:
+        this may be called again after an earlier success. Raises RoomsFailure."""
 
     async def close_room(self, room_id: str) -> None:
         """Raises RoomsFailure."""

@@ -216,8 +216,8 @@ class PeopleService:
                     raise PeopleError(
                         502,
                         "rooms",
-                        "The invite is revoked, but the calling service did not take them out of the call: "
-                        f"{exc} Press Revoke again to try again.",
+                        "The invite is revoked, but the calling service did not take them out of the call "
+                        f"({exc}). Press Revoke again to try again.",
                     ) from exc
                 self._apply(lambda state: rules.unseated(state, broadcast_id, invite_id))
         return self.view(broadcast_id)
@@ -263,7 +263,7 @@ class PeopleService:
                     await rooms.unseat(room_id, item.user_id)
                 except RoomsFailure as exc:
                     raise PeopleError(
-                        502, "rooms", f"Your earlier session could not be ended: {exc} Try joining again."
+                        502, "rooms", f"Your earlier session could not be ended ({exc}). Try joining again."
                     ) from exc
             seat = await self._call(rooms.seat(room_id, ROLES_IN_THE_ROOM[item.role]))
             self._apply(lambda state: rules.join(state, secret, clean, seat.user_id))

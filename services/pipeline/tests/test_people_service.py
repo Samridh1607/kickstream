@@ -102,7 +102,8 @@ async def test_an_earlier_session_that_cannot_be_ended_keeps_the_link_as_it_was(
     rooms.fails = "service unavailable"
     with pytest.raises(PeopleError) as refused:
         await service.join("secret-1", "Sam")
-    assert refusal(refused) == (502, "rooms") and "service unavailable" in refused.value.message
+    assert refusal(refused) == (502, "rooms")
+    assert refused.value.message.endswith("ended (service unavailable). Try joining again.")
     assert list(rooms.rooms["room-1"]) == [first.acs_id] and rooms.calls.count("seat") == seats
     assert service.view("b1").invites[0].acs_id == first.acs_id
 
@@ -135,7 +136,7 @@ async def test_a_guest_the_calling_service_keeps_is_reported_and_revoking_again_
     with pytest.raises(PeopleError) as refused:
         await service.revoke("b1", "i1")
     assert refusal(refused) == (502, "rooms")
-    assert "service unavailable" in refused.value.message and "Press Revoke again" in refused.value.message
+    assert refused.value.message.endswith("call (service unavailable). Press Revoke again to try again.")
     assert service.view("b1").invites[0].revoked and seat.acs_id in rooms.rooms["room-1"]
     rooms.fails = None
     await service.revoke("b1", "i1")
@@ -143,6 +144,19 @@ async def test_a_guest_the_calling_service_keeps_is_reported_and_revoking_again_
     unseats = rooms.calls.count("unseat")
     await service.revoke("b1", "i1")
     assert rooms.calls.count("unseat") == unseats
+
+
+async def test_a_new_invite_keeps_a_revoked_guest_still_in_the_call_so_revoking_can_be_retried():
+    service, rooms, _ = made()
+    await service.invite("b1", "speaker", None)
+    seat = await service.join("secret-1", "Sam")
+    rooms.fails = "service unavailable"
+    with pytest.raises(PeopleError):
+        await service.revoke("b1", "i1")
+    rooms.fails = None
+    await service.invite("b1", "member", None)
+    await service.revoke("b1", "i1")
+    assert seat.acs_id not in rooms.rooms["room-1"]
 
 
 async def test_the_host_and_program_keep_their_identity_and_get_fresh_tokens():
