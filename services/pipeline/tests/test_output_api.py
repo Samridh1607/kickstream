@@ -161,7 +161,7 @@ def test_only_the_page_with_the_run_s_token_may_send_video(client, rig):
     client.post(f"{BASE}/destinations", json=YOUTUBE)
     client.post(f"{BASE}/start")
     wait_for(lambda: rig.capture.started)
-    for query in ("", "?token=wrong"):
+    for query in ("", "?token=wrong", "?token=%C3%A9"):
         with pytest.raises(WebSocketDisconnect) as refused:
             with client.websocket_connect(f"/api/output/capture/socket{query}") as socket:
                 socket.receive_bytes()

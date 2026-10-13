@@ -413,7 +413,11 @@ class OutputService:
 
     def accepts(self, token: str) -> bool:
         """Whether a page presenting this token is the one this run opened."""
-        return self._token is not None and secrets.compare_digest(token, self._token)
+        if self._token is None:
+            return False
+        # Bytes, so any text can be compared (compare_digest rejects non-ASCII str) and still in constant time.
+        # errors="surrogatepass" keeps a lone surrogate from a malformed query from raising here.
+        return secrets.compare_digest(token.encode(errors="surrogatepass"), self._token.encode())
 
     async def feed(self, token: str, chunks: AsyncIterator[bytes]) -> None:
         """Pass a page's recording to the encoder, for as long as that page is the current one."""

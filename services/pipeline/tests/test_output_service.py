@@ -277,6 +277,20 @@ async def test_only_the_current_run_s_page_may_send_video(kit):
     await kit.service.stop()
 
 
+async def test_a_token_that_is_not_plain_text_is_refused_not_an_error(kit):
+    add_youtube(kit)
+    await kit.live()
+    assert not kit.service.accepts("é") and not kit.service.accepts("token-1é")
+    assert kit.service.accepts("token-1")
+
+    async def chunks():
+        yield b"never"
+
+    await kit.service.feed("é", chunks())
+    assert kit.encoder.written == []
+    await kit.service.stop()
+
+
 async def test_an_old_page_finishing_does_not_disturb_the_run_that_replaced_it(kit):
     add_youtube(kit)
     await kit.live()
