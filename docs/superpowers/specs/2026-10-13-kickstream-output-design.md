@@ -90,7 +90,7 @@ Stream keys are kept beside the document, not in it. The document, as every page
 - The known platforms have a default server address, which the streamer may change: YouTube `rtmp://a.rtmp.youtube.com/live2`, Facebook `rtmps://live-api-s.facebook.com:443/rtmp/`, Twitch `rtmp://live.twitch.tv/app`. X gives each streamer its own address in Media Studio, so X and Custom RTMP start empty.
 - A server address must begin with `rtmp://` or `rtmps://`, be at most 300 characters, and name a host. A key is 1 to 300 characters with no spaces or line breaks; spaces and line breaks around a pasted key are dropped.
 - Editing a destination without entering a key keeps the stored key.
-- Record to file needs no address or key. It writes `.data/recordings/<date>-<time>.mp4`, in a form that still plays if the recording is cut short.
+- Record to file needs no address or key. It writes `.data/recordings/<date>-<time>-<destination id>.mp4`, in a form that still plays if the recording is cut short.
 - Destinations cannot be added, edited, removed, enabled or disabled while a run is starting, live or stopping. The quality cannot be changed either.
 - Deleting a destination deletes its key.
 
