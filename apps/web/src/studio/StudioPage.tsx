@@ -1,14 +1,17 @@
 import { Badge, makeStyles, mergeClasses, MessageBar, MessageBarBody, Select, Tab, TabList, Text, tokens } from "@fluentui/react-components";
 import {
-  FlashRegular, LayerRegular, LiveRegular, MegaphoneRegular, SettingsRegular,
+  FlashRegular, LayerRegular, LiveRegular, MegaphoneRegular, PeopleTeamRegular, SettingsRegular,
   SlideLayoutRegular, TextBulletListSquareRegular, TimerRegular, TvRegular,
 } from "@fluentui/react-icons";
 import { type ReactElement, type ReactNode, useEffect, useMemo, useState } from "react";
 import { endBroadcast, goLiveWith } from "../broadcasts/api";
 import { StudioBroadcastBar, useStudioBroadcast } from "../broadcasts/StudioBroadcast";
-import type { Broadcast, Output, Scene, SceneElement, Studio, ViewerProfile } from "../contracts";
+import type { Broadcast, Output, People, Scene, SceneElement, Studio, ViewerProfile } from "../contracts";
 import { OUTPUT_STREAM } from "../output/api";
 import { OutputTab } from "../output/OutputTab";
+import { peopleStream } from "../people/api";
+import { PeoplePanel } from "../people/PeoplePanel";
+import { stageTiles } from "../people/stage";
 import { AppNav } from "../shell/AppNav";
 import { useMatch } from "../stream/store";
 import { useLiveDocument } from "../stream/useLiveDocument";
@@ -83,6 +86,7 @@ export function StudioPage({ broadcastId, eventSource, retryMs, pollMs }: Studio
   const link = useStudioBroadcast(broadcastId, eventSource, retryMs);
   const [ending, setEnding] = useState(false);
   const { doc: output, accept: acceptOutput } = useLiveDocument<Output>(OUTPUT_STREAM, eventSource, retryMs);
+  const { doc: people, accept: acceptPeople } = useLiveDocument<People>(broadcastId !== undefined ? peopleStream(broadcastId) : null, eventSource, retryMs);
   // The match is followed in the commentary of the scene on air, as the program shows it.
   const mode = studio ? programMode(studio) : undefined;
   const language = studio?.settings.language;
@@ -176,7 +180,8 @@ export function StudioPage({ broadcastId, eventSource, retryMs, pollMs }: Studio
   const onAir = onAirScene(studio);
   const saved = studio.scenes.find((scene) => scene.id === editingId) ?? onAir;
   const editing = pending?.id === saved.id ? pending : saved;
-  const data = { match, studio, now, language: studio.settings.language };
+  const cameras = stageTiles(people);
+  const data = { match, studio, now, language: studio.settings.language, cameras };
 
   const changeElements = async (elements: SceneElement[]) => {
     const edited = { ...editing, elements };
@@ -215,20 +220,28 @@ export function StudioPage({ broadcastId, eventSource, retryMs, pollMs }: Studio
         </MessageBar>
       )}
       <div className={styles.body}>
-        <div className={mergeClasses(styles.card, styles.scenes)}>
-          <SceneList
-            studio={studio}
-            editingId={editing.id}
-            onEdit={(sceneId) => {
-              setEditingId(sceneId);
-              setSelectedId(null);
-            }}
-            onActivate={(sceneId) => void run(() => activateScene(sceneId))}
-            onCreate={(source, ref) => void run(() => createScene(source, ref))}
-            onDelete={(sceneId) => void run(() => deleteScene(sceneId))}
-            onSaveTemplate={(sceneId) => void run(() => saveTemplate(sceneId))}
-            onDeleteTemplate={(templateId) => void run(() => deleteTemplate(templateId))}
-          />
+        <div className={mergeClasses(styles.column, styles.scenes)}>
+          <div className={styles.card}>
+            <SceneList
+              studio={studio}
+              editingId={editing.id}
+              onEdit={(sceneId) => {
+                setEditingId(sceneId);
+                setSelectedId(null);
+              }}
+              onActivate={(sceneId) => void run(() => activateScene(sceneId))}
+              onCreate={(source, ref) => void run(() => createScene(source, ref))}
+              onDelete={(sceneId) => void run(() => deleteScene(sceneId))}
+              onSaveTemplate={(sceneId) => void run(() => saveTemplate(sceneId))}
+              onDeleteTemplate={(templateId) => void run(() => deleteTemplate(templateId))}
+            />
+          </div>
+          {broadcastId !== undefined && (
+            <section className={styles.card} aria-label="People">
+              <Heading icon={<PeopleTeamRegular />} title="People" />
+              <PeoplePanel key={broadcastId} broadcastId={broadcastId} people={people} live={link.broadcast?.state === "live"} onPeople={acceptPeople} />
+            </section>
+          )}
         </div>
         <div className={mergeClasses(styles.column, styles.editor)}>
           <section className={styles.card} aria-label="Editor">
@@ -245,7 +258,7 @@ export function StudioPage({ broadcastId, eventSource, retryMs, pollMs }: Studio
           </section>
           <section className={styles.card} aria-label="Program preview">
             <Heading icon={<TvRegular />} title="Program" />
-            <SceneCanvas scene={withFallbacks(onAir, studio)} data={data} scale={PREVIEW_SCALE} />
+            <SceneCanvas scene={withFallbacks(onAir, studio, cameras)} data={data} scale={PREVIEW_SCALE} />
           </section>
         </div>
         <div className={mergeClasses(styles.column, styles.controls)}>

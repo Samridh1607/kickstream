@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import type { Studio } from "../contracts";
 import { useMatch } from "../stream/store";
 import {
-  destination, envelope, FakeEventSource, FakeEventSourceCtor, moment, narrative, output, scene, status, studio,
+  broadcast, broadcasts, destination, envelope, FakeEventSource, FakeEventSourceCtor, moment, narrative, output, peopleDoc, scene, status, studio,
 } from "../test/fixtures";
 import { renderUi } from "../test/render";
 import { StudioPage } from "./StudioPage";
@@ -369,4 +369,20 @@ test("while live, the top bar shows each stream being sent and how it is doing",
   expect(bar.getByText("Twitch").nextElementSibling?.textContent).toBe("Retrying");
   expect(bar.getByText("Twitch").parentElement?.title).toBe("connection refused");
   expect(bar.queryByText("Facebook")).toBeNull();
+});
+
+test("a broadcast's studio has a People panel, and who is on stage reaches the program preview", async () => {
+  serve();
+  renderUi(<StudioPage broadcastId="b1" eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} />);
+  act(() => {
+    stream("/api/studio/stream").open();
+    stream("/api/studio/stream").emitRaw(JSON.stringify(studio()));
+    stream("/api/broadcasts/stream").open();
+    stream("/api/broadcasts/stream").emitRaw(JSON.stringify(broadcasts({ broadcasts: [broadcast()], current_id: "b1" })));
+    stream("/api/broadcasts/b1/people/stream").open();
+    stream("/api/broadcasts/b1/people/stream").emitRaw(JSON.stringify(peopleDoc({ stage: [{ id: "i1", name: "Sam", acs_id: null, present: true }] })));
+  });
+  expect(within(screen.getByRole("region", { name: "People" })).getByRole("button", { name: "Invite" })).toBeTruthy();
+  const preview = within(screen.getByRole("region", { name: "Program preview" }));
+  expect(preview.getByTestId("camera-tile").textContent).toContain("Sam");
 });
