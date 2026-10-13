@@ -20,10 +20,10 @@ function hasRevision(value: unknown): value is Revisioned {
  * A server-held document, kept live from a Server-Sent Events stream.
  *
  * The first document after each (re)connection is authoritative even if its revision is
- * lower: the server may have restarted from an older or reset file.
+ * lower: the server may have restarted from an older or reset file. A null url follows nothing.
  */
 export function useLiveDocument<T extends Revisioned & { server_time: number }>(
-  url: string,
+  url: string | null,
   EventSourceImpl?: new (url: string) => EventSource,
   retryMs = 2000,
 ) {
@@ -40,6 +40,7 @@ export function useLiveDocument<T extends Revisioned & { server_time: number }>(
   const accept = useCallback((incoming: T) => take(incoming, false), [take]);
 
   useEffect(() => {
+    if (url === null) return;
     const source = new (EventSourceImpl ?? LiveSource)(url);
     let first = true;
     let retry: ReturnType<typeof setTimeout> | undefined;

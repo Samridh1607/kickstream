@@ -1,5 +1,5 @@
 import type {
-  Broadcast, Broadcasts, Destination, Output, Reel,
+  Broadcast, Broadcasts, CallSeat, Destination, Guest, Invite, Output, People, Reel,
   Envelope, KeyMoment, MatchEvent, MatchStatus, Narrative, Overlay, PressureSnapshot, Recap, StatsSnapshot,
   Scene, SceneElement, Studio, TeamSheet, TeamStats,
 } from "../contracts";
@@ -182,4 +182,24 @@ export const endedBroadcast = (over: Partial<Broadcast> = {}): Broadcast => broa
 
 export const broadcasts = (over: Partial<Broadcasts> = {}): Broadcasts => ({
   revision: 1, server_time: 1000, broadcasts: [], current_id: null, ai: true, ...over,
+});
+
+export const invitation = (over: Partial<Invite> = {}): Invite => ({
+  id: "i1", role: "speaker", name: "Sam", link: "/guest/abc", made_at: 1000, joined_name: null, acs_id: null,
+  present: false, revoked: false, ...over,
+});
+
+export const peopleDoc = (over: Partial<People> = {}): People => ({
+  revision: 1, server_time: 1000, broadcast_id: "b1", service: "fake", room_id: "room-1",
+  public_origin: "https://guests.example", invites: [], stage: [], host_name: "Host", host_acs_id: null, ...over,
+});
+
+export const guestDoc = (over: Partial<Guest> = {}): Guest => ({
+  revision: 1, server_time: 1000, valid: true, service: "fake", broadcast_id: null, broadcast_title: "Derby day",
+  broadcast_state: "ready", role: "speaker", name: "Sam", joined: false, joined_name: null, room_id: null,
+  on_stage: false, muted_live: false, ...over,
+});
+
+export const callSeat = (over: Partial<CallSeat> = {}): CallSeat => ({
+  room_id: "room-1", acs_id: "8:fake:2", token: "t1", expires_at: 2000, service: "fake", ...over,
 });

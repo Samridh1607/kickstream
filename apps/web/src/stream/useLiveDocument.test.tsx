@@ -53,3 +53,9 @@ test("offset is the server clock minus this machine's clock", () => {
   push(broadcasts({ server_time: 2_030 }));
   expect(result.current.offset).toBe(30);
 });
+
+test("with no address there is nothing to follow", () => {
+  const { result } = renderHook(() => useLiveDocument<Broadcasts>(null, FakeEventSourceCtor, 10));
+  expect(FakeEventSource.instances).toHaveLength(0);
+  expect([result.current.doc, result.current.connected]).toEqual([null, false]);
+});
