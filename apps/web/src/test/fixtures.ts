@@ -1,5 +1,5 @@
 import type {
-  Audience, Broadcast, Broadcasts, Destination, Output, Poll, Question, Reel,
+  Broadcast, Broadcasts, Destination, Output, Reel,
   Envelope, KeyMoment, MatchEvent, MatchStatus, Narrative, Overlay, PressureSnapshot, Recap, StatsSnapshot,
   Scene, SceneElement, Studio, TeamSheet, TeamStats,
 } from "../contracts";
@@ -137,24 +137,6 @@ export const studio = (over: Partial<Studio> = {}): Studio => ({
   countdown: null, replay: null, ...over,
 });
 
-export const poll = (over: Partial<Poll> = {}): Poll => ({
-  id: "p1", question: "Who will win?", state: "open", closes_at: null,
-  options: [
-    { id: "o1", text: "Northbridge FC", votes: 3 },
-    { id: "o2", text: "Draw", votes: 0 },
-    { id: "o3", text: "Harbour City", votes: 1 },
-  ],
-  ...over,
-});
-
-export const fanQuestion = (over: Partial<Question> = {}): Question => ({
-  id: "q1", text: "Why the change?", nickname: "Ann", votes: 2, state: "open", answer: null, asked_at: 100, ...over,
-});
-
-export const audience = (over: Partial<Audience> = {}): Audience => ({
-  revision: 1, server_time: 1000, poll: null, poll_on_air: false, history: [], questions: [], draft: null, qa: null, ...over,
-});
-
 export const destination = (over: Partial<Destination> = {}): Destination => ({
   id: "d1", name: "YouTube", platform: "youtube", url: "rtmp://a.rtmp.youtube.com/live2", enabled: true,
   key_hint: "wxyz", status: "idle", reason: null, live_since: null, ...over,
@@ -177,7 +159,7 @@ export const broadcast = (over: Partial<Broadcast> = {}): Broadcast => ({
   reels: [], generating: false, problem: null, ...over,
 });
 
-/** A broadcast that was live for two minutes, recorded, with a goal, a poll and a reel. */
+/** A broadcast that was live for two minutes, recorded, with a goal and a reel. */
 export const endedBroadcast = (over: Partial<Broadcast> = {}): Broadcast => broadcast({
   state: "ended",
   sessions: [{

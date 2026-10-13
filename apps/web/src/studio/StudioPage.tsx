@@ -1,14 +1,12 @@
 import { Badge, makeStyles, mergeClasses, MessageBar, MessageBarBody, Select, Tab, TabList, Text, tokens } from "@fluentui/react-components";
 import {
-  FlashRegular, LayerRegular, LiveRegular, MegaphoneRegular, PeopleCommunityRegular, SettingsRegular,
+  FlashRegular, LayerRegular, LiveRegular, MegaphoneRegular, SettingsRegular,
   SlideLayoutRegular, TextBulletListSquareRegular, TimerRegular, TvRegular,
 } from "@fluentui/react-icons";
 import { type ReactElement, type ReactNode, useEffect, useMemo, useState } from "react";
-import { STUDIO_AUDIENCE_STREAM } from "../audience/api";
-import { AudienceTab } from "../audience/AudienceTab";
 import { endBroadcast, goLiveWith } from "../broadcasts/api";
 import { StudioBroadcastBar, useStudioBroadcast } from "../broadcasts/StudioBroadcast";
-import type { Audience, Broadcast, Output, Scene, SceneElement, Studio, ViewerProfile } from "../contracts";
+import type { Broadcast, Output, Scene, SceneElement, Studio, ViewerProfile } from "../contracts";
 import { OUTPUT_STREAM } from "../output/api";
 import { OutputTab } from "../output/OutputTab";
 import { AppNav } from "../shell/AppNav";
@@ -27,11 +25,11 @@ import { useNow, useStudio } from "./useStudio";
 
 const EDITOR_SCALE = 0.45;
 const PREVIEW_SCALE = 0.16;
-const TABS = ["Elements", "Banner", "Ticker", "Highlights", "Audience", "Countdown", "Settings"] as const;
+const TABS = ["Elements", "Banner", "Ticker", "Highlights", "Countdown", "Settings"] as const;
 type TabName = (typeof TABS)[number];
 const TAB_ICONS: Record<TabName, ReactElement> = {
   Elements: <LayerRegular />, Banner: <MegaphoneRegular />, Ticker: <TextBulletListSquareRegular />, Highlights: <FlashRegular />,
-  Audience: <PeopleCommunityRegular />, Countdown: <TimerRegular />, Settings: <SettingsRegular />,
+  Countdown: <TimerRegular />, Settings: <SettingsRegular />,
 };
 
 const useStyles = makeStyles({
@@ -84,7 +82,6 @@ export function StudioPage({ broadcastId, eventSource, retryMs, pollMs }: Studio
   const { studio, offset, connected, accept } = useStudio(eventSource, retryMs);
   const link = useStudioBroadcast(broadcastId, eventSource, retryMs);
   const [ending, setEnding] = useState(false);
-  const { doc: audience, accept: acceptAudience } = useLiveDocument<Audience>(STUDIO_AUDIENCE_STREAM, eventSource, retryMs);
   const { doc: output, accept: acceptOutput } = useLiveDocument<Output>(OUTPUT_STREAM, eventSource, retryMs);
   // The match is followed in the commentary of the scene on air, as the program shows it.
   const mode = studio ? programMode(studio) : undefined;
@@ -141,17 +138,6 @@ export function StudioPage({ broadcastId, eventSource, retryMs, pollMs }: Studio
     }
   };
 
-  const runAudience = async (request: () => Promise<Audience>): Promise<boolean> => {
-    try {
-      acceptAudience(await request());
-      setProblem(null);
-      return true;
-    } catch (caught) {
-      setProblem(caught instanceof Error ? caught.message : "The change was not saved.");
-      return false;
-    }
-  };
-
   const runOutput = async (request: () => Promise<Output>): Promise<boolean> => {
     try {
       acceptOutput(await request());
@@ -190,7 +176,7 @@ export function StudioPage({ broadcastId, eventSource, retryMs, pollMs }: Studio
   const onAir = onAirScene(studio);
   const saved = studio.scenes.find((scene) => scene.id === editingId) ?? onAir;
   const editing = pending?.id === saved.id ? pending : saved;
-  const data = { match, studio, now, language: studio.settings.language, audience };
+  const data = { match, studio, now, language: studio.settings.language };
 
   const changeElements = async (elements: SceneElement[]) => {
     const edited = { ...editing, elements };
@@ -259,7 +245,7 @@ export function StudioPage({ broadcastId, eventSource, retryMs, pollMs }: Studio
           </section>
           <section className={styles.card} aria-label="Program preview">
             <Heading icon={<TvRegular />} title="Program" />
-            <SceneCanvas scene={withFallbacks(onAir, studio, audience)} data={data} scale={PREVIEW_SCALE} />
+            <SceneCanvas scene={withFallbacks(onAir, studio)} data={data} scale={PREVIEW_SCALE} />
           </section>
         </div>
         <div className={mergeClasses(styles.column, styles.controls)}>
@@ -292,7 +278,6 @@ export function StudioPage({ broadcastId, eventSource, retryMs, pollMs }: Studio
                   onStopReplay={() => void run(stopReplay)}
                   onBanner={(narrative) => void run(() => showBanner({ text: narrative.text.slice(0, 200), kind: "info", source_id: narrative.id }))} />
               )}
-              {tab === "Audience" && <AudienceTab audience={audience} onRun={runAudience} />}
               {tab === "Countdown" && (
                 <CountdownPanel studio={studio} now={now}
                   onStart={(startsAt) => void run(() => startCountdown(startsAt))}

@@ -3,9 +3,8 @@ import {
   mergeClasses, MessageBar, MessageBarBody, Spinner, Text, tokens,
 } from "@fluentui/react-components";
 import {
-  ArrowDownloadRegular, BotSparkleRegular, ChatRegular, DeleteRegular, FilmstripRegular, FlashRegular,
-  LiveRegular, PeopleCommunityRegular, PlayRegular, PollRegular, RecordRegular, RecordStopRegular, SparkleRegular,
-  SportSoccerRegular, TimerRegular, VideoClipMultipleRegular,
+  ArrowDownloadRegular, BotSparkleRegular, DeleteRegular, FilmstripRegular, FlashRegular, LiveRegular, PlayRegular,
+  RecordRegular, RecordStopRegular, SparkleRegular, SportSoccerRegular, TimerRegular, VideoClipMultipleRegular,
 } from "@fluentui/react-icons";
 import { type ReactNode, useState } from "react";
 import type { Broadcast, Broadcasts, Output } from "../contracts";
@@ -18,7 +17,7 @@ import { useNow } from "../studio/useStudio";
 import {
   BROADCASTS_STREAM, deleteBroadcast, deleteReel, endBroadcast, generateReels, goLiveWith, recordingUrl, studioPath,
 } from "./api";
-import { bytes, clock, duration, intoBroadcast, MOMENT_LABELS, onAir, plural, reach, STATE, teamName, votes, when } from "./format";
+import { bytes, clock, duration, intoBroadcast, MOMENT_LABELS, onAir, plural, reach, STATE, teamName, when } from "./format";
 import { ReelCard } from "./ReelCard";
 
 const MAX_REELS = 12;
@@ -244,8 +243,6 @@ function Details({ broadcast, doc, output, now, busy, playing, setPlaying, run, 
           detail={plural(broadcast.sessions.length, "session")} />
         <Tile icon={<LiveRegular />} tint="#7535E3" label="Destinations reached" value={total > 0 ? `${reached} of ${total}` : "—"}
           detail={total > 0 && reached === total ? "Every destination got the stream" : "Platforms and recordings"} />
-        <Tile icon={<PeopleCommunityRegular />} tint="#0E9F6E" label="Audience" value={plural(votes(broadcast), "vote")}
-          detail={`${plural(broadcast.stats.polls.length, "poll")} · ${plural(broadcast.stats.questions, "question")}`} />
         <Tile icon={<SportSoccerRegular />} tint="#0866FF" label="Match" value={score ? `${score.score_home}–${score.score_away}` : "No match"}
           detail={score ? `${score.home} v ${score.away}` : "Start the match feed while live"} />
         <Tile icon={<FlashRegular />} tint="#DC6803" label="Key moments" value={broadcast.moments.length}
@@ -366,27 +363,6 @@ function Details({ broadcast, doc, output, now, busy, playing, setPlaying, run, 
                   </li>
                 ))}
               </ol>
-            )}
-          </Card>
-
-          <Card icon={<PollRegular />} title="Audience">
-            {broadcast.stats.polls.length === 0 && broadcast.stats.questions === 0 ? (
-              <Text className={styles.empty}>Polls and fan questions while live are counted here.</Text>
-            ) : (
-              <ul className={styles.list}>
-                {broadcast.stats.polls.map((poll) => (
-                  <li key={poll.id} className={styles.row}>
-                    <PollRegular />
-                    <Text className={styles.grow}>{poll.question}</Text>
-                    <Badge appearance="tint" color="brand">{plural(poll.votes, "vote")}</Badge>
-                  </li>
-                ))}
-                <li className={styles.row}>
-                  <ChatRegular />
-                  <Text className={styles.grow}>Fan questions</Text>
-                  <Badge appearance="tint" color="informative">{broadcast.stats.questions}</Badge>
-                </li>
-              </ul>
             )}
           </Card>
         </div>

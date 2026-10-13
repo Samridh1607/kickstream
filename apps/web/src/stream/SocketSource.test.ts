@@ -39,7 +39,7 @@ test("a stream path becomes the socket path on this page's host", () => {
   const here = { protocol: "http:", host: "127.0.0.1:5173" };
   expect(socketUrl("/api/studio/stream", here, 0)).toBe("ws://127.0.0.1:5173/api/studio/socket");
   expect(socketUrl("/api/matches/m-1/stream?mode=fan&lang=en", here, 0)).toBe("ws://127.0.0.1:5173/api/matches/m-1/socket?mode=fan&lang=en");
-  expect(socketUrl("/api/audience/stream", { protocol: "https:", host: "kick.example" }, 0)).toBe("wss://kick.example/api/audience/socket");
+  expect(socketUrl("/api/broadcasts/stream", { protocol: "https:", host: "kick.example" }, 0)).toBe("wss://kick.example/api/broadcasts/socket");
 });
 
 test("a reconnection asks for what came after the last id it saw", () => {

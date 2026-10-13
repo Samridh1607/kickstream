@@ -47,8 +47,7 @@ test("an ended broadcast shows its stats", () => {
   const tile = (name: string) => within(screen.getByRole("group", { name }));
   expect(tile("Time on air").getByText("2 min")).toBeTruthy();
   expect(tile("Destinations reached").getByText("2 of 3")).toBeTruthy();
-  expect(tile("Audience").getByText("7 votes")).toBeTruthy();
-  expect(tile("Audience").getByText("1 poll · 3 questions")).toBeTruthy();
+  expect(screen.queryByText("Audience")).toBeNull();
   expect(tile("Match").getByText("1–0")).toBeTruthy();
   expect(tile("Key moments").getByText("1")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Go live" })).toBeNull();

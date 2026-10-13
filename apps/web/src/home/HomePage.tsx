@@ -1,17 +1,15 @@
-import { Badge, Button, makeStyles, mergeClasses, MessageBar, MessageBarBody, Text, tokens, Tooltip } from "@fluentui/react-components";
+import { Badge, Button, makeStyles, mergeClasses, MessageBar, MessageBarBody, Text, tokens } from "@fluentui/react-components";
 import {
-  AddRegular, ChatRegular, CheckmarkCircleFilled, CircleRegular, CopyRegular, FilmstripRegular, InfoRegular, LiveRegular,
-  OpenRegular, PeopleCommunityRegular, PlayRegular, PollRegular, RecordRegular, RecordStopRegular, SlideLayoutRegular,
-  SportSoccerRegular, VideoClipMultipleRegular,
+  AddRegular, CheckmarkCircleFilled, CircleRegular, FilmstripRegular, InfoRegular, LiveRegular, OpenRegular, PlayRegular,
+  RecordRegular, RecordStopRegular, SlideLayoutRegular, SportSoccerRegular, VideoClipMultipleRegular,
 } from "@fluentui/react-icons";
 import { type ReactNode, useMemo, useState } from "react";
 import { speedFromLocation, startMatch } from "../api";
-import { STUDIO_AUDIENCE_STREAM } from "../audience/api";
 import { BROADCASTS_STREAM, broadcastPath, endBroadcast, goLiveWith, studioPath } from "../broadcasts/api";
 import { BroadcastList } from "../broadcasts/BroadcastList";
 import { CreateBroadcastDialog } from "../broadcasts/CreateBroadcastDialog";
 import { clock } from "../broadcasts/format";
-import type { Audience, Broadcasts, Output, ViewerProfile } from "../contracts";
+import type { Broadcasts, Output, ViewerProfile } from "../contracts";
 import { OUTPUT_STREAM, stopOutput } from "../output/api";
 import { AppNav } from "../shell/AppNav";
 import { PlatformMark, platformLabel } from "../shell/PlatformMark";
@@ -70,7 +68,6 @@ const useStyles = makeStyles({
   grow: { flexGrow: 1 },
   list: { listStyleType: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS },
   destination: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalM, padding: tokens.spacingHorizontalS, borderRadius: tokens.borderRadiusMedium, backgroundColor: tokens.colorNeutralBackground3 },
-  share: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS, padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalS}`, borderRadius: tokens.borderRadiusMedium, backgroundColor: tokens.colorNeutralBackground3, fontFamily: tokens.fontFamilyMonospace, overflowWrap: "anywhere" },
   step: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS },
   done: { color: tokens.colorPaletteGreenForeground1, fontSize: "20px" },
   todo: { color: tokens.colorNeutralForeground4, fontSize: "20px" },
@@ -111,7 +108,6 @@ export function HomePage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) 
   const styles = useStyles();
   const { studio, offset } = useStudio(eventSource, retryMs);
   const { doc: output, accept: acceptOutput } = useLiveDocument<Output>(OUTPUT_STREAM, eventSource, retryMs);
-  const { doc: audience } = useLiveDocument<Audience>(STUDIO_AUDIENCE_STREAM, eventSource, retryMs);
   const { doc: broadcasts, accept: acceptBroadcasts } = useLiveDocument<Broadcasts>(BROADCASTS_STREAM, eventSource, retryMs);
   const mode = studio ? programMode(studio) : undefined;
   const language = studio?.settings.language;
@@ -125,7 +121,6 @@ export function HomePage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) 
   const now = useNow() + offset;
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   const attempt = async (request: () => Promise<void>, failure: string) => {
     setBusy(true);
@@ -145,10 +140,7 @@ export function HomePage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) 
   const sending = output?.destinations.filter((item) => item.enabled) ?? [];
   const onAir = studio ? onAirScene(studio) : null;
   const status = matchId !== null && connection !== "idle" ? match.status : null;
-  const openQuestions = audience?.questions.filter((question) => question.state === "open").length ?? 0;
-  const votes = audience?.poll?.options.reduce((sum, option) => sum + option.votes, 0) ?? 0;
-  const joinUrl = `${window.location.origin}/join`;
-  const data = studio ? { match, studio, now, language: studio.settings.language, audience } : null;
+  const data = studio ? { match, studio, now, language: studio.settings.language } : null;
   const all = broadcasts?.broadcasts ?? [];
   const current = all.find((item) => item.state === "live") ?? all.find((item) => item.id === broadcasts?.current_id && item.state === "ready") ?? null;
   const canGoLive = current !== null && (sending.length > 0 || current.record);
@@ -234,7 +226,7 @@ export function HomePage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) 
                 {live ? "ON AIR" : "PREVIEW"}
               </span>
               <div className={styles.monitorScreen}>
-                <SceneCanvas scene={withFallbacks(onAir, studio, audience)} data={data} scale={HERO_SCALE} />
+                <SceneCanvas scene={withFallbacks(onAir, studio)} data={data} scale={HERO_SCALE} />
               </div>
             </div>
           )}
@@ -246,9 +238,6 @@ export function HomePage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) 
             detail={<Text size={200} className={styles.muted}>{live ? "Streaming now" : "Off air"}</Text>} />
           <Tile icon={<SlideLayoutRegular />} tint="#7535E3" label="Scene on air" value={onAir?.name ?? "—"}
             detail={studio && onAir ? <ModeBadge scene={onAir} studio={studio} /> : undefined} />
-          <Tile icon={<PeopleCommunityRegular />} tint="#0E9F6E" label="Audience"
-            value={audience?.poll ? `${votes} ${votes === 1 ? "vote" : "votes"}` : `${openQuestions} ${openQuestions === 1 ? "question" : "questions"}`}
-            detail={<Text size={200} className={styles.muted}>{audience?.poll ? `Poll: ${audience.poll.question}` : "No poll running"}</Text>} />
           <Tile icon={<SportSoccerRegular />} tint="#0866FF" label="Match feed"
             value={status ? `${status.home.name} ${status.score_home}–${status.score_away} ${status.away.name}` : "Not started"}
             detail={status ? <Text size={200} className={styles.muted}>{`${Math.max(status.minute, match.minute)}' · ${status.state}`}</Text> : (
@@ -296,25 +285,6 @@ export function HomePage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) 
                   ))}
                 </ul>
               )}
-            </Card>
-
-            <Card icon={<PeopleCommunityRegular />} title="Your audience" label="Audience">
-              <Text className={styles.muted}>Share the fan page in your stream description. Fans vote in polls and ask questions you can put on air.</Text>
-              <div className={styles.share}>
-                <Text className={styles.grow}>{joinUrl}</Text>
-                <Tooltip content={copied ? "Copied" : "Copy link"} relationship="label">
-                  <Button size="small" appearance="subtle" icon={<CopyRegular />}
-                    onClick={() => void navigator.clipboard?.writeText(joinUrl).then(() => setCopied(true), () => undefined)} />
-                </Tooltip>
-              </div>
-              <div className={styles.step}>
-                <PollRegular />
-                <Text>{audience?.poll ? `${audience.poll.question} · ${votes} ${votes === 1 ? "vote" : "votes"}` : "No poll running"}</Text>
-              </div>
-              <div className={styles.step}>
-                <ChatRegular />
-                <Text>{`${openQuestions} ${openQuestions === 1 ? "question" : "questions"} waiting`}</Text>
-              </div>
             </Card>
 
             <Card icon={<CheckmarkCircleFilled />} title="Quick start" label="Quick start">

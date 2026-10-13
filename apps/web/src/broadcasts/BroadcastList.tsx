@@ -1,7 +1,5 @@
 import { Badge, makeStyles, mergeClasses, Text, tokens } from "@fluentui/react-components";
-import {
-  ChevronRightRegular, FilmstripRegular, LiveRegular, PollRegular, RecordRegular, SportSoccerRegular, TimerRegular,
-} from "@fluentui/react-icons";
+import { ChevronRightRegular, FilmstripRegular, LiveRegular, RecordRegular, SportSoccerRegular, TimerRegular } from "@fluentui/react-icons";
 import type { ReactNode } from "react";
 import type { Broadcast } from "../contracts";
 import { broadcastPath } from "./api";
@@ -73,7 +71,6 @@ export function BroadcastList({ broadcasts, now, empty }: { broadcasts: Broadcas
                   {broadcast.sessions.length > 0 && <Fact icon={<LiveRegular />}>{duration(onAir(broadcast, now))} on air</Fact>}
                   {broadcast.recordings.length > 0 && <Fact icon={<RecordRegular />}>{plural(broadcast.recordings.length, "recording")}</Fact>}
                   {ready > 0 && <Fact icon={<FilmstripRegular />}>{plural(ready, "reel")}</Fact>}
-                  {broadcast.stats.polls.length > 0 && <Fact icon={<PollRegular />}>{plural(broadcast.stats.polls.length, "poll")}</Fact>}
                   {broadcast.stats.score && (
                     <Fact icon={<SportSoccerRegular />}>
                       {`${broadcast.stats.score.home} ${broadcast.stats.score.score_home}–${broadcast.stats.score.score_away} ${broadcast.stats.score.away}`}

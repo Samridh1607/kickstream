@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { useMatch } from "../stream/store";
 import {
-  audience, broadcast, broadcasts, destination, endedBroadcast, FakeEventSource, FakeEventSourceCtor, output, poll, studio,
+  broadcast, broadcasts, destination, endedBroadcast, FakeEventSource, FakeEventSourceCtor, output, studio,
 } from "../test/fixtures";
 import { renderUi } from "../test/render";
 import { HomePage } from "./HomePage";
@@ -138,13 +138,12 @@ test("every broadcast is listed with what it kept, and leads to its page", () =>
   expect(screen.queryByRole("region", { name: "Scenes" })).toBeNull();
 });
 
-test("the audience box shares the fan page and sums the poll", () => {
+test("home has no fan page or audience box", () => {
   serve();
   render();
-  push("/api/studio/audience/stream", audience({ poll: poll() }));
-  const box = within(screen.getByRole("region", { name: "Audience" }));
-  expect(box.getByText(`${window.location.origin}/join`)).toBeTruthy();
-  expect(box.getByText("Who will win? · 4 votes")).toBeTruthy();
+  expect(screen.queryByRole("region", { name: "Audience" })).toBeNull();
+  expect(screen.queryByText(/\/join$/)).toBeNull();
+  expect(screen.queryByRole("link", { name: /Fan page/ })).toBeNull();
 });
 
 test("destinations are listed with their key hint", () => {

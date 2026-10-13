@@ -50,10 +50,6 @@ export function onAir(broadcast: Broadcast, now: number): number {
   return broadcast.sessions.reduce((sum, session) => sum + Math.max(0, (session.ended_at ?? now) - session.started_at), 0);
 }
 
-export function votes(broadcast: Broadcast): number {
-  return broadcast.stats.polls.reduce((sum, poll) => sum + poll.votes, 0);
-}
-
 /** Destinations that received the stream at least once, of all that were on in any session. */
 export function reach(broadcast: Broadcast): { reached: number; total: number } {
   const outcomes = new Map<string, boolean>();

@@ -1,7 +1,6 @@
 import { makeStyles, MessageBar, MessageBarBody, Switch, Tab, TabList, tokens } from "@fluentui/react-components";
 import { useEffect, useState } from "react";
 import { fetchTeams, speedFromLocation, startMatch, type Teams } from "./api";
-import { JoinLive } from "./audience/JoinPage";
 import { Header } from "./components/Header";
 import { NarrativeFeed } from "./components/NarrativeFeed";
 import { OverlayTab } from "./components/OverlayTab";
@@ -17,7 +16,7 @@ import { loadProfile, saveProfile } from "./prefs";
 import { useMatch } from "./stream/store";
 import { useCurrentMatch } from "./stream/useCurrentMatch";
 
-type View = "match" | "overlay" | "join";
+type View = "match" | "overlay";
 
 const useStyles = makeStyles({
   app: { display: "flex", flexDirection: "column", minHeight: "100vh", backgroundColor: tokens.colorNeutralBackground2 },
@@ -112,7 +111,6 @@ export function App({ eventSource, retryMs = 2000, pollMs = 3000 }: AppProps) {
       <TabList className={styles.views} selectedValue={view} onTabSelect={(_, tab) => setView(tab.value as View)}>
         <Tab value="match">{t(language, "matchTab")}</Tab>
         <Tab value="overlay">{t(language, "overlayTab")}</Tab>
-        <Tab value="join">{t(language, "joinTab")}</Tab>
       </TabList>
       {view === "match" && (
         <main className={styles.match}>
@@ -143,11 +141,6 @@ export function App({ eventSource, retryMs = 2000, pollMs = 3000 }: AppProps) {
       {view === "overlay" && (
         <main>
           <OverlayTab overlays={data.overlays} language={language} />
-        </main>
-      )}
-      {view === "join" && (
-        <main className={styles.match} style={{ display: "block" }}>
-          <JoinLive language={language} eventSource={eventSource} retryMs={retryMs} />
         </main>
       )}
       <PreferencesDrawer open={preferencesOpen} profile={profile} teams={teams} onChange={updateProfile}

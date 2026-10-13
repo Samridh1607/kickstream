@@ -34,7 +34,7 @@ export function ModeBadge({ scene, studio }: { scene: Scene; studio: Studio }) {
   );
 }
 const ELEMENT_TYPES: SceneElement["type"][] = [
-  "scoreboard", "pitch", "narration", "stats", "banner", "ticker", "timeline", "recap", "replay", "countdown", "text", "image", "poll", "qa",
+  "scoreboard", "pitch", "narration", "stats", "banner", "ticker", "timeline", "recap", "replay", "countdown", "text", "image",
 ];
 
 const useStyles = makeStyles({

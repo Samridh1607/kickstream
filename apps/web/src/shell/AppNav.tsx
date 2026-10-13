@@ -1,8 +1,5 @@
 import { Button, makeStyles, mergeClasses, Text, tokens, Tooltip } from "@fluentui/react-components";
-import {
-  DataTrendingRegular, HomeRegular, OpenRegular, PeopleCommunityRegular, VideoClipMultipleRegular,
-  WeatherMoonRegular, WeatherSunnyRegular,
-} from "@fluentui/react-icons";
+import { DataTrendingRegular, HomeRegular, VideoClipMultipleRegular, WeatherMoonRegular, WeatherSunnyRegular } from "@fluentui/react-icons";
 import type { ReactNode } from "react";
 import type { Output } from "../contracts";
 import { LiveStatus } from "../output/OutputTab";
@@ -11,11 +8,11 @@ import { BrandLogo } from "./BrandLogo";
 
 export type NavPage = "home" | "studio" | "match";
 
-const LINKS: { page: NavPage | null; href: string; label: string; icon: ReactNode; newTab?: boolean }[] = [
+const LINKS: { page: NavPage; href: string; label: string; icon: ReactNode }[] = [
   { page: "home", href: "/", label: "Home", icon: <HomeRegular /> },
   { page: "studio", href: "/studio", label: "Studio", icon: <VideoClipMultipleRegular /> },
   { page: "match", href: "/match", label: "Match data", icon: <DataTrendingRegular /> },
-  { page: null, href: "/join", label: "Fan page", icon: <PeopleCommunityRegular />, newTab: true },];
+];
 
 const useStyles = makeStyles({
   nav: {
@@ -69,11 +66,9 @@ export function AppNav({ current, output = null, now = Date.now() / 1000, childr
       <nav aria-label="Main" className={styles.links}>
         {LINKS.map((link) => (
           <a key={link.href} href={link.href} className={mergeClasses(styles.link, link.page === current && styles.current)}
-            aria-current={link.page === current ? "page" : undefined}
-            {...(link.newTab ? { target: "_blank", rel: "noreferrer" } : {})}>
+            aria-current={link.page === current ? "page" : undefined}>
             {link.icon}
             {link.label}
-            {link.newTab && <OpenRegular style={{ fontSize: 12, opacity: 0.6 }} />}
           </a>
         ))}
       </nav>
