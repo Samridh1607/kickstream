@@ -34,7 +34,8 @@ export function useDevices(call: RoomCall | null): Devices {
         setMicrophones(foundMicrophones);
         if (foundMicrophones[0]) {
           await call.setMicrophone(foundMicrophones[0].id);
-          if (current) setMicrophone(foundMicrophones[0].id);
+          if (!current) return;
+          setMicrophone(foundMicrophones[0].id);
         }
         if (foundCameras[0]) {
           await call.setCamera(foundCameras[0].id);

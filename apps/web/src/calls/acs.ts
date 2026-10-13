@@ -96,44 +96,85 @@ export class AcsRoomCall implements RoomCall {
   }
 
   async setMuted(muted: boolean) {
-    this.muted = muted;
-    if (this.call && this.call.isMuted !== muted) await (muted ? this.call.mute() : this.call.unmute());
-    this.emit();
+    const call = this.call;
+    if (!call) {
+      this.muted = muted;
+      this.emit();
+      return;
+    }
+    try {
+      if (call.isMuted !== muted) await (muted ? call.mute() : call.unmute());
+    } finally {
+      if (call === this.call) this.muted = call.isMuted;
+      this.emit();
+    }
+  }
+
+  /** A call client allows one call agent at a time. */
+  private async releaseAgent() {
+    const agent = this.agent;
+    this.agent = null;
+    this.call = null;
+    await agent?.dispose();
   }
 
   async join({ roomId, token, name, refresh, receiveOnly = false }: JoinOptions) {
-    const client = await this.start();
-    const [, common] = await load();
-    const credential = new common.AzureCommunicationTokenCredential({ token, tokenRefresher: () => refresh(), refreshProactively: true });
-    this.agent = await client.createCallAgent(credential, { displayName: name });
+    await this.releaseAgent();
     this.problem = null;
     this.state = "joining";
     this.emit();
-    const sending = !receiveOnly && this.local ? { localVideoStreams: [this.local] } : undefined;
-    const call = this.agent.join({ roomId }, { videoOptions: sending, audioOptions: { muted: receiveOnly || this.muted } });
-    this.call = call;
-    call.on("stateChanged", () => this.followState(call));
-    call.on("remoteParticipantsUpdated", ({ added }) => {
-      added.forEach((participant) => this.follow(participant));
+    let agent: CallAgent | null = null;
+    try {
+      const client = await this.start();
+      const [, common] = await load();
+      const credential = new common.AzureCommunicationTokenCredential({ token, tokenRefresher: () => refresh(), refreshProactively: true });
+      agent = await client.createCallAgent(credential, { displayName: name });
+      this.agent = agent;
+      const sending = !receiveOnly && this.local ? { localVideoStreams: [this.local] } : undefined;
+      const call = agent.join({ roomId }, { videoOptions: sending, audioOptions: { muted: receiveOnly || this.muted } });
+      this.call = call;
+      this.muted = call.isMuted;
+      call.on("stateChanged", () => this.followState(call));
+      call.on("isMutedChanged", () => {
+        if (call !== this.call) return;
+        this.muted = call.isMuted;
+        this.emit();
+      });
+      call.on("remoteParticipantsUpdated", ({ added }) => {
+        added.forEach((participant) => this.follow(participant));
+        this.collect();
+      });
+      call.on("remoteAudioStreamsUpdated", () => this.emit());
+      call.remoteParticipants.forEach((participant) => this.follow(participant));
       this.collect();
-    });
-    call.on("remoteAudioStreamsUpdated", () => this.emit());
-    call.remoteParticipants.forEach((participant) => this.follow(participant));
-    this.collect();
-    await new Promise<void>((resolve, reject) => {
-      const check = () => {
-        if (call.state === "Connected") resolve();
-        else if (call.state === "Disconnected") reject(new Error(this.problem ?? "The call could not be joined."));
-      };
-      call.on("stateChanged", check);
-      check();
-    });
+      await new Promise<void>((resolve, reject) => {
+        const check = () => {
+          if (call.state !== "Connected" && call.state !== "Disconnected") return;
+          call.off("stateChanged", check);
+          if (call.state === "Connected") resolve();
+          else reject(new Error(this.problem ?? "The call could not be joined."));
+        };
+        call.on("stateChanged", check);
+        check();
+      });
+    } catch (caught) {
+      if (agent && agent !== this.agent) throw caught;
+      this.agent = null;
+      this.call = null;
+      this.participants = [];
+      this.state = "dropped";
+      this.problem ??= "The call could not be joined.";
+      this.emit();
+      await agent?.dispose();
+      throw caught;
+    }
   }
 
   private followState(call: Call) {
     if (call !== this.call) return;
     if (call.state === "Connected") {
       this.state = "joined";
+      this.muted = call.isMuted;
     } else if (call.state === "Disconnected") {
       this.state = "dropped";
       const reason = call.callEndReason;
@@ -202,7 +243,10 @@ export class AcsRoomCall implements RoomCall {
           if (renderer === made) element.replaceChildren(view.target);
         },
         () => {
-          if (renderer === made) shown = null;
+          if (renderer !== made) return;
+          made.dispose();
+          renderer = null;
+          shown = null;
         },
       );
     };
