@@ -127,3 +127,43 @@ test("without a capture token the page never offers to record itself", () => {
   push(studio());
   expect((window as unknown as { __kickstreamStartCapture?: unknown }).__kickstreamStartCapture).toBeUndefined();
 });
+
+test("a second call shares the running capture, unmounting stops it, and the function goes away", async () => {
+  serve(null);
+  const page = window as unknown as { __kickstreamStartCapture?: () => Promise<void> };
+  const stop = vi.fn();
+  const capture = vi.fn(async () => stop);
+  window.history.pushState({}, "", "/program?capture=run-token");
+  try {
+    const view = renderUi(<ProgramPage eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10_000} capture={capture} />);
+    push(studio());
+    const first = page.__kickstreamStartCapture!();
+    const second = page.__kickstreamStartCapture!();
+    expect(second).toBe(first);
+    await first;
+    await page.__kickstreamStartCapture!();
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(stop).not.toHaveBeenCalled();
+    view.unmount();
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(page.__kickstreamStartCapture).toBeUndefined();
+  } finally {
+    window.history.pushState({}, "", "/program");
+  }
+});
+
+test("after a failed capture a later call may try again", async () => {
+  serve(null);
+  const page = window as unknown as { __kickstreamStartCapture?: () => Promise<void> };
+  const capture = vi.fn().mockRejectedValueOnce(new Error("refused")).mockResolvedValue(() => {});
+  window.history.pushState({}, "", "/program?capture=run-token");
+  try {
+    renderUi(<ProgramPage eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10_000} capture={capture} />);
+    push(studio());
+    await expect(page.__kickstreamStartCapture!()).rejects.toThrow("refused");
+    await page.__kickstreamStartCapture!();
+    expect(capture).toHaveBeenCalledTimes(2);
+  } finally {
+    window.history.pushState({}, "", "/program");
+  }
+});

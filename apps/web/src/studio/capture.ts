@@ -44,15 +44,24 @@ export function captureSocketUrl(token: string, place: Place): string {
 /** What capture needs from the browser. Tests pass stand-ins. */
 export interface CaptureDeps {
   display(constraints: object): Promise<MediaStream>;
-  audio(): MediaStream;
+  /** The program's sound, once it is running. Rejects if it cannot be started. */
+  audio(): Promise<MediaStream>;
   Stream: typeof MediaStream;
   Recorder: typeof MediaRecorder;
   Socket: typeof WebSocket;
 }
 
+/** Stops a capture. Safe to call more than once; `ended` settles once it has stopped, however that came about. */
+export type StopCapture = (() => void) & { ended?: Promise<void> };
+
 const browser = (): CaptureDeps => ({
   display: (constraints) => navigator.mediaDevices.getDisplayMedia(constraints as DisplayMediaStreamOptions),
-  audio: () => programAudio().stream,
+  audio: async () => {
+    const program = programAudio();
+    // Without a user gesture the context can stay suspended and the track would carry nothing.
+    if (program.context.state === "suspended") await program.context.resume();
+    return program.stream;
+  },
   Stream: MediaStream,
   Recorder: MediaRecorder,
   Socket: WebSocket,
@@ -69,15 +78,36 @@ function opened(socket: WebSocket): Promise<void> {
   });
 }
 
-/** Record this tab with the program's sound and send it to the pipeline. Resolves to a function that stops it. */
-export async function startCapture(token: string, size: { width: number; height: number }, deps: CaptureDeps = browser()): Promise<() => void> {
+/**
+ * Record this tab with the program's sound and send it to the pipeline. Resolves to a function that stops it.
+ * The pipeline reads the socket closing as "the page stopped sending", so any way this ends closes the socket.
+ */
+export async function startCapture(token: string, size: { width: number; height: number }, deps: CaptureDeps = browser()): Promise<StopCapture> {
   const shown = await deps.display({
     video: { width: size.width, height: size.height, frameRate: 30 },
     audio: false,
     preferCurrentTab: true,
     selfBrowserSurface: "include",
   });
-  const release = () => shown.getTracks().forEach((track) => track.stop());
+  let socket: WebSocket | undefined;
+  let recorder: MediaRecorder | undefined;
+  let done = false;
+  let finish!: () => void;
+  const ended = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const stop: StopCapture = () => {
+    if (done) return;
+    done = true;
+    try {
+      if (recorder && recorder.state !== "inactive") recorder.stop();
+    } finally {
+      shown.getTracks().forEach((track) => track.stop());
+      socket?.close();
+      finish();
+    }
+  };
+  stop.ended = ended;
   try {
     const [picture] = shown.getVideoTracks();
     // Anything but this tab would put the streamer's screen on air.
@@ -85,25 +115,28 @@ export async function startCapture(token: string, size: { width: number; height:
     const mimeType = FORMATS.find((format) => deps.Recorder.isTypeSupported(format));
     if (!mimeType) throw new Error("This browser cannot record the program.");
 
-    const socket = new deps.Socket(captureSocketUrl(token, window.location));
-    socket.binaryType = "arraybuffer";
-    await opened(socket);
+    const opening = new deps.Socket(captureSocketUrl(token, window.location));
+    socket = opening;
+    opening.binaryType = "arraybuffer";
+    await opened(opening);
+    // From here the pipeline closing the socket means the run is over; there is no gap before this.
+    opening.onclose = stop;
+    picture.onended = stop;
 
-    const recorder = new deps.Recorder(new deps.Stream([picture, ...deps.audio().getAudioTracks()]), { mimeType, videoBitsPerSecond: 8_000_000 });
-    const stop = () => {
-      if (recorder.state !== "inactive") recorder.stop();
-      release();
-      socket.close();
+    const sound = await deps.audio();
+    if (done || opening.readyState !== OPEN) throw new Error("The pipeline closed the recording.");
+
+    const made = new deps.Recorder(new deps.Stream([picture, ...sound.getAudioTracks()]), { mimeType, videoBitsPerSecond: 8_000_000 });
+    recorder = made;
+    made.ondataavailable = (event) => {
+      if (event.data.size > 0 && opening.readyState === OPEN) opening.send(event.data);
     };
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0 && socket.readyState === OPEN) socket.send(event.data);
-    };
-    // The pipeline closing the socket means the run is over.
-    socket.onclose = stop;
-    recorder.start(PIECE_MS);
+    made.onerror = stop;
+    made.onstop = stop;
+    made.start(PIECE_MS);
     return stop;
   } catch (problem) {
-    release();
+    stop();
     throw problem;
   }
 }

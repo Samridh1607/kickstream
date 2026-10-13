@@ -4,7 +4,7 @@ import type { Audience, Scene, Studio, ViewerProfile } from "../contracts";
 import { useMatch } from "../stream/store";
 import { useLiveDocument } from "../stream/useLiveDocument";
 import { type CurrentMatchOptions, useCurrentMatch } from "../stream/useCurrentMatch";
-import { startCapture } from "./capture";
+import { startCapture, type StopCapture } from "./capture";
 import { fitScale, nextLayer } from "./geometry";
 import { SceneCanvas } from "./SceneCanvas";
 import { useNow, useStudio } from "./useStudio";
@@ -68,10 +68,36 @@ export function ProgramPage({ eventSource, retryMs, pollMs, capture = startCaptu
   useEffect(() => {
     if (!token || !ready) return;
     const page = window as unknown as { __kickstreamStartCapture?: () => Promise<void> };
-    page.__kickstreamStartCapture = async () => {
-      await capture(token, { width: window.innerWidth, height: window.innerHeight });
+    // At most one capture at a time: a call while one starts or runs gets the same promise.
+    let current: Promise<void> | null = null;
+    let stopRunning: (() => void) | null = null;
+    let gone = false;
+    page.__kickstreamStartCapture = () => {
+      if (current) return current;
+      const attempt: Promise<void> = (async () => {
+        const stop = await capture(token, { width: window.innerWidth, height: window.innerHeight });
+        if (gone) {
+          stop();
+          return;
+        }
+        stopRunning = stop;
+        // Once it has ended by itself, a later call may start a new one.
+        void (stop as StopCapture).ended?.then(() => {
+          if (current === attempt) {
+            current = null;
+            stopRunning = null;
+          }
+        });
+      })();
+      current = attempt;
+      attempt.catch(() => {
+        if (current === attempt) current = null;
+      });
+      return attempt;
     };
     return () => {
+      gone = true;
+      stopRunning?.();
       delete page.__kickstreamStartCapture;
     };
   }, [token, ready, capture]);

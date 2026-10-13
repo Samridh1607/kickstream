@@ -2,6 +2,7 @@ import { type CaptureDeps, captureSocketUrl, startCapture } from "./capture";
 
 class FakeTrack {
   stopped = false;
+  onended: (() => void) | null = null;
   constructor(public kind: string, private surface = "browser") {}
   getSettings() {
     return { displaySurface: this.surface };
@@ -27,19 +28,26 @@ class FakeStream {
 class FakeRecorder {
   static supported = ["video/webm;codecs=h264,opus"];
   static last: FakeRecorder;
+  static failBuild = false;
+  static failStart = false;
   static isTypeSupported = (type: string) => FakeRecorder.supported.includes(type);
   state = "inactive";
   every = 0;
   ondataavailable: ((event: { data: Blob }) => void) | null = null;
+  onerror: (() => void) | null = null;
+  onstop: (() => void) | null = null;
   constructor(public stream: FakeStream, public options: { mimeType: string }) {
+    if (FakeRecorder.failBuild) throw new Error("no recorder");
     FakeRecorder.last = this;
   }
   start(every: number) {
+    if (FakeRecorder.failStart) throw new Error("cannot start");
     this.state = "recording";
     this.every = every;
   }
   stop() {
     this.state = "inactive";
+    this.onstop?.();
   }
 }
 
@@ -74,7 +82,7 @@ class FakeSocket {
   }
 }
 
-function deps(surface = "browser") {
+function deps(surface = "browser", audio?: () => Promise<MediaStream>) {
   const video = new FakeTrack("video", surface);
   const sound = new FakeTrack("audio");
   const asked: unknown[] = [];
@@ -83,7 +91,7 @@ function deps(surface = "browser") {
       asked.push(constraints);
       return new FakeStream([video]) as unknown as MediaStream;
     },
-    audio: () => new FakeStream([sound]) as unknown as MediaStream,
+    audio: audio ?? (async () => new FakeStream([sound]) as unknown as MediaStream),
     Stream: FakeStream as unknown as typeof MediaStream,
     Recorder: FakeRecorder as unknown as typeof MediaRecorder,
     Socket: FakeSocket as unknown as typeof WebSocket,
@@ -96,6 +104,8 @@ const SIZE = { width: 1280, height: 720 };
 beforeEach(() => {
   FakeSocket.opens = true;
   FakeRecorder.supported = ["video/webm;codecs=h264,opus"];
+  FakeRecorder.failBuild = false;
+  FakeRecorder.failStart = false;
 });
 
 test("the capture socket is on this page's host and carries the token", () => {
@@ -148,4 +158,78 @@ test("the socket closing later stops the recording, and so does the returned sto
   const stop = await startCapture("tok", SIZE, second.made);
   stop();
   expect([FakeRecorder.last.state, second.video.stopped, FakeSocket.last.closed]).toEqual(["inactive", true, true]);
+});
+
+test.each([["a recorder that cannot be built", "failBuild"], ["a recorder that cannot start", "failStart"]] as const)(
+  "%s fails the capture, releases the tab and closes the socket",
+  async (_name, flag) => {
+    FakeRecorder[flag] = true;
+    const { made, video } = deps();
+    await expect(startCapture("tok", SIZE, made)).rejects.toThrow();
+    expect([video.stopped, FakeSocket.last.closed]).toEqual([true, true]);
+  },
+);
+
+test("a recorder error, the recorder stopping alone, or the tab share ending each end the capture", async () => {
+  const errored = deps();
+  await startCapture("tok", SIZE, errored.made);
+  FakeRecorder.last.onerror?.();
+  expect([FakeRecorder.last.state, errored.video.stopped, FakeSocket.last.closed]).toEqual(["inactive", true, true]);
+
+  const stopped = deps();
+  await startCapture("tok", SIZE, stopped.made);
+  FakeRecorder.last.state = "inactive";
+  FakeRecorder.last.onstop?.();
+  expect([stopped.video.stopped, FakeSocket.last.closed]).toEqual([true, true]);
+
+  const ended = deps();
+  await startCapture("tok", SIZE, ended.made);
+  ended.video.onended?.();
+  expect([FakeRecorder.last.state, ended.video.stopped, FakeSocket.last.closed]).toEqual(["inactive", true, true]);
+});
+
+test("stopping twice is harmless and the end is reported once", async () => {
+  const { made } = deps();
+  const stop = await startCapture("tok", SIZE, made);
+  stop();
+  stop();
+  await expect(stop.ended).resolves.toBeUndefined();
+});
+
+test("the recorder is not built until the audio is running", async () => {
+  let resume!: () => void;
+  const { made, sound } = deps("browser", () => new Promise((resolve) => {
+    resume = () => resolve(new FakeStream([sound]) as unknown as MediaStream);
+  }));
+  FakeRecorder.last = undefined as unknown as FakeRecorder;
+  const started = startCapture("tok", SIZE, made);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  expect(FakeRecorder.last).toBeUndefined();
+  resume();
+  await started;
+  expect(FakeRecorder.last.state).toBe("recording");
+});
+
+test("audio that cannot start fails the capture, releases the tab and closes the socket", async () => {
+  const { made, video } = deps("browser", async () => {
+    throw new Error("no audio");
+  });
+  await expect(startCapture("tok", SIZE, made)).rejects.toThrow("no audio");
+  expect([video.stopped, FakeSocket.last.closed]).toEqual([true, true]);
+});
+
+test("a socket that closes while the audio starts fails the capture instead of recording to a dead socket", async () => {
+  let resume!: () => void;
+  const { made, video, sound } = deps("browser", () => new Promise((resolve) => {
+    resume = () => resolve(new FakeStream([sound]) as unknown as MediaStream);
+  }));
+  FakeRecorder.last = undefined as unknown as FakeRecorder;
+  const started = startCapture("tok", SIZE, made);
+  const outcome = expect(started).rejects.toThrow();
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  FakeSocket.last.onclose?.();
+  resume();
+  await outcome;
+  expect(FakeRecorder.last).toBeUndefined();
+  expect(video.stopped).toBe(true);
 });
