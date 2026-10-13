@@ -21,7 +21,11 @@ def encoder_args(quality: Quality) -> list[str]:
     keyframe_every = str(quality.fps * 2)
     video = f"{quality.video_kbps}k"
     return [
-        *_QUIET, "-fflags", "+genpts", "-analyzeduration", "2000000", "-i", "pipe:0",
+        *_QUIET, "-fflags", "+genpts", "-analyzeduration", "2000000",
+        # A still program sends about one picture a second. With frame threads the decoder holds back
+        # several pictures, so the picture would trail the sound by seconds and a sender would never find it.
+        "-flags", "low_delay",
+        "-i", "pipe:0",
         "-vf", f"scale={quality.width}:{quality.height},fps={quality.fps}",
         "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-pix_fmt", "yuv420p",
         "-g", keyframe_every, "-keyint_min", keyframe_every, "-sc_threshold", "0",

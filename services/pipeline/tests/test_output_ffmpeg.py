@@ -25,6 +25,12 @@ def test_the_encoder_is_asked_for_the_chosen_size_rate_and_a_keyframe_every_two_
     assert args[-3:] == ["-f", "mpegts", "pipe:1"]
 
 
+def test_the_encoder_does_not_hold_pictures_back_because_a_still_program_sends_few():
+    args = encoder_args(QUALITY)
+    # Before the input: it is the decoder's option, and frame threads would delay a one-a-second picture by seconds.
+    assert args.index("-flags") < args.index("-i") and args[args.index("-flags") + 1] == "low_delay"
+
+
 def test_a_sender_copies_without_encoding_to_flv_or_to_a_file_that_plays_if_cut_short():
     rtmp = sender_args(Target("rtmp", "rtmp://host/app/key"))
     assert rtmp[rtmp.index("-c") + 1] == "copy" and rtmp[-3:] == ["-f", "flv", "rtmp://host/app/key"]
