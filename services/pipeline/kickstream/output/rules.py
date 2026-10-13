@@ -146,6 +146,17 @@ def remove_destination(state: OutputState, destination_id: str) -> OutputState:
     return replace(_doc(state, destinations=remaining), keys=keys)
 
 
+def ensure_recording(state: OutputState) -> OutputState:
+    """A file destination switched on: the first one there is, or a new one."""
+    files = [d for d in state.doc.destinations if d.platform == "file"]
+    if any(d.enabled for d in files):
+        return state
+    if files:
+        _editable(state)
+        return _swap(state, files[0].model_copy(update={"enabled": True}))
+    return add_destination(state, "Recording", "file", "", "")
+
+
 def set_quality(state: OutputState, quality: str) -> OutputState:
     _editable(state)
     if quality not in QUALITIES:

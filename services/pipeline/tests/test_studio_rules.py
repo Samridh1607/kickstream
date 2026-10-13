@@ -94,7 +94,13 @@ def test_scenes_can_be_made_from_a_template_a_saved_template_or_another_scene():
 
 def test_the_live_match_is_the_fan_scene_and_the_analyst_desk_the_analyst_scene():
     modes = {t.name: t.mode for t in builtin_templates()}
-    assert modes == {STARTING_SOON: None, LIVE_MATCH: "fan", ANALYST_DESK: "analyst", BREAK: None, FULL_TIME: None}
+    assert modes == {
+        STARTING_SOON: None,
+        LIVE_MATCH: "fan",
+        ANALYST_DESK: "analyst",
+        BREAK: None,
+        FULL_TIME: None,
+    }
 
 
 def test_a_new_scene_keeps_the_mode_of_what_it_was_made_from():
@@ -110,7 +116,9 @@ def test_a_scene_mode_can_be_set_or_cleared_and_only_on_that_scene():
     doc = default_studio()
     target = scene_id(doc, BREAK)
     changed = rules.set_scene_mode(doc, target, "analyst")
-    assert [s.mode for s in changed.scenes if s.id != target] == [s.mode for s in doc.scenes if s.id != target]
+    assert [s.mode for s in changed.scenes if s.id != target] == [
+        s.mode for s in doc.scenes if s.id != target
+    ]
     assert next(s.mode for s in changed.scenes if s.id == target) == "analyst"
     cleared = rules.set_scene_mode(changed, target, None)
     assert next(s.mode for s in cleared.scenes if s.id == target) is None

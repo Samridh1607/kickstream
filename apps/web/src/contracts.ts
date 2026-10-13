@@ -517,3 +517,150 @@ export interface Output {
    */
   recordings: Recording[];
 }
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "BroadcastDestination".
+ */
+export interface BroadcastDestination {
+  id: string;
+  name: string;
+  platform: "youtube" | "x" | "facebook" | "twitch" | "custom" | "file";
+  outcome: "off" | "live" | "failed";
+  reason?: string | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "BroadcastSession".
+ */
+export interface BroadcastSession {
+  started_at: number;
+  ended_at?: number | null;
+  /**
+   * @maxItems 10
+   */
+  destinations: BroadcastDestination[];
+  problem?: string | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "BroadcastRecording".
+ */
+export interface BroadcastRecording {
+  file: string;
+  size_bytes: number;
+  started_at: number;
+  made_at: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "BroadcastMoment".
+ */
+export interface BroadcastMoment {
+  id: string;
+  kind: "goal" | "red_card" | "big_chance" | "momentum_swing" | "sustained_pressure";
+  team: "home" | "away";
+  minute: number;
+  at: number;
+  score_home: number;
+  score_away: number;
+  commentary?: string | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "BroadcastPoll".
+ */
+export interface BroadcastPoll {
+  id: string;
+  question: string;
+  votes: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "BroadcastScore".
+ */
+export interface BroadcastScore {
+  home: string;
+  away: string;
+  score_home: number;
+  score_away: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "BroadcastStats".
+ */
+export interface BroadcastStats {
+  live_s: number;
+  /**
+   * @maxItems 20
+   */
+  polls: BroadcastPoll[];
+  questions: number;
+  score?: BroadcastScore | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Reel".
+ */
+export interface Reel {
+  id: string;
+  recording: string;
+  moment_id?: string | null;
+  start_s: number;
+  duration_s: number;
+  title: string;
+  caption: string;
+  /**
+   * @maxItems 6
+   */
+  hashtags: string[];
+  state: "rendering" | "ready" | "failed";
+  agent: string;
+  size_bytes?: number | null;
+  reason?: string | null;
+  made_at: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Broadcast".
+ */
+export interface Broadcast {
+  id: string;
+  title: string;
+  description: string;
+  record: boolean;
+  state: "ready" | "live" | "ended";
+  created_at: number;
+  /**
+   * @maxItems 50
+   */
+  sessions: BroadcastSession[];
+  /**
+   * @maxItems 50
+   */
+  recordings: BroadcastRecording[];
+  /**
+   * @maxItems 100
+   */
+  moments: BroadcastMoment[];
+  stats: BroadcastStats;
+  /**
+   * @maxItems 12
+   */
+  reels: Reel[];
+  generating: boolean;
+  problem?: string | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Broadcasts".
+ */
+export interface Broadcasts {
+  revision: number;
+  server_time: number;
+  /**
+   * @maxItems 100
+   */
+  broadcasts: Broadcast[];
+  current_id?: string | null;
+  ai: boolean;
+}

@@ -1,6 +1,7 @@
 """A local OpenAI-compatible Chat Completions endpoint for tests. No test calls a live model."""
 
 import json
+import re
 import socket
 import threading
 import time
@@ -11,7 +12,16 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
 from starlette.routing import Route
 
-ROLES = ("commentator", "tactical_analyst", "recap_writer", "localizer", "match_expert")
+ROLES = (
+    "commentator",
+    "tactical_analyst",
+    "recap_writer",
+    "localizer",
+    "match_expert",
+    "highlight_editor",
+    "social_copywriter",
+)
+_LISTED = re.compile(r"^\[([^\]]+)\]", re.MULTILINE)
 RECAP_JSON = json.dumps(
     {
         "fan": {"title": "Fan title", "bullets": ["f1", "f2", "f3"], "text": "Fan recap."},
@@ -58,6 +68,21 @@ class FakeLLM:
             return "Analyst line."
         if role == "recap_writer":
             return RECAP_JSON
+        if role == "highlight_editor":
+            # The listed moments in reverse, as an editor putting the best last-minute drama first would.
+            picks = [{"id": found, "why": f"why {found}"} for found in reversed(_LISTED.findall(user))]
+            return json.dumps({"picks": picks})
+        if role == "social_copywriter":
+            reels = [
+                {
+                    "id": found,
+                    "title": f"Title {found}",
+                    "caption": f"Caption {found}",
+                    "hashtags": ["#Fake", "goal"],
+                }
+                for found in _LISTED.findall(user)
+            ]
+            return "Here you go:\n```json\n" + json.dumps({"reels": reels}) + "\n```"
         english = json.loads(user)
         return json.dumps({"es": _tag(english, "es"), "hi": _tag(english, "hi")}, ensure_ascii=False)
 

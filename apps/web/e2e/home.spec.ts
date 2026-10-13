@@ -1,18 +1,17 @@
 import { expect, test } from "@playwright/test";
 
-test("the home page shows the broadcast, its scenes, and the way into the studio", async ({ page }) => {
+test("the home page leads with creating a broadcast, lists the saved ones, and opens the studio", async ({ page }) => {
   await page.goto("/");
   const nav = page.getByRole("navigation", { name: "Main" });
   await expect(nav.getByRole("link", { name: "Home" })).toHaveAttribute("aria-current", "page");
 
-  const broadcast = page.getByRole("region", { name: "Broadcast" });
-  await expect(broadcast.getByRole("heading", { level: 1 })).toHaveText(/Ready to go live|You're live|Going live|Ending the stream/);
+  // Exact: the list of broadcasts is a region too.
+  const broadcast = page.getByRole("region", { name: "Broadcast", exact: true });
+  await expect(broadcast.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(broadcast.getByRole("button", { name: /Create a broadcast|New broadcast/ })).toBeVisible();
   await expect(broadcast.getByRole("link", { name: "Open studio" })).toHaveAttribute("href", "/studio");
-
-  const scenes = page.getByRole("region", { name: "Scenes" });
-  await expect(scenes.getByText("Live match")).toBeVisible();
-  await expect(scenes.getByText("Analyst desk")).toBeVisible();
-  await expect(scenes.getByText("On air")).toHaveCount(1);
+  await expect(page.getByRole("region", { name: "Broadcasts" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Scenes" })).toHaveCount(0);
   await expect(page.locator('a[href="/program"]')).toHaveCount(0);
 
   await nav.getByRole("link", { name: "Studio" }).click();
@@ -29,6 +28,6 @@ test("the clean picture is at /studio?output, and /program is no longer a page",
   await expect(page.getByRole("navigation")).toHaveCount(0);
 
   await page.goto("/program");
-  await expect(page.getByRole("region", { name: "Broadcast" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Broadcast", exact: true })).toBeVisible();
   await expect(page.getByTestId("program")).toHaveCount(0);
 });

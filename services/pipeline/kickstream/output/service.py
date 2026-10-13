@@ -29,7 +29,9 @@ log = logging.getLogger(__name__)
 def capture_address(program_url: str, token: str) -> str:
     """The program page's address with the run's token added, keeping any query it already has."""
     parts = urlsplit(program_url)
-    query = [(name, value) for name, value in parse_qsl(parts.query, keep_blank_values=True) if name != "capture"]
+    query = [
+        (name, value) for name, value in parse_qsl(parts.query, keep_blank_values=True) if name != "capture"
+    ]
     return urlunsplit(parts._replace(query=urlencode([*query, ("capture", token)])))
 
 
@@ -171,6 +173,9 @@ class OutputService:
 
     def set_quality(self, quality: str) -> None:
         self._apply(lambda state: rules.set_quality(state, quality))
+
+    def ensure_recording(self) -> None:
+        self._apply(rules.ensure_recording)
 
     async def changes(self) -> AsyncIterator[Output]:
         """The current document, then the latest one after each change."""

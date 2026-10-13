@@ -452,6 +452,129 @@
         "problem": { "type": ["string", "null"], "default": null },
         "recordings": { "type": "array", "items": { "$ref": "#/$defs/Recording" }, "maxItems": 20 }
       }
+    },
+    "BroadcastDestination": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "platform", "outcome"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "platform": { "enum": ["youtube", "x", "facebook", "twitch", "custom", "file"] },
+        "outcome": { "enum": ["off", "live", "failed"] },
+        "reason": { "type": ["string", "null"], "default": null }
+      }
+    },
+    "BroadcastSession": {
+      "type": "object", "additionalProperties": false,
+      "required": ["started_at", "destinations"],
+      "properties": {
+        "started_at": { "type": "number" },
+        "ended_at": { "type": ["number", "null"], "default": null },
+        "destinations": { "type": "array", "items": { "$ref": "#/$defs/BroadcastDestination" }, "maxItems": 10 },
+        "problem": { "type": ["string", "null"], "default": null }
+      }
+    },
+    "BroadcastRecording": {
+      "type": "object", "additionalProperties": false,
+      "required": ["file", "size_bytes", "started_at", "made_at"],
+      "properties": {
+        "file": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "started_at": { "type": "number" },
+        "made_at": { "type": "number" }
+      }
+    },
+    "BroadcastMoment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "team", "minute", "at", "score_home", "score_away"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "kind": { "enum": ["goal", "red_card", "big_chance", "momentum_swing", "sustained_pressure"] },
+        "team": { "enum": ["home", "away"] },
+        "minute": { "type": "integer" },
+        "at": { "type": "number" },
+        "score_home": { "type": "integer" },
+        "score_away": { "type": "integer" },
+        "commentary": { "type": ["string", "null"], "default": null }
+      }
+    },
+    "BroadcastPoll": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "question", "votes"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "question": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "votes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "BroadcastScore": {
+      "type": "object", "additionalProperties": false,
+      "required": ["home", "away", "score_home", "score_away"],
+      "properties": {
+        "home": { "type": "string" },
+        "away": { "type": "string" },
+        "score_home": { "type": "integer" },
+        "score_away": { "type": "integer" }
+      }
+    },
+    "BroadcastStats": {
+      "type": "object", "additionalProperties": false,
+      "required": ["live_s", "polls", "questions"],
+      "properties": {
+        "live_s": { "type": "number", "minimum": 0 },
+        "polls": { "type": "array", "items": { "$ref": "#/$defs/BroadcastPoll" }, "maxItems": 20 },
+        "questions": { "type": "integer", "minimum": 0 },
+        "score": { "anyOf": [{ "$ref": "#/$defs/BroadcastScore" }, { "type": "null" }], "default": null }
+      }
+    },
+    "Reel": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "recording", "start_s", "duration_s", "title", "caption", "hashtags", "state", "agent", "made_at"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "recording": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "moment_id": { "type": ["string", "null"], "default": null },
+        "start_s": { "type": "number", "minimum": 0 },
+        "duration_s": { "type": "number", "minimum": 0 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "caption": { "type": "string", "maxLength": 300 },
+        "hashtags": { "type": "array", "items": { "type": "string" }, "maxItems": 6 },
+        "state": { "enum": ["rendering", "ready", "failed"] },
+        "agent": { "type": "string" },
+        "size_bytes": { "type": ["integer", "null"], "default": null },
+        "reason": { "type": ["string", "null"], "default": null },
+        "made_at": { "type": "number" }
+      }
+    },
+    "Broadcast": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "title", "description", "record", "state", "created_at", "sessions", "recordings", "moments", "stats", "reels", "generating"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "description": { "type": "string", "maxLength": 500 },
+        "record": { "type": "boolean" },
+        "state": { "enum": ["ready", "live", "ended"] },
+        "created_at": { "type": "number" },
+        "sessions": { "type": "array", "items": { "$ref": "#/$defs/BroadcastSession" }, "maxItems": 50 },
+        "recordings": { "type": "array", "items": { "$ref": "#/$defs/BroadcastRecording" }, "maxItems": 50 },
+        "moments": { "type": "array", "items": { "$ref": "#/$defs/BroadcastMoment" }, "maxItems": 100 },
+        "stats": { "$ref": "#/$defs/BroadcastStats" },
+        "reels": { "type": "array", "items": { "$ref": "#/$defs/Reel" }, "maxItems": 12 },
+        "generating": { "type": "boolean" },
+        "problem": { "type": ["string", "null"], "default": null }
+      }
+    },
+    "Broadcasts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["revision", "server_time", "broadcasts", "ai"],
+      "properties": {
+        "revision": { "type": "integer" },
+        "server_time": { "type": "number" },
+        "broadcasts": { "type": "array", "items": { "$ref": "#/$defs/Broadcast" }, "maxItems": 100 },
+        "current_id": { "type": ["string", "null"], "default": null },
+        "ai": { "type": "boolean" }
+      }
     }
   }
 }

@@ -1,27 +1,30 @@
 import { Badge, Button, makeStyles, mergeClasses, MessageBar, MessageBarBody, Text, tokens, Tooltip } from "@fluentui/react-components";
 import {
-  ChatRegular, CheckmarkCircleFilled, CircleRegular, CopyRegular, LiveRegular, OpenRegular, PeopleCommunityRegular,
-  PlayRegular, PollRegular, RecordStopRegular, SlideLayoutRegular, SportSoccerRegular, VideoClipMultipleRegular,
+  AddRegular, ChatRegular, CheckmarkCircleFilled, CircleRegular, CopyRegular, FilmstripRegular, InfoRegular, LiveRegular,
+  OpenRegular, PeopleCommunityRegular, PlayRegular, PollRegular, RecordRegular, RecordStopRegular, SlideLayoutRegular,
+  SportSoccerRegular, VideoClipMultipleRegular,
 } from "@fluentui/react-icons";
 import { type ReactNode, useMemo, useState } from "react";
 import { speedFromLocation, startMatch } from "../api";
 import { STUDIO_AUDIENCE_STREAM } from "../audience/api";
-import type { Audience, Output, ViewerProfile } from "../contracts";
-import { goLive, OUTPUT_STREAM, stopOutput } from "../output/api";
+import { BROADCASTS_STREAM, broadcastPath, endBroadcast, goLiveWith } from "../broadcasts/api";
+import { BroadcastList } from "../broadcasts/BroadcastList";
+import { CreateBroadcastDialog } from "../broadcasts/CreateBroadcastDialog";
+import { clock } from "../broadcasts/format";
+import type { Audience, Broadcasts, Output, ViewerProfile } from "../contracts";
+import { OUTPUT_STREAM, stopOutput } from "../output/api";
 import { AppNav } from "../shell/AppNav";
 import { PlatformMark, platformLabel } from "../shell/PlatformMark";
 import { useMatch } from "../stream/store";
 import { useLiveDocument } from "../stream/useLiveDocument";
 import { type CurrentMatchOptions, useCurrentMatch } from "../stream/useCurrentMatch";
-import { activateScene } from "../studio/api";
 import { onAirScene, programMode } from "../studio/mode";
-import { ModeBadge, sceneIcon } from "../studio/panels";
+import { ModeBadge } from "../studio/panels";
 import { withFallbacks } from "../studio/ProgramPage";
 import { SceneCanvas } from "../studio/SceneCanvas";
 import { useNow, useStudio } from "../studio/useStudio";
 
 const HERO_SCALE = 0.25;
-const THUMB_SCALE = 0.125;
 
 const STATUS = {
   idle: { label: "Off", color: "subtle" },
@@ -41,8 +44,11 @@ const useStyles = makeStyles({
   },
   heroText: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM, flex: "1 1 380px", minWidth: 0 },
   kicker: { display: "inline-flex", alignItems: "center", gap: tokens.spacingHorizontalXS, textTransform: "uppercase", letterSpacing: "0.12em", fontSize: tokens.fontSizeBase200, fontWeight: tokens.fontWeightSemibold, opacity: 0.85 },
-  heroTitle: { margin: 0, fontSize: "40px", lineHeight: 1.1, fontWeight: tokens.fontWeightBold },
-  heroSub: { fontSize: tokens.fontSizeBase400, lineHeight: 1.5, opacity: 0.9, maxWidth: "560px" },
+  kickerLive: { opacity: 1, color: "#FFB4AB" },
+  heroTitle: { margin: 0, fontSize: "40px", lineHeight: 1.1, fontWeight: tokens.fontWeightBold, overflowWrap: "anywhere" },
+  heroSub: { fontSize: tokens.fontSizeBase400, lineHeight: 1.5, opacity: 0.9, maxWidth: "620px" },
+  heroFacts: { display: "flex", flexWrap: "wrap", gap: tokens.spacingHorizontalS },
+  heroFact: { display: "inline-flex", alignItems: "center", gap: "6px", padding: "4px 10px", borderRadius: "999px", fontSize: tokens.fontSizeBase200, backgroundColor: "rgba(255, 255, 255, 0.12)", border: "1px solid rgba(255, 255, 255, 0.2)" },
   actions: { display: "flex", flexWrap: "wrap", gap: tokens.spacingHorizontalM, marginTop: tokens.spacingVerticalS },
   goLive: { backgroundColor: "#D92D20", color: "#FFFFFF", border: "none", ":hover": { backgroundColor: "#B42318", color: "#FFFFFF" }, ":hover:active": { backgroundColor: "#912018", color: "#FFFFFF" } },
   ghost: { color: "#FFFFFF", backgroundColor: "rgba(255, 255, 255, 0.12)", border: "1px solid rgba(255, 255, 255, 0.3)", ":hover": { color: "#FFFFFF", backgroundColor: "rgba(255, 255, 255, 0.22)" } },
@@ -62,11 +68,6 @@ const useStyles = makeStyles({
   cardHead: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS },
   cardIcon: { display: "inline-flex", alignItems: "center", justifyContent: "center", width: "32px", height: "32px", borderRadius: tokens.borderRadiusMedium, fontSize: "18px", color: tokens.colorBrandForeground1, backgroundColor: tokens.colorBrandBackground2 },
   grow: { flexGrow: 1 },
-  scenes: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: tokens.spacingHorizontalL },
-  scene: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS, padding: tokens.spacingHorizontalS, borderRadius: tokens.borderRadiusLarge, backgroundColor: tokens.colorNeutralBackground3, border: `${tokens.strokeWidthThick} solid transparent` },
-  sceneOnAir: { border: `${tokens.strokeWidthThick} solid #D92D20` },
-  thumb: { borderRadius: tokens.borderRadiusMedium, overflow: "hidden", lineHeight: 0, alignSelf: "center" },
-  sceneRow: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalXS, minWidth: 0 },
   list: { listStyleType: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS },
   destination: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalM, padding: tokens.spacingHorizontalS, borderRadius: tokens.borderRadiusMedium, backgroundColor: tokens.colorNeutralBackground3 },
   share: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS, padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalS}`, borderRadius: tokens.borderRadiusMedium, backgroundColor: tokens.colorNeutralBackground3, fontFamily: tokens.fontFamilyMonospace, overflowWrap: "anywhere" },
@@ -75,14 +76,6 @@ const useStyles = makeStyles({
   todo: { color: tokens.colorNeutralForeground4, fontSize: "20px" },
   muted: { color: tokens.colorNeutralForeground3 },
 });
-
-function elapsed(seconds: number): string {
-  const whole = Math.max(0, Math.floor(seconds));
-  const pad = (value: number) => String(value).padStart(2, "0");
-  const hours = Math.floor(whole / 3600);
-  const minutes = Math.floor((whole % 3600) / 60);
-  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(whole % 60)}` : `${minutes}:${pad(whole % 60)}`;
-}
 
 function Card({ icon, title, action, label, children }: { icon: ReactNode; title: string; action?: ReactNode; label: string; children: ReactNode }) {
   const styles = useStyles();
@@ -113,12 +106,13 @@ function Tile({ icon, tint, label, value, detail }: { icon: ReactNode; tint: str
   );
 }
 
-/** The streamer's home: is the stream on, where it goes, what is on air, and the way into everything else. */
+/** The streamer's home: the broadcast to go live with, every broadcast kept, and the way into everything else. */
 export function HomePage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) {
   const styles = useStyles();
-  const { studio, offset, accept: acceptStudio } = useStudio(eventSource, retryMs);
+  const { studio, offset } = useStudio(eventSource, retryMs);
   const { doc: output, accept: acceptOutput } = useLiveDocument<Output>(OUTPUT_STREAM, eventSource, retryMs);
   const { doc: audience } = useLiveDocument<Audience>(STUDIO_AUDIENCE_STREAM, eventSource, retryMs);
+  const { doc: broadcasts, accept: acceptBroadcasts } = useLiveDocument<Broadcasts>(BROADCASTS_STREAM, eventSource, retryMs);
   const mode = studio ? programMode(studio) : undefined;
   const language = studio?.settings.language;
   const profile = useMemo<ViewerProfile | null>(
@@ -147,6 +141,7 @@ export function HomePage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) 
 
   const state = output?.state ?? "idle";
   const live = state === "live";
+  const running = state !== "idle";
   const sending = output?.destinations.filter((item) => item.enabled) ?? [];
   const onAir = studio ? onAirScene(studio) : null;
   const status = matchId !== null && connection !== "idle" ? match.status : null;
@@ -154,18 +149,31 @@ export function HomePage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) 
   const votes = audience?.poll?.options.reduce((sum, option) => sum + option.votes, 0) ?? 0;
   const joinUrl = `${window.location.origin}/join`;
   const data = studio ? { match, studio, now, language: studio.settings.language, audience } : null;
+  const all = broadcasts?.broadcasts ?? [];
+  const current = all.find((item) => item.state === "live") ?? all.find((item) => item.id === broadcasts?.current_id && item.state === "ready") ?? null;
+  const canGoLive = current !== null && (sending.length > 0 || current.record);
 
-  const title = live ? "You're live" : state === "starting" ? "Going live…" : state === "stopping" ? "Ending the stream…" : "Ready to go live";
-  const subtitle = live
-    ? `Streaming to ${sending.length} ${sending.length === 1 ? "destination" : "destinations"}${onAir ? ` · ${onAir.name} on air` : ""}.`
-    : sending.length === 0
-      ? "Add YouTube, X, Facebook or Twitch in the studio, pick a scene, and send one stream to every platform at once."
-      : `${sending.length} ${sending.length === 1 ? "destination is" : "destinations are"} ready. Pick a scene and press Go live.`;
+  const kicker = live ? `Live now${typeof output?.started_at === "number" ? ` · ${clock(now - output.started_at)}` : ""}`
+    : state === "starting" ? "Going live…"
+      : state === "stopping" ? "Ending the broadcast…"
+        : current ? "Next broadcast" : "Kickstream live studio";
+  const subtitle = current === null
+    ? "Give your stream a title and go live to YouTube, X, Facebook and Twitch at once. Every broadcast keeps its sessions, recording and stats, and AI agents turn the best moments into reels."
+    : live
+      ? `Streaming to ${sending.length} ${sending.length === 1 ? "destination" : "destinations"}${onAir ? ` · ${onAir.name} on air` : ""}.`
+      : current.description || (sending.length === 0 && !current.record
+        ? "Add a destination in the studio, or turn recording on, to go live."
+        : "Pick a scene in the studio, then press Go live.");
+
+  const create = (label: string, primary: boolean) => (
+    <CreateBroadcastDialog onCreated={acceptBroadcasts}
+      trigger={<Button size="large" icon={<AddRegular />} className={primary ? styles.goLive : styles.ghost}>{label}</Button>} />
+  );
 
   const steps = [
-    { done: (output?.destinations.length ?? 0) > 0, label: "Add a streaming destination" },
+    { done: all.length > 0, label: "Create a broadcast" },
+    { done: (output?.destinations.length ?? 0) > 0 || Boolean(current?.record), label: "Add a destination, or record to a file" },
     { done: status !== null, label: "Start the match feed" },
-    { done: Boolean(onAir && onAir.template !== "Starting soon"), label: "Put a match scene on air" },
     { done: live, label: "Go live" },
   ];
 
@@ -173,33 +181,49 @@ export function HomePage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) 
     <div className={styles.page}>
       <AppNav current="home" output={output} now={now} />
       <main className={styles.main}>
-        {problem && (
+        {(problem ?? output?.problem) && (
           <MessageBar intent="error">
-            <MessageBarBody>{problem}</MessageBarBody>
+            <MessageBarBody>{problem ?? output?.problem}</MessageBarBody>
           </MessageBar>
         )}
 
         <section className={styles.hero} aria-label="Broadcast">
           <div className={styles.heroText}>
-            <span className={styles.kicker}><LiveRegular /> Kickstream live studio</span>
-            <h1 className={styles.heroTitle}>{title}</h1>
+            <span className={mergeClasses(styles.kicker, live && styles.kickerLive)}>
+              {live ? <span className={styles.dot} /> : <LiveRegular />} {kicker}
+            </span>
+            <h1 className={styles.heroTitle}>{current?.title ?? "Create a broadcast"}</h1>
             <Text className={styles.heroSub}>{subtitle}</Text>
-            {live && typeof output?.started_at === "number" && (
-              <Text size={600} weight="bold" style={{ fontVariantNumeric: "tabular-nums" }}>{elapsed(now - output.started_at)}</Text>
+            {current && (
+              <div className={styles.heroFacts}>
+                <span className={styles.heroFact}><LiveRegular />{`${sending.length} ${sending.length === 1 ? "destination" : "destinations"} on`}</span>
+                <span className={styles.heroFact}><RecordRegular />{current.record ? "Recording on" : "Not recording"}</span>
+                {onAir && <span className={styles.heroFact}><SlideLayoutRegular />{onAir.name}</span>}
+              </div>
             )}
             <div className={styles.actions}>
-              {state === "idle" ? (
-                <Button size="large" icon={<LiveRegular />} className={styles.goLive} disabled={busy || sending.length === 0}
-                  onClick={() => void attempt(async () => acceptOutput(await goLive()), "The stream could not start.")}>
+              {current === null && !running && create("Create a broadcast", true)}
+              {current !== null && !running && (
+                <Button size="large" icon={<LiveRegular />} className={styles.goLive} disabled={busy || !canGoLive}
+                  onClick={() => void attempt(async () => acceptBroadcasts(await goLiveWith(current.id)), "The broadcast could not go live.")}>
                   Go live
                 </Button>
-              ) : (
+              )}
+              {running && (
                 <Button size="large" icon={<RecordStopRegular />} className={styles.goLive} disabled={busy || state === "stopping"}
-                  onClick={() => void attempt(async () => acceptOutput(await stopOutput()), "The stream could not stop.")}>
-                  Stop stream
+                  onClick={() => void attempt(async () => {
+                    if (current) acceptBroadcasts(await endBroadcast(current.id));
+                    else acceptOutput(await stopOutput());
+                  }, "The broadcast could not end.")}>
+                  End broadcast
                 </Button>
               )}
-              <Button as="a" href="/studio" size="large" icon={<VideoClipMultipleRegular />} className={styles.ghost}>Open studio</Button>            </div>
+              <Button as="a" href="/studio" size="large" icon={<VideoClipMultipleRegular />} className={styles.ghost}>Open studio</Button>
+              {current && (
+                <Button as="a" href={broadcastPath(current.id)} size="large" icon={<InfoRegular />} className={styles.ghost}>Details</Button>
+              )}
+              {current !== null && !running && create("New broadcast", false)}
+            </div>
           </div>
           {studio && onAir && data && (
             <div className={styles.monitor} aria-label="Program preview">
@@ -235,36 +259,12 @@ export function HomePage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) 
 
         <div className={styles.grid}>
           <div className={styles.column}>
-            <Card icon={<SlideLayoutRegular />} title="Scenes" label="Scenes"
-              action={<Button as="a" href="/studio" appearance="subtle" icon={<OpenRegular />}>Edit in studio</Button>}>
-              {!studio || !data ? (
-                <Text className={styles.muted}>Connecting to the studio…</Text>
+            <Card icon={<FilmstripRegular />} title="Broadcasts" label="Broadcasts"
+              action={<CreateBroadcastDialog onCreated={acceptBroadcasts} trigger={<Button appearance="subtle" icon={<AddRegular />}>New broadcast</Button>} />}>
+              {broadcasts === null ? (
+                <Text className={styles.muted}>Connecting…</Text>
               ) : (
-                <div className={styles.scenes}>
-                  {studio.scenes.map((scene) => {
-                    const isOnAir = scene.id === studio.active_scene_id;
-                    return (
-                      <div key={scene.id} className={mergeClasses(styles.scene, isOnAir && styles.sceneOnAir)}>
-                        <div className={styles.thumb}>
-                          <SceneCanvas scene={scene} data={data} scale={THUMB_SCALE} />
-                        </div>
-                        <div className={styles.sceneRow}>
-                          <span aria-hidden style={{ display: "inline-flex", fontSize: 18, color: tokens.colorBrandForeground1 }}>{sceneIcon(scene)}</span>
-                          <Text weight="semibold" truncate wrap={false} className={styles.grow}>{scene.name}</Text>
-                          {isOnAir ? (
-                            <Badge color="danger">On air</Badge>
-                          ) : (
-                            <Button size="small" icon={<PlayRegular />} aria-label={`Switch to ${scene.name}`} disabled={busy}
-                              onClick={() => void attempt(async () => acceptStudio(await activateScene(scene.id)), "The scene could not be switched.")}>
-                              Switch
-                            </Button>
-                          )}
-                        </div>
-                        <ModeBadge scene={scene} studio={studio} />
-                      </div>
-                    );
-                  })}
-                </div>
+                <BroadcastList broadcasts={all} now={now} />
               )}
             </Card>
           </div>

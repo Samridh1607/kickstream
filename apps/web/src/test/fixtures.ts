@@ -1,5 +1,5 @@
 import type {
-  Audience, Destination, Output, Poll, Question,
+  Audience, Broadcast, Broadcasts, Destination, Output, Poll, Question, Reel,
   Envelope, KeyMoment, MatchEvent, MatchStatus, Narrative, Overlay, PressureSnapshot, Recap, StatsSnapshot,
   Scene, SceneElement, Studio, TeamSheet, TeamStats,
 } from "../contracts";
@@ -163,4 +163,42 @@ export const destination = (over: Partial<Destination> = {}): Destination => ({
 export const output = (over: Partial<Output> = {}): Output => ({
   revision: 1, server_time: 1000, destinations: [], quality: "720p30", state: "idle", started_at: null,
   problem: null, recordings: [], ...over,
+});
+
+export const reel = (over: Partial<Reel> = {}): Reel => ({
+  id: "r1", recording: "2026-10-13-140000-rec.mp4", moment_id: "m-1-k1", start_s: 34, duration_s: 15,
+  title: "GOAL! Northbridge FC score in the 23'", caption: "Top corner!", hashtags: ["#Kickstream", "#Goal"],
+  state: "ready", agent: "AI agents", size_bytes: 4000, reason: null, made_at: 2000, ...over,
+});
+
+export const broadcast = (over: Partial<Broadcast> = {}): Broadcast => ({
+  id: "b1", title: "Derby day", description: "Matchday 12", record: true, state: "ready", created_at: 1000,
+  sessions: [], recordings: [], moments: [], stats: { live_s: 0, polls: [], questions: 0, score: null },
+  reels: [], generating: false, problem: null, ...over,
+});
+
+/** A broadcast that was live for two minutes, recorded, with a goal, a poll and a reel. */
+export const endedBroadcast = (over: Partial<Broadcast> = {}): Broadcast => broadcast({
+  state: "ended",
+  sessions: [{
+    started_at: 1000, ended_at: 1120, problem: null,
+    destinations: [
+      { id: "d1", name: "YouTube", platform: "youtube", outcome: "live", reason: null },
+      { id: "rec", name: "Recording", platform: "file", outcome: "live", reason: null },
+      { id: "d2", name: "Twitch", platform: "twitch", outcome: "failed", reason: "Connection refused" },
+    ],
+  }],
+  recordings: [{ file: "2026-10-13-140000-rec.mp4", size_bytes: 5 * 1024 * 1024, started_at: 1000, made_at: 1120 }],
+  moments: [{ id: "m-1-k1", kind: "goal", team: "home", minute: 23, at: 1042, score_home: 1, score_away: 0, commentary: "Top corner!" }],
+  stats: {
+    live_s: 120, questions: 3,
+    polls: [{ id: "p1", question: "Who will win?", votes: 7 }],
+    score: { home: "Northbridge FC", away: "Harbour City", score_home: 1, score_away: 0 },
+  },
+  reels: [reel()],
+  ...over,
+});
+
+export const broadcasts = (over: Partial<Broadcasts> = {}): Broadcasts => ({
+  revision: 1, server_time: 1000, broadcasts: [], current_id: null, ai: true, ...over,
 });

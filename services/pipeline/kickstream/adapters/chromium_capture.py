@@ -95,7 +95,11 @@ def _page_socket(port: int, timeout: float) -> str:
 def _without_token(url: str) -> str:
     """The address as the streamer can open it: the run's token is a secret and stays out of messages."""
     parts = urllib.parse.urlsplit(url)
-    query = [(name, value) for name, value in urllib.parse.parse_qsl(parts.query, keep_blank_values=True) if name != "capture"]
+    query = [
+        (name, value)
+        for name, value in urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+        if name != "capture"
+    ]
     return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(query)))
 
 

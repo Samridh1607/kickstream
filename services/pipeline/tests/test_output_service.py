@@ -84,7 +84,10 @@ async def test_start_is_refused_with_nothing_enabled_or_something_missing(kit):
 def test_the_token_is_added_to_the_program_address_keeping_its_query():
     assert capture_address("http://h:1/studio?output", "t1") == "http://h:1/studio?output=&capture=t1"
     assert capture_address("http://h:1/program", "t1") == "http://h:1/program?capture=t1"
-    assert capture_address("http://h:1/studio?output&capture=old", "t2") == "http://h:1/studio?output=&capture=t2"
+    assert (
+        capture_address("http://h:1/studio?output&capture=old", "t2")
+        == "http://h:1/studio?output=&capture=t2"
+    )
 
 
 async def test_going_live_starts_the_encoder_then_the_page_then_a_sender_per_enabled_destination(kit):

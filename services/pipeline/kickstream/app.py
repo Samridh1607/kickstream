@@ -14,15 +14,18 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from kickstream.adapters.agent_expert import AgentExpertWriter
+from kickstream.adapters.agent_reels import AgentReelProducer
 from kickstream.adapters.agent_writer import AgentNarrativeWriter
 from kickstream.adapters.chromium_capture import ChromiumCapture
 from kickstream.adapters.clocks import RealClock
 from kickstream.adapters.dir_image_store import DirImageStore
 from kickstream.adapters.ffmpeg import FfmpegEncoder, FfmpegSender
+from kickstream.adapters.ffmpeg_clips import FfmpegClipCutter
 from kickstream.adapters.json_record_store import JsonRecordStore
 from kickstream.adapters.json_studio_store import JsonStudioStore
 from kickstream.adapters.memory_bus import InMemoryEventBus
 from kickstream.adapters.memory_store import InMemoryMatchStore
+from kickstream.adapters.scripted_reels import ScriptedReelProducer
 from kickstream.adapters.scripted_writer import ScriptedNarrativeWriter
 from kickstream.adapters.sse_broadcaster import InProcessBroadcaster
 from kickstream.analytics.stage import AnalyticsStage
@@ -30,6 +33,9 @@ from kickstream.audience.api import build_audience_router
 from kickstream.audience.context import MatchTracker
 from kickstream.audience.service import AudienceService
 from kickstream.audience.stage import AudienceStage
+from kickstream.broadcasts.api import build_broadcasts_router
+from kickstream.broadcasts.service import BroadcastService
+from kickstream.broadcasts.stage import BroadcastStage
 from kickstream.control import MatchController
 from kickstream.domain.demo import DEMO_SEED
 from kickstream.domain.errors import Refusal
@@ -46,6 +52,7 @@ from kickstream.overlay.stage import OverlayStage
 from kickstream.ports.clock import Clock
 from kickstream.ports.expert import ExpertWriter
 from kickstream.ports.output import Encoder, ProgramCapture, Sender
+from kickstream.ports.reels import ClipCutter, ReelProducer
 from kickstream.ports.writer import NarrativeWriter
 from kickstream.studio.api import build_studio_router, find_moment
 from kickstream.studio.rules import sanitize_raw
@@ -162,7 +169,9 @@ class Settings:
     data_dir: Path = Path(".data")  # the studio document and uploaded images
     # Public hostnames pages are served from, when a reverse proxy rewrites Host. See domain/sockets.py.
     allowed_hosts: tuple[str, ...] = ()
-    program_url: str = "http://127.0.0.1:5173/studio?output"  # where the hidden browser finds the program picture
+    program_url: str = (
+        "http://127.0.0.1:5173/studio?output"  # where the hidden browser finds the program picture
+    )
     browser: str | None = None  # a Chromium-based browser; Microsoft Edge is looked for when unset
     ffmpeg: str = "ffmpeg"
 
@@ -200,6 +209,7 @@ class Pipeline:
     audience: AudienceService
     tracker: MatchTracker
     output: OutputService
+    broadcasts: BroadcastService
     stages: list
     tasks: list[asyncio.Task] = field(default_factory=list)
 
@@ -207,8 +217,10 @@ class Pipeline:
         self.tasks = [asyncio.create_task(stage.run()) for stage in self.stages]
         self.tasks.append(asyncio.create_task(self.studio.run()))
         self.tasks.append(asyncio.create_task(self.audience.run()))
+        self.tasks.append(asyncio.create_task(self.broadcasts.run()))
 
     async def stop(self) -> None:
+        await self.broadcasts.stop()
         await self.output.stop()
         await self.controller.stop()
         for task in self.tasks:
@@ -229,6 +241,8 @@ def build_pipeline(
     capture: ProgramCapture | None = None,
     encoder: Encoder | None = None,
     new_sender: Callable[[], Sender] | None = None,
+    reel_producer: ReelProducer | None = None,
+    cutter: ClipCutter | None = None,
 ) -> Pipeline:
     bus, store, broadcaster = InMemoryEventBus(), InMemoryMatchStore(), InProcessBroadcaster()
     primary = writer
@@ -268,6 +282,20 @@ def build_pipeline(
         recordings_dir=settings.data_dir / "recordings",
         now=now,
     )
+    if reel_producer is None and settings.llm_configured:
+        reel_producer = AgentReelProducer(settings.llm_base_url, settings.llm_model, settings.llm_api_key)
+    broadcasts = BroadcastService(
+        JsonRecordStore(settings.data_dir / "broadcasts.json"),
+        output=output,
+        audience_view=lambda: audience.view(studio=True),
+        audience_changes=lambda: audience.changes(studio=True),
+        producer=reel_producer,
+        fallback=ScriptedReelProducer(),
+        cutter=cutter or FfmpegClipCutter(settings.ffmpeg),
+        recordings_dir=settings.data_dir / "recordings",
+        reels_dir=settings.data_dir / "reels",
+        now=now,
+    )
     # Every stage subscribes in its constructor, so nothing published after this point is missed.
     stages = [
         AnalyticsStage(bus),
@@ -276,8 +304,11 @@ def build_pipeline(
         Recorder(bus, store, broadcaster),
         StudioStage(bus, studio),
         AudienceStage(bus, tracker),
+        BroadcastStage(bus, broadcasts),
     ]
-    return Pipeline(bus, store, broadcaster, controller, studio, audience, tracker, output, stages)
+    return Pipeline(
+        bus, store, broadcaster, controller, studio, audience, tracker, output, broadcasts, stages
+    )
 
 
 def create_app(
@@ -291,6 +322,8 @@ def create_app(
     capture: ProgramCapture | None = None,
     encoder: Encoder | None = None,
     new_sender: Callable[[], Sender] | None = None,
+    reel_producer: ReelProducer | None = None,
+    cutter: ClipCutter | None = None,
 ) -> FastAPI:
     # Match IDs are unique to this process, so an ID a browser kept from before a restart is
     # reported as unknown instead of silently naming a different match.
@@ -305,6 +338,8 @@ def create_app(
         capture=capture,
         encoder=encoder,
         new_sender=new_sender,
+        reel_producer=reel_producer,
+        cutter=cutter,
     )
 
     @asynccontextmanager
@@ -347,4 +382,7 @@ def create_app(
         )
     )
     app.include_router(build_output_router(service=pipeline.output, socket_hosts=settings.allowed_hosts))
+    app.include_router(
+        build_broadcasts_router(service=pipeline.broadcasts, socket_hosts=settings.allowed_hosts)
+    )
     return app

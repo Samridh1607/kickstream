@@ -58,7 +58,8 @@ test("the streamer records the program to a file, changes it while live, and sto
     await expect(stream.getByText("Off air")).toBeVisible({ timeout: 15_000 });
 
     const recordings = page.getByRole("region", { name: "Recordings" });
-    await expect(recordings.getByText(/\.mp4$/)).toBeVisible();
+    // Newest first: the broadcast test may have recorded before this one.
+    await expect(recordings.getByText(/\.mp4$/).first()).toBeVisible();
     const doc = await (await request.get(OUTPUT)).json();
     expect(doc.state).toBe("idle");
     expect(doc.problem).toBeNull();

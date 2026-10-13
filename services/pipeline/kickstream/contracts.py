@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel, conint, constr
+from pydantic import BaseModel, ConfigDict, Field, RootModel, confloat, conint, constr
 
 
 class KickstreamContracts(RootModel[Any]):
@@ -451,3 +451,126 @@ class Output(BaseModel):
     started_at: float | None = None
     problem: str | None = None
     recordings: list[Recording] = Field(..., max_length=20)
+
+
+class BroadcastDestination(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: constr(min_length=1, max_length=64)
+    name: constr(min_length=1, max_length=40)
+    platform: Literal['youtube', 'x', 'facebook', 'twitch', 'custom', 'file']
+    outcome: Literal['off', 'live', 'failed']
+    reason: str | None = None
+
+
+class BroadcastSession(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    started_at: float
+    ended_at: float | None = None
+    destinations: list[BroadcastDestination] = Field(..., max_length=10)
+    problem: str | None = None
+
+
+class BroadcastRecording(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    file: constr(min_length=1, max_length=80)
+    size_bytes: conint(ge=0)
+    started_at: float
+    made_at: float
+
+
+class BroadcastMoment(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: constr(min_length=1, max_length=64)
+    kind: Literal['goal', 'red_card', 'big_chance', 'momentum_swing', 'sustained_pressure']
+    team: Literal['home', 'away']
+    minute: int
+    at: float
+    score_home: int
+    score_away: int
+    commentary: str | None = None
+
+
+class BroadcastPoll(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: constr(min_length=1, max_length=64)
+    question: constr(min_length=1, max_length=140)
+    votes: conint(ge=0)
+
+
+class BroadcastScore(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    home: str
+    away: str
+    score_home: int
+    score_away: int
+
+
+class BroadcastStats(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    live_s: confloat(ge=0.0)
+    polls: list[BroadcastPoll] = Field(..., max_length=20)
+    questions: conint(ge=0)
+    score: BroadcastScore | None = None
+
+
+class Reel(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: constr(min_length=1, max_length=64)
+    recording: constr(min_length=1, max_length=80)
+    moment_id: str | None = None
+    start_s: confloat(ge=0.0)
+    duration_s: confloat(ge=0.0)
+    title: constr(min_length=1, max_length=80)
+    caption: constr(max_length=300)
+    hashtags: list[str] = Field(..., max_length=6)
+    state: Literal['rendering', 'ready', 'failed']
+    agent: str
+    size_bytes: int | None = None
+    reason: str | None = None
+    made_at: float
+
+
+class Broadcast(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: constr(min_length=1, max_length=64)
+    title: constr(min_length=1, max_length=80)
+    description: constr(max_length=500)
+    record: bool
+    state: Literal['ready', 'live', 'ended']
+    created_at: float
+    sessions: list[BroadcastSession] = Field(..., max_length=50)
+    recordings: list[BroadcastRecording] = Field(..., max_length=50)
+    moments: list[BroadcastMoment] = Field(..., max_length=100)
+    stats: BroadcastStats
+    reels: list[Reel] = Field(..., max_length=12)
+    generating: bool
+    problem: str | None = None
+
+
+class Broadcasts(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    revision: int
+    server_time: float
+    broadcasts: list[Broadcast] = Field(..., max_length=100)
+    current_id: str | None = None
+    ai: bool

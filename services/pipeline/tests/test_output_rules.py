@@ -38,6 +38,19 @@ def test_a_known_platform_gets_its_address_and_the_key_is_kept_beside_the_docume
     assert rules.view(state, 5.0).server_time == 5.0
 
 
+def test_a_recording_is_switched_on_or_added_when_a_broadcast_asks_for_one():
+    added = rules.ensure_recording(one())
+    assert [(d.platform, d.name, d.enabled) for d in added.doc.destinations] == [
+        ("youtube", "Main channel", True),
+        ("file", "Recording", True),
+    ]
+    assert rules.ensure_recording(added) is added
+    file_id = added.doc.destinations[1].id
+    off = rules.edit_destination(added, file_id, name="Recording", url="", enabled=False)
+    again = rules.ensure_recording(off)
+    assert len(again.doc.destinations) == 2 and again.doc.destinations[1].enabled
+
+
 def test_a_pasted_key_loses_the_spaces_around_it_and_a_short_key_shows_nothing():
     state = one(key=f"  {KEY}\n")
     assert list(state.keys.values()) == [KEY]
