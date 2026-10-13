@@ -32,6 +32,8 @@ A throwaway test on this machine, before this spec was written:
 |---|---|
 | Where video comes from | The pipeline opens `/program` in a hidden browser, which captures its own tab |
 | Browser | A Chromium-based browser already on the machine: Microsoft Edge by default, or the one named in `KICKSTREAM_BROWSER` |
+| Program address | The hidden browser opens `KICKSTREAM_PROGRAM_URL`, by default the dev server's `/program` |
+| ffmpeg | The `ffmpeg` on the path, or the one named in `KICKSTREAM_FFMPEG` |
 | Sound | The program page owns one audio mix. In this sub-project nothing is connected to it, so the stream carries silence |
 | Encoding | One ffmpeg process encodes once: H.264 video, AAC audio, a keyframe every 2 seconds |
 | Reaching platforms | One sender process per destination copies the encoded stream to it without re-encoding |
@@ -43,7 +45,7 @@ A throwaway test on this machine, before this spec was written:
 ## Definition of done
 
 1. The streamer adds a destination in the studio's Output tab by choosing a platform and pasting a stream key. The server address is filled in for the known platforms.
-2. After saving, the key is never shown again: the studio shows only its last four characters.
+2. After saving, the key is never shown again: the studio shows only its last four characters, and nothing at all for a key of eight characters or fewer.
 3. The streamer presses Go live. Within 15 seconds each enabled destination shows live, and the program, as it looks on `/program`, is being sent to it.
 4. A Record to file destination produces an MP4 that plays, with the program's picture at the chosen size and an audio track.
 5. What the streamer changes in the studio while live (scene, banner, poll on air) appears in the stream.
@@ -86,9 +88,9 @@ Stream keys are kept beside the document, not in it. The document, as every page
 ### Destinations
 
 - The known platforms have a default server address, which the streamer may change: YouTube `rtmp://a.rtmp.youtube.com/live2`, Facebook `rtmps://live-api-s.facebook.com:443/rtmp/`, Twitch `rtmp://live.twitch.tv/app`. X gives each streamer its own address in Media Studio, so X and Custom RTMP start empty.
-- A server address must begin with `rtmp://` or `rtmps://`, be at most 300 characters, and name a host. A key is 1 to 300 characters with no spaces or line breaks.
+- A server address must begin with `rtmp://` or `rtmps://`, be at most 300 characters, and name a host. A key is 1 to 300 characters with no spaces or line breaks; spaces and line breaks around a pasted key are dropped.
 - Editing a destination without entering a key keeps the stored key.
-- Record to file needs no address or key. It writes `.data/recordings/<date>-<time>.mp4`.
+- Record to file needs no address or key. It writes `.data/recordings/<date>-<time>.mp4`, in a form that still plays if the recording is cut short.
 - Destinations cannot be added, edited, removed, enabled or disabled while a run is starting, live or stopping. The quality cannot be changed either.
 - Deleting a destination deletes its key.
 
@@ -121,6 +123,7 @@ Stream keys are kept beside the document, not in it. The document, as every page
 - The page owns one audio mix and records it alongside the picture. Nothing is connected to it in this sub-project.
 - The page sends the recording to the pipeline over a WebSocket in pieces of about a quarter of a second.
 - The page shows nothing that is not on `/program` today: no capture controls, no cursor.
+- The page records only its own tab. If the browser hands it a screen or a window instead, it refuses and nothing is sent.
 
 ## Architecture
 
