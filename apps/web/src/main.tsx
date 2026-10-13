@@ -5,13 +5,14 @@ import { BroadcastPage } from "./broadcasts/BroadcastPage";
 import { StudioEntry } from "./broadcasts/StudioEntry";
 import { HomePage } from "./home/HomePage";
 import { MatchPage } from "./MatchPage";
+import { GuestPage } from "./people/GuestPage";
 import { isOutputView, ProgramPage } from "./studio/ProgramPage";
 import { StudioPage } from "./studio/StudioPage";
 import { useAppTheme } from "./theme";
 
 /**
  * The pages: Home lists the broadcasts, each broadcast has its page and its studio, and the studio's clean output
- * and the match data stand beside them.
+ * and the match data stand beside them, as does a guest's page, opened from an invite link.
  */
 function Page() {
   const path = window.location.pathname.replace(/\/+$/, "");
@@ -20,6 +21,8 @@ function Page() {
     const broadcastId = decodeURIComponent(broadcast[1]);
     return broadcast[2] ? <StudioPage broadcastId={broadcastId} /> : <BroadcastPage broadcastId={broadcastId} />;
   }
+  const guest = /^\/guest\/([^/]+)$/.exec(path);
+  if (guest) return <GuestPage secret={decodeURIComponent(guest[1])} />;
   if (path === "/studio") return isOutputView(window.location.search) ? <ProgramPage /> : <StudioEntry />;
   if (path === "/match") return <MatchPage />;
   return <HomePage />;
