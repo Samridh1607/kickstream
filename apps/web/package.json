@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "gen:contracts": "node scripts/gen-contracts.mjs",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "e2e:acs": "playwright test --config playwright.acs.config.ts"
   },
   "dependencies": {
     "@azure/communication-calling": "2.0.0",

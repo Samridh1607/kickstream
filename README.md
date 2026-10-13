@@ -28,6 +28,7 @@ Open `http://127.0.0.1:5173`, the streaming home, press **Create a broadcast**, 
 | `/broadcasts/{id}/studio` | That broadcast's studio: build and switch scenes, see the program as it goes out, run banners, and go live with it |
 | `/studio` | Opens the studio of the broadcast on air, or else of the current one; with neither, asks you to choose or create one |
 | `/match` | The match data: pitch, key moments, narratives and stats, in Fan or Analyst view |
+| `/guest/{secret}` | A guest's page, opened from an invite link: check the camera and microphone, give a name, and join |
 
 Every streamer page has the same top bar. While the stream is on, its right side shows how long you have been live and the status of each destination. The sun and moon button switches between light and dark themes.
 
@@ -53,7 +54,7 @@ A streamer composes the picture in the studio, watches it in the **Program** pre
 
 | Address | Use |
 |---|---|
-| `http://127.0.0.1:5173/broadcasts/{id}/studio` | Arrange scenes on a 16:9 canvas, switch them, and control banners, the ticker, replays and countdowns |
+| `http://127.0.0.1:5173/broadcasts/{id}/studio` | Arrange scenes on a 16:9 canvas, switch them, and control banners, the ticker, replays and countdowns, and invite guests |
 | `http://127.0.0.1:5173/studio?output` | The scene that is on air, full window, with no controls. This is what Go live streams. To use another tool instead, such as an OBS browser source, point it here at 1920 × 1080 |
 
 - **Scenes** are saved canvases. Five templates are built in: Starting soon, Live match, Analyst desk, Break and Full-time. Drag and resize elements, or select one and use the arrow keys (Shift with the arrow keys resizes). Press **Switch** on a scene to put it on air.
@@ -106,6 +107,41 @@ On an ended broadcast's page, **Generate reels** cuts up to four 15-second verti
 | `POST /api/broadcasts/{id}/reels` | Generate reels from its recording |
 | `GET /api/broadcasts/{id}/recordings/{file}`, `/reels/{reel}.mp4` | Its recordings and reels, with range requests for seeking |
 
+## Guests
+
+In a broadcast's studio, the **People** panel invites guests by link, as on StreamYard. Each invite has a role:
+
+| Role | Camera and mic | On stage | Studio |
+|---|---|---|---|
+| Speaker | yes | when you put them there | no |
+| Co-host | yes | when you put them there | can open it |
+| Member | yes | never | no |
+
+Copy the link and send it. The guest checks their camera and microphone, gives a name, and joins. You add up to four people to the stage, including yourself with **Join with camera** and **Add me to stage**. Who is on stage appears in the scene's **Cameras** element (the **Interview** template has one), or in a picture-in-picture box when the scene has none, and their voices are on the stream. While the broadcast is live, everyone backstage is muted. **Revoke** stops a link at once; ending or deleting the broadcast stops them all.
+
+Calls go through Azure Communication Services Rooms. Create a Communication Services resource in the Azure portal, then put its connection string in a `.env` file at the top of the project (it is ignored by git):
+
+    KICKSTREAM_ACS_CONNECTION_STRING=endpoint=https://<resource>.communication.azure.com/;accesskey=<key>
+
+To try guests without Azure, set `KICKSTREAM_ROOMS=fake` instead: invites, the stage and the guest page work, but no one sees or hears anyone else.
+
+Guests on other networks reach you through an HTTPS tunnel (Cloudflare Tunnel or ngrok) to the web server on port 5173; browsers allow cameras only on `https://` pages or `localhost`. Put the tunnel's hostname in `KICKSTREAM_PUBLIC_HOSTS` (in `.env` too). On that address only the guest routes answer, and a co-host's studio routes; everything else stays on your machine.
+
+| Variable | Use |
+|---|---|
+| `KICKSTREAM_ACS_CONNECTION_STRING` | The Azure Communication Services resource guests' calls use |
+| `KICKSTREAM_ROOMS` | `fake`: in-memory rooms, for trying guests without Azure |
+| `KICKSTREAM_PUBLIC_HOSTS` | The tunnel's hostnames, comma-separated; invite links use the first |
+
+| Endpoint | Use |
+|---|---|
+| `GET /api/broadcasts/{id}/people`, `/socket` | The broadcast's people: invites, who is present, the stage |
+| `POST /api/broadcasts/{id}/people/invites` | `{role, name?}`: make an invite link |
+| `DELETE /api/broadcasts/{id}/people/invites/{invite}` | Revoke it |
+| `PUT /api/broadcasts/{id}/people/stage` | `{people}`: who is on stage, in order |
+| `GET /api/guest/{secret}`, `/socket` | What a guest's page shows |
+| `POST /api/guest/{secret}/join` | `{name}`: join the room |
+
 ## Layout
 
 | Path | Contents |
@@ -113,17 +149,19 @@ On an ended broadcast's page, **Generate reels** cuts up to four 15-second verti
 | `packages/contracts/` | JSON Schema for every message; the Python and TypeScript types are generated from it |
 | `services/pipeline/kickstream/` | The five stages, the ports they depend on, and the adapters behind those ports |
 | `services/pipeline/kickstream/app.py` | The composition root: the only place adapters are chosen |
+| `services/pipeline/kickstream/people/` | Invites, the stage and call rooms for guests |
 | `apps/web/` | The React and Fluent UI web app: home, broadcasts, studio, program and match data |
 | `docs/superpowers/` | Design spec and implementation plan |
 
-Stages talk only through the event bus and the contracts, and never import one another. Moving to Azure means adding adapters for the four ports (event bus, narrative writer, match store, broadcaster) and choosing them in `app.py`.
+Stages talk only through the event bus and the contracts, and never import one another. Moving to Azure means adding adapters for the four ports (event bus, narrative writer, match store, broadcaster) and choosing them in `app.py`; the fifth, the call rooms, already has one for Azure Communication Services Rooms.
 
 ## Test it
 
 ```bash
 pnpm test:api                         # pipeline unit and integration tests
 pnpm test:web                         # web unit and component tests
-(cd apps/web && pnpm e2e)             # home, broadcasts and reels, studio, output and match data, in a real browser
+(cd apps/web && pnpm e2e)             # home, broadcasts and reels, studio, output, guests and match data, in a real browser
+(cd apps/web && pnpm e2e:acs)         # guests over Azure; runs only with KICKSTREAM_ACS_CONNECTION_STRING in .env
 ```
 
 No test calls a live model.
