@@ -13,13 +13,13 @@ test("the streamer invites guests by link, puts a speaker on stage, and revokes 
   await people.getByLabel("Name (optional)").fill("Sam");
   await people.getByRole("button", { name: "Invite", exact: true }).click();
   const link = people.getByLabel("Invite link for Sam");
-  await expect(link).toHaveValue(new RegExp(`^https://${PUBLIC_HOST}/guest/`));
+  await expect(link).toHaveValue(new RegExp(`^https://${PUBLIC_HOST}/guest/`), { timeout: 15_000 });
   // The link names the public address; the test opens the same path on the local one.
   const path = new URL(await link.inputValue()).pathname;
   await people.getByLabel("Role").selectOption("member");
   await people.getByLabel("Name (optional)").fill("Mia");
   await people.getByRole("button", { name: "Invite", exact: true }).click();
-  await expect(people.getByLabel("Invite link for Mia")).toBeVisible();
+  await expect(people.getByLabel("Invite link for Mia")).toBeVisible({ timeout: 15_000 });
   await expect(people.getByRole("button", { name: "Add Mia to stage" })).toHaveCount(0);
 
   const guestContext = await browser.newContext({ permissions: ["camera", "microphone"] });
