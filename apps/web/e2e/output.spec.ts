@@ -1,7 +1,29 @@
+import { execFileSync } from "node:child_process";
+import { existsSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 
 // The test pipeline; see playwright.config.ts.
 const OUTPUT = "http://127.0.0.1:8010/api/studio/output";
+
+/** The streams of a file, from ffprobe; null when ffprobe is not installed. */
+function probe(path: string): { codec_name: string; codec_type: string; width?: number; height?: number }[] | null {
+  try {
+    const out = execFileSync("ffprobe", ["-v", "error", "-show_entries", "stream=codec_name,codec_type,width,height", "-of", "json", path], { encoding: "utf8" });
+    return JSON.parse(out).streams;
+  } catch (problem) {
+    if ((problem as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw problem;
+  }
+}
+
+/** The recording the pipeline just listed. Its name is unique, so another run's files cannot be taken for it. */
+function find(file: string): string {
+  const data = ".data-e2e";
+  const found = readdirSync(data).map((run) => join(data, run, "recordings", file)).filter(existsSync);
+  expect(found, `${file} should be in exactly one run's data directory`).toHaveLength(1);
+  return found[0];
+}
 
 test("the streamer records the program to a file, changes it while live, and stops", async ({ page, request }) => {
   await page.goto("/studio");
@@ -40,6 +62,14 @@ test("the streamer records the program to a file, changes it while live, and sto
     expect(doc.state).toBe("idle");
     expect(doc.problem).toBeNull();
     expect(doc.recordings[0].size_bytes).toBeGreaterThan(20_000);
+
+    // What the file holds, not only how big it is: the chosen size, with picture and sound.
+    const streams = probe(find(doc.recordings[0].file));
+    test.info().annotations.push({ type: "ffprobe", description: streams ? "recording inspected" : "not installed: the recording's streams were not checked" });
+    if (streams) {
+      expect(streams.find((one) => one.codec_type === "video")).toMatchObject({ codec_name: "h264", width: 1280, height: 720 });
+      expect(streams.find((one) => one.codec_type === "audio")).toMatchObject({ codec_name: "aac" });
+    }
   } finally {
     await request.post(`${OUTPUT}/stop`);
     const doc = await (await request.get(OUTPUT)).json();
