@@ -46,6 +46,12 @@ function useWindowSize() {
   return size;
 }
 
+/** `/studio?output` shows the clean picture. The pipeline's hidden browser opens it with a `capture` token. */
+export function isOutputView(search: string): boolean {
+  const query = new URLSearchParams(search);
+  return query.has("output") || query.has("capture");
+}
+
 /** The clean output: the active scene, scaled to the window, with no controls. */
 export function ProgramPage({ eventSource, retryMs, pollMs, capture = startCapture }: CurrentMatchOptions & { capture?: typeof startCapture }) {
   const { studio, offset } = useStudio(eventSource, retryMs);

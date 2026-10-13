@@ -8,6 +8,7 @@ from collections import deque
 from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine
 from dataclasses import replace
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from kickstream.contracts import Output
 from kickstream.output import rules
@@ -23,6 +24,13 @@ from kickstream.ports.output import (
 )
 
 log = logging.getLogger(__name__)
+
+
+def capture_address(program_url: str, token: str) -> str:
+    """The program page's address with the run's token added, keeping any query it already has."""
+    parts = urlsplit(program_url)
+    query = [(name, value) for name, value in parse_qsl(parts.query, keep_blank_values=True) if name != "capture"]
+    return urlunsplit(parts._replace(query=urlencode([*query, ("capture", token)])))
 
 
 class _Ended(Exception):
@@ -248,7 +256,7 @@ class OutputService:
             fan = asyncio.create_task(self._fan_out(quality, relays))
             watchers.append(fan)
             await self._capture.start(
-                f"{self._program_url}?capture={self._token}", quality.width, quality.height
+                capture_address(self._program_url, self._token), quality.width, quality.height
             )
             gone = asyncio.create_task(self._capture.wait())
             lost = asyncio.create_task(self._feed_lost.wait())

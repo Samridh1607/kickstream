@@ -1,7 +1,7 @@
 import { Badge, Button, makeStyles, mergeClasses, MessageBar, MessageBarBody, Text, tokens, Tooltip } from "@fluentui/react-components";
 import {
   ChatRegular, CheckmarkCircleFilled, CircleRegular, CopyRegular, LiveRegular, OpenRegular, PeopleCommunityRegular,
-  PlayRegular, PollRegular, RecordStopRegular, SlideLayoutRegular, SportSoccerRegular, TvRegular, VideoClipMultipleRegular,
+  PlayRegular, PollRegular, RecordStopRegular, SlideLayoutRegular, SportSoccerRegular, VideoClipMultipleRegular,
 } from "@fluentui/react-icons";
 import { type ReactNode, useMemo, useState } from "react";
 import { speedFromLocation, startMatch } from "../api";
@@ -199,9 +199,7 @@ export function HomePage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) 
                   Stop stream
                 </Button>
               )}
-              <Button as="a" href="/studio" size="large" icon={<VideoClipMultipleRegular />} className={styles.ghost}>Open studio</Button>
-              <Button as="a" href="/program" target="_blank" rel="noreferrer" size="large" icon={<TvRegular />} className={styles.ghost}>Program</Button>
-            </div>
+              <Button as="a" href="/studio" size="large" icon={<VideoClipMultipleRegular />} className={styles.ghost}>Open studio</Button>            </div>
           </div>
           {studio && onAir && data && (
             <div className={styles.monitor} aria-label="Program preview">

@@ -162,7 +162,7 @@ class Settings:
     data_dir: Path = Path(".data")  # the studio document and uploaded images
     # Public hostnames pages are served from, when a reverse proxy rewrites Host. See domain/sockets.py.
     allowed_hosts: tuple[str, ...] = ()
-    program_url: str = "http://127.0.0.1:5173/program"  # where the hidden browser finds the program page
+    program_url: str = "http://127.0.0.1:5173/studio?output"  # where the hidden browser finds the program picture
     browser: str | None = None  # a Chromium-based browser; Microsoft Edge is looked for when unset
     ffmpeg: str = "ffmpeg"
 
@@ -180,7 +180,7 @@ class Settings:
                 for host in env.get("KICKSTREAM_ALLOWED_HOSTS", "").split(",")
                 if host.strip()
             ),
-            program_url=env.get("KICKSTREAM_PROGRAM_URL") or "http://127.0.0.1:5173/program",
+            program_url=env.get("KICKSTREAM_PROGRAM_URL") or "http://127.0.0.1:5173/studio?output",
             browser=env.get("KICKSTREAM_BROWSER") or None,
             ffmpeg=env.get("KICKSTREAM_FFMPEG") or "ffmpeg",
         )

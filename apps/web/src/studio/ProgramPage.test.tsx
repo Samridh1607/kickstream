@@ -4,9 +4,17 @@ import {
   element, envelope, FakeEventSource, FakeEventSourceCtor, scene, status, studio,
 } from "../test/fixtures";
 import { renderUi } from "../test/render";
-import { ProgramPage, withReplayFallback } from "./ProgramPage";
+import { isOutputView, ProgramPage, withReplayFallback } from "./ProgramPage";
 
 const stream = (path: string) => FakeEventSource.instances.filter((source) => source.url.startsWith(path) && !source.closed).at(-1);
+
+test("the studio shows its clean output when asked for it, or when the pipeline opens it to record", () => {
+  expect(isOutputView("?output")).toBe(true);
+  expect(isOutputView("?output=&capture=t1")).toBe(true);
+  expect(isOutputView("?capture=t1")).toBe(true);
+  expect(isOutputView("")).toBe(false);
+  expect(isOutputView("?tab=banner")).toBe(false);
+});
 
 function serve(current: string | null) {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
@@ -118,7 +126,7 @@ test("the page offers to record itself only when opened with a capture token, an
   serve(null);
   const page = window as unknown as { __kickstreamStartCapture?: () => Promise<void> };
   const capture = vi.fn(async () => () => {});
-  window.history.pushState({}, "", "/program?capture=run-token");
+  window.history.pushState({}, "", "/studio?output&capture=run-token");
   try {
     renderUi(<ProgramPage eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10_000} capture={capture} />);
     expect(page.__kickstreamStartCapture).toBeUndefined();
@@ -127,7 +135,7 @@ test("the page offers to record itself only when opened with a capture token, an
     await page.__kickstreamStartCapture!();
     expect(capture).toHaveBeenCalledWith("run-token", { width: window.innerWidth, height: window.innerHeight });
   } finally {
-    window.history.pushState({}, "", "/program");
+    window.history.pushState({}, "", "/studio?output");
   }
 });
 
@@ -143,7 +151,7 @@ test("a second call shares the running capture, unmounting stops it, and the fun
   const page = window as unknown as { __kickstreamStartCapture?: () => Promise<void> };
   const stop = vi.fn();
   const capture = vi.fn(async () => stop);
-  window.history.pushState({}, "", "/program?capture=run-token");
+  window.history.pushState({}, "", "/studio?output&capture=run-token");
   try {
     const view = renderUi(<ProgramPage eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10_000} capture={capture} />);
     push(studio());
@@ -158,7 +166,7 @@ test("a second call shares the running capture, unmounting stops it, and the fun
     expect(stop).toHaveBeenCalledTimes(1);
     expect(page.__kickstreamStartCapture).toBeUndefined();
   } finally {
-    window.history.pushState({}, "", "/program");
+    window.history.pushState({}, "", "/studio?output");
   }
 });
 
@@ -166,7 +174,7 @@ test("after a failed capture a later call may try again", async () => {
   serve(null);
   const page = window as unknown as { __kickstreamStartCapture?: () => Promise<void> };
   const capture = vi.fn().mockRejectedValueOnce(new Error("refused")).mockResolvedValue(() => {});
-  window.history.pushState({}, "", "/program?capture=run-token");
+  window.history.pushState({}, "", "/studio?output&capture=run-token");
   try {
     renderUi(<ProgramPage eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10_000} capture={capture} />);
     push(studio());
@@ -174,6 +182,6 @@ test("after a failed capture a later call may try again", async () => {
     await page.__kickstreamStartCapture!();
     expect(capture).toHaveBeenCalledTimes(2);
   } finally {
-    window.history.pushState({}, "", "/program");
+    window.history.pushState({}, "", "/studio?output");
   }
 });

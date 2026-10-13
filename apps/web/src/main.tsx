@@ -4,16 +4,15 @@ import { createRoot } from "react-dom/client";
 import { JoinPage } from "./audience/JoinPage";
 import { HomePage } from "./home/HomePage";
 import { MatchPage } from "./MatchPage";
-import { ProgramPage } from "./studio/ProgramPage";
+import { isOutputView, ProgramPage } from "./studio/ProgramPage";
 import { StudioPage } from "./studio/StudioPage";
 import { useAppTheme } from "./theme";
 
-/** The pages: the streamer's home and studio, the match data, the fan join page, and the clean program output. */
+/** The pages: the streamer's home and studio (with its clean output), the match data, and the fan join page. */
 function Page() {
   const path = window.location.pathname.replace(/\/+$/, "");
   if (path === "/join") return <JoinPage />;
-  if (path === "/studio") return <StudioPage />;
-  if (path === "/program") return <ProgramPage />;
+  if (path === "/studio") return isOutputView(window.location.search) ? <ProgramPage /> : <StudioPage />;
   if (path === "/match") return <MatchPage />;
   return <HomePage />;
 }

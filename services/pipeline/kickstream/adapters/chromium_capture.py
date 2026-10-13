@@ -9,6 +9,7 @@ import os
 import shutil
 import tempfile
 import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -91,6 +92,13 @@ def _page_socket(port: int, timeout: float) -> str:
     return address
 
 
+def _without_token(url: str) -> str:
+    """The address as the streamer can open it: the run's token is a secret and stays out of messages."""
+    parts = urllib.parse.urlsplit(url)
+    query = [(name, value) for name, value in urllib.parse.parse_qsl(parts.query, keep_blank_values=True) if name != "capture"]
+    return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(query)))
+
+
 def _remove(profile: Path) -> None:
     """Windows keeps a killed browser's files locked for a moment, so try a few times."""
     for _ in range(20):
@@ -130,8 +138,7 @@ class ChromiumCapture:
             raise OutputFailure(_MISSING)
         self._deadline = asyncio.get_running_loop().time() + self._start_timeout_s
         browser_late = "The hidden browser did not start in time."
-        # The address is shown without its query, which carries the run's token.
-        page_late = f"The program page did not start. Check that it opens at {url.split('?')[0]}"
+        page_late = f"The program page did not start. Check that it opens at {_without_token(url)}"
         record_late = "The program page did not begin recording in time."
         self._profile = Path(tempfile.mkdtemp(prefix="kickstream-browser-"))
         try:

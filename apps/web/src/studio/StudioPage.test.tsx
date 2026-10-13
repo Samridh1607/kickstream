@@ -68,7 +68,7 @@ test("until the studio document arrives the page says it is connecting", () => {
   expect(screen.getByText("Connecting to the studio…")).toBeTruthy();
 });
 
-test("it lists the scenes, marks the one on air, and links to the program", async () => {
+test("it lists the scenes, marks the one on air, and shows the program here rather than linking away", async () => {
   await opened();
   const scenes = within(screen.getByRole("region", { name: "Scenes" }));
   expect(scenes.getByRole("button", { name: "Edit Live match" })).toBeTruthy();
@@ -76,7 +76,8 @@ test("it lists the scenes, marks the one on air, and links to the program", asyn
   expect(scenes.getByRole("button", { name: "Switch to Break" })).toBeTruthy();
   expect(scenes.queryByRole("button", { name: "Switch to Live match" })).toBeNull();
   expect((scenes.getByRole("button", { name: "Delete Live match" }) as HTMLButtonElement).disabled).toBe(true);
-  expect(screen.getByRole("link", { name: "Open program" }).getAttribute("href")).toBe("/program");
+  expect(screen.getByRole("region", { name: "Program preview" })).toBeTruthy();
+  expect(screen.queryAllByRole("link").map((link) => link.getAttribute("href"))).not.toContain("/program");
 });
 
 test("switching to a scene activates it", async () => {

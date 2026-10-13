@@ -5,7 +5,7 @@ import pytest
 
 from kickstream.adapters.json_record_store import JsonRecordStore
 from kickstream.output.rules import OutputError
-from kickstream.output.service import OutputService
+from kickstream.output.service import OutputService, capture_address
 from kickstream.ports.output import Quality, Target
 from tests.output_fakes import FakeCapture, FakeEncoder, FakeNow, FakeSender, Sleeps, until
 
@@ -23,7 +23,7 @@ class Kit:
             "capture": self.capture,
             "encoder": self.encoder,
             "new_sender": lambda: FakeSender(self.senders, **self.sender_options),
-            "program_url": "http://web.test/program",
+            "program_url": "http://web.test/studio?output",
             "recordings_dir": tmp_path / "recordings",
             "now": self.now,
             "sleep": self.sleeps,
@@ -81,6 +81,12 @@ async def test_start_is_refused_with_nothing_enabled_or_something_missing(kit):
     assert kit.doc().state == "idle" and kit.encoder.started == []
 
 
+def test_the_token_is_added_to_the_program_address_keeping_its_query():
+    assert capture_address("http://h:1/studio?output", "t1") == "http://h:1/studio?output=&capture=t1"
+    assert capture_address("http://h:1/program", "t1") == "http://h:1/program?capture=t1"
+    assert capture_address("http://h:1/studio?output&capture=old", "t2") == "http://h:1/studio?output=&capture=t2"
+
+
 async def test_going_live_starts_the_encoder_then_the_page_then_a_sender_per_enabled_destination(kit):
     first = add_youtube(kit)
     kit.service.add_destination("Recording", "file", "", "")
@@ -93,7 +99,7 @@ async def test_going_live_starts_the_encoder_then_the_page_then_a_sender_per_ena
     assert refused(kit.service.start) == (409, "output")
     await until(lambda: kit.capture.started)
     assert kit.encoder.started == [Quality(1280, 720, 3000)]
-    assert kit.capture.started == [("http://web.test/program?capture=token-1", 1280, 720)]
+    assert kit.capture.started == [("http://web.test/studio?output=&capture=token-1", 1280, 720)]
     assert kit.senders == []
 
     kit.encoder.emit(b"first")

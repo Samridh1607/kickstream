@@ -24,8 +24,7 @@ Open `http://127.0.0.1:5173`, the streaming home, and press **Start match**. A 9
 | Page | Use |
 |---|---|
 | `/` | Home: go live or stop, where the stream is going and how each destination is doing, the scenes with a switch for each, the fan page link, and a quick-start checklist |
-| `/studio` | Build and switch scenes, run banners, polls and questions, and manage the Output |
-| `/program` | The clean picture that is streamed |
+| `/studio` | Build and switch scenes, see the program as it goes out, run banners, polls and questions, and manage the Output |
 | `/match` | The match data: pitch, key moments, narratives and stats, in Fan or Analyst view |
 | `/join` | The fan page to share with viewers |
 
@@ -47,12 +46,12 @@ Four Microsoft Agent Framework agents do the writing: a Commentator and a Tactic
 
 ## Studio
 
-A streamer composes the picture at `/studio` and sends `/program` out from its **Output** box (see Going live below), or captures it with a streaming tool.
+A streamer composes the picture at `/studio`, watches it in the studio's **Program** preview, and sends it out from the **Output** box (see Going live below).
 
-| Page | Use |
+| Address | Use |
 |---|---|
 | `http://127.0.0.1:5173/studio` | Arrange scenes on a 16:9 canvas, switch them, and control banners, the ticker, replays and countdowns |
-| `http://127.0.0.1:5173/program` | The scene that is on air, with no controls. Point a capture tool such as an OBS browser source at this page, at 1920 × 1080 |
+| `http://127.0.0.1:5173/studio?output` | The scene that is on air, full window, with no controls. This is what Go live streams. To use another tool instead, such as an OBS browser source, point it here at 1920 × 1080 |
 
 - **Scenes** are saved canvases. Five templates are built in: Starting soon, Live match, Analyst desk, Break and Full-time. Drag and resize elements, or select one and use the arrow keys (Shift with the arrow keys resizes). Press **Switch** on a scene, in the studio or on the home page, to put it on air.
 - **Fan and Analyst scenes:** each scene's commentary is Fan, Analyst, or the studio default (set it with the selector above the editor). Live match is a Fan scene and Analyst desk an Analyst scene, so switching between them while live changes the program's narration from the Commentator's to the Tactical Analyst's.
@@ -60,7 +59,7 @@ A streamer composes the picture at `/studio` and sends `/program` out from its *
 - **Replays** animate the 20 seconds of play before a key moment on the pitch.
 - **Countdowns**: a start countdown starts the match and cuts to the Live scene at zero; a break cuts to the Break scene and returns to where you were.
 
-Scenes, settings and uploaded images are kept in `.data/` (set `KICKSTREAM_DATA_DIR` to move it). The program page uses the on-air scene's commentary, or the **Default commentary** and language from the studio's Settings tab.
+Scenes, settings and uploaded images are kept in `.data/` (set `KICKSTREAM_DATA_DIR` to move it). The program uses the on-air scene's commentary, or the **Default commentary** and language from the studio's Settings tab.
 
 ## Going live
 
@@ -70,11 +69,11 @@ The studio's **Output** box sends the program to several platforms at once.
 2. In the Output box, choose the platform and paste the key. YouTube, Facebook and Twitch addresses are filled in; X gives each account its own, so paste that too. **Record to file** needs neither and writes an MP4 to `.data/recordings/`, which is a good first test.
 3. Press **Go live**, in the studio or on the home page. Each destination shows connecting, live, retrying or failed, in the Output box and in the top bar. One failing does not stop the others.
 
-Kickstream opens the program page in a hidden browser, encodes it once with ffmpeg, and copies that stream to every destination. It needs [ffmpeg](https://ffmpeg.org) and a Chromium-based browser (Microsoft Edge is used when present).
+Kickstream opens the studio's clean output (`/studio?output`) in a hidden browser, encodes it once with ffmpeg, and copies that stream to every destination. It needs [ffmpeg](https://ffmpeg.org) and a Chromium-based browser (Microsoft Edge is used when present).
 
 | Variable | Meaning |
 |---|---|
-| `KICKSTREAM_PROGRAM_URL` | Where the hidden browser opens the program page (default `http://127.0.0.1:5173/program`) |
+| `KICKSTREAM_PROGRAM_URL` | Where the hidden browser opens the clean output (default `http://127.0.0.1:5173/studio?output`) |
 | `KICKSTREAM_BROWSER` | Path to a Chromium-based browser, when Edge is not wanted or not found |
 | `KICKSTREAM_FFMPEG` | Path to ffmpeg, when it is not on the `PATH` |
 

@@ -1,6 +1,6 @@
-import { Badge, Link, makeStyles, mergeClasses, MessageBar, MessageBarBody, Select, Tab, TabList, Text, tokens } from "@fluentui/react-components";
+import { Badge, makeStyles, mergeClasses, MessageBar, MessageBarBody, Select, Tab, TabList, Text, tokens } from "@fluentui/react-components";
 import {
-  FlashRegular, LayerRegular, LiveRegular, MegaphoneRegular, OpenRegular, PeopleCommunityRegular, SettingsRegular,
+  FlashRegular, LayerRegular, LiveRegular, MegaphoneRegular, PeopleCommunityRegular, SettingsRegular,
   SlideLayoutRegular, TextBulletListSquareRegular, TimerRegular, TvRegular,
 } from "@fluentui/react-icons";
 import { type ReactElement, type ReactNode, useEffect, useMemo, useState } from "react";
@@ -188,7 +188,6 @@ export function StudioPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions
           <Text>On air: {onAir.name}</Text>
           <ModeBadge scene={onAir} studio={studio} />
         </span>
-        <Link href="/program" target="_blank" rel="noreferrer">Open program <OpenRegular /></Link>
       </AppNav>
       {problem && (
         <MessageBar intent="error">

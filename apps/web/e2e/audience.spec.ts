@@ -18,7 +18,7 @@ test("fans vote and ask, and the streamer puts the result and an answer on the p
 
   try {
     await control.goto("/studio");
-    await program.goto("/program");
+    await program.goto("/studio?output");
     await fan.goto("/join");
     await control.getByRole("tab", { name: "Audience" }).click();
 

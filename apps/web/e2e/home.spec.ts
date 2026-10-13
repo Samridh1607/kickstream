@@ -13,8 +13,22 @@ test("the home page shows the broadcast, its scenes, and the way into the studio
   await expect(scenes.getByText("Live match")).toBeVisible();
   await expect(scenes.getByText("Analyst desk")).toBeVisible();
   await expect(scenes.getByText("On air")).toHaveCount(1);
+  await expect(page.locator('a[href="/program"]')).toHaveCount(0);
 
   await nav.getByRole("link", { name: "Studio" }).click();
   await expect(page).toHaveURL(/\/studio$/);
   await expect(page.getByRole("region", { name: "Output" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Program preview" }).getByTestId("scene-canvas")).toBeVisible();
+  await expect(page.locator('a[href="/program"]')).toHaveCount(0);
+});
+
+test("the clean picture is at /studio?output, and /program is no longer a page", async ({ page }) => {
+  await page.goto("/studio?output");
+  await expect(page.getByTestId("program").getByTestId("scene-canvas")).toBeVisible();
+  await expect(page.getByRole("button")).toHaveCount(0);
+  await expect(page.getByRole("navigation")).toHaveCount(0);
+
+  await page.goto("/program");
+  await expect(page.getByRole("region", { name: "Broadcast" })).toBeVisible();
+  await expect(page.getByTestId("program")).toHaveCount(0);
 });

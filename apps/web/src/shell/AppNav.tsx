@@ -1,6 +1,6 @@
 import { Button, makeStyles, mergeClasses, Text, tokens, Tooltip } from "@fluentui/react-components";
 import {
-  DataTrendingRegular, HomeRegular, OpenRegular, PeopleCommunityRegular, TvRegular, VideoClipMultipleRegular,
+  DataTrendingRegular, HomeRegular, OpenRegular, PeopleCommunityRegular, VideoClipMultipleRegular,
   WeatherMoonRegular, WeatherSunnyRegular,
 } from "@fluentui/react-icons";
 import type { ReactNode } from "react";
@@ -15,9 +15,7 @@ const LINKS: { page: NavPage | null; href: string; label: string; icon: ReactNod
   { page: "home", href: "/", label: "Home", icon: <HomeRegular /> },
   { page: "studio", href: "/studio", label: "Studio", icon: <VideoClipMultipleRegular /> },
   { page: "match", href: "/match", label: "Match data", icon: <DataTrendingRegular /> },
-  { page: null, href: "/join", label: "Fan page", icon: <PeopleCommunityRegular />, newTab: true },
-  { page: null, href: "/program", label: "Program", icon: <TvRegular />, newTab: true },
-];
+  { page: null, href: "/join", label: "Fan page", icon: <PeopleCommunityRegular />, newTab: true },];
 
 const useStyles = makeStyles({
   nav: {

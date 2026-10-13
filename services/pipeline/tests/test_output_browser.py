@@ -149,9 +149,10 @@ async def test_a_page_that_never_becomes_ready_is_given_up_on(pages, caplog):
     capture = ChromiumCapture(start_timeout_s=3.0)
     began = time.monotonic()
     with pytest.raises(OutputFailure, match="did not start") as raised:
-        await capture.start(f"{pages}/never?capture=secret-token", 1280, 720)
+        await capture.start(f"{pages}/never?output=&capture=secret-token", 1280, 720)
     assert time.monotonic() - began < 6.0
     assert "secret-token" not in str(raised.value)
+    assert str(raised.value).endswith(f"{pages}/never?output=")
     assert all("secret-token" not in record.getMessage() for record in caplog.records)
     await asyncio.wait_for(capture.wait(), 10)
 

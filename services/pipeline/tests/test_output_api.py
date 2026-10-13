@@ -23,7 +23,7 @@ class Rig:
             None,
             cache_dir=tmp_path / "cache",
             data_dir=tmp_path / "data",
-            program_url="http://web.test/program",
+            program_url="http://web.test/studio?output",
         )
         self.app = create_app(
             settings,
@@ -61,7 +61,7 @@ def wait_for(check, timeout=3.0):
 def test_settings_read_the_program_address_the_browser_and_ffmpeg_from_the_environment():
     defaults = Settings.from_env({})
     assert (defaults.program_url, defaults.browser, defaults.ffmpeg) == (
-        "http://127.0.0.1:5173/program",
+        "http://127.0.0.1:5173/studio?output",
         None,
         "ffmpeg",
     )

@@ -22,7 +22,7 @@ test("a streamer builds a scene, goes live, and drives the program", async ({ br
 
   try {
     await control.goto("/studio");
-    await program.goto("/program");
+    await program.goto("/studio?output");
 
     // Scenes: going live cuts the program.
     await control.getByRole("button", { name: "Switch to E2E scene" }).click();
