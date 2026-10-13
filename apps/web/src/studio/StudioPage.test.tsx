@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import type { Studio } from "../contracts";
 import { useMatch } from "../stream/store";
 import {
-  envelope, FakeEventSource, FakeEventSourceCtor, moment, narrative, status, studio,
+  destination, envelope, FakeEventSource, FakeEventSourceCtor, moment, narrative, output, status, studio,
 } from "../test/fixtures";
 import { renderUi } from "../test/render";
 import { StudioPage } from "./StudioPage";
@@ -311,4 +311,16 @@ test("a second edit made before the first is answered is not lost when the first
   expect([shown("Show banner"), shown("Show scoreboard")]).toEqual([false, false]);
   await act(async () => waiting[1]());
   await waitFor(() => expect([shown("Show banner"), shown("Show scoreboard")]).toEqual([true, true]));
+});
+
+test("the Output tab follows the output document", async () => {
+  await opened();
+  openTab("Output");
+  expect(screen.getByText("Connecting to the output…")).toBeTruthy();
+  const source = FakeEventSource.instances.find((candidate) => candidate.url === "/api/studio/output/stream")!;
+  act(() => {
+    source.open();
+    source.emitRaw(JSON.stringify(output({ destinations: [destination()] })));
+  });
+  expect(screen.getByRole("switch", { name: "Send to YouTube" })).toBeTruthy();
 });

@@ -2,7 +2,9 @@ import { Badge, Link, makeStyles, MessageBar, MessageBarBody, Tab, TabList, Text
 import { useEffect, useMemo, useState } from "react";
 import { STUDIO_AUDIENCE_STREAM } from "../audience/api";
 import { AudienceTab } from "../audience/AudienceTab";
-import type { Audience, Scene, SceneElement, Studio, ViewerProfile } from "../contracts";
+import type { Audience, Output, Scene, SceneElement, Studio, ViewerProfile } from "../contracts";
+import { OUTPUT_STREAM } from "../output/api";
+import { OutputTab } from "../output/OutputTab";
 import { useMatch } from "../stream/store";
 import { useLiveDocument } from "../stream/useLiveDocument";
 import { type CurrentMatchOptions, useCurrentMatch } from "../stream/useCurrentMatch";
@@ -17,7 +19,7 @@ import { useNow, useStudio } from "./useStudio";
 
 const EDITOR_SCALE = 0.45;
 const PREVIEW_SCALE = 0.16;
-const TABS = ["Elements", "Banner", "Ticker", "Highlights", "Audience", "Countdown", "Settings"] as const;
+const TABS = ["Elements", "Banner", "Ticker", "Highlights", "Audience", "Output", "Countdown", "Settings"] as const;
 type TabName = (typeof TABS)[number];
 
 const useStyles = makeStyles({
@@ -37,6 +39,7 @@ export function StudioPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions
   const styles = useStyles();
   const { studio, offset, connected, accept } = useStudio(eventSource, retryMs);
   const { doc: audience, accept: acceptAudience } = useLiveDocument<Audience>(STUDIO_AUDIENCE_STREAM, eventSource, retryMs);
+  const { doc: output, accept: acceptOutput } = useLiveDocument<Output>(OUTPUT_STREAM, eventSource, retryMs);
   const mode = studio?.settings.mode;
   const language = studio?.settings.language;
   const profile = useMemo<ViewerProfile | null>(
@@ -98,6 +101,17 @@ export function StudioPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions
       return true;
     } catch (caught) {
       setProblem(caught instanceof Error ? caught.message : "The change was not saved.");
+      return false;
+    }
+  };
+
+  const runOutput = async (request: () => Promise<Output>): Promise<boolean> => {
+    try {
+      acceptOutput(await request());
+      setProblem(null);
+      return true;
+    } catch (caught) {
+      setProblem(caught instanceof Error ? caught.message : "The change was not made.");
       return false;
     }
   };
@@ -191,6 +205,7 @@ export function StudioPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions
                 onBanner={(narrative) => void run(() => showBanner({ text: narrative.text.slice(0, 200), kind: "info", source_id: narrative.id }))} />
             )}
             {tab === "Audience" && <AudienceTab audience={audience} onRun={runAudience} />}
+            {tab === "Output" && <OutputTab output={output} now={now} onRun={runOutput} />}
             {tab === "Countdown" && (
               <CountdownPanel studio={studio} now={now}
                 onStart={(startsAt) => void run(() => startCountdown(startsAt))}
