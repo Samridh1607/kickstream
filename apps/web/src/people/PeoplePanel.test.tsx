@@ -79,6 +79,37 @@ test("joined speakers go on and off the stage, and members never do", async () =
   await waitFor(() => expect(sent.at(-1)).toMatchObject({ body: { people: [] } }));
 });
 
+test("while a stage change is on its way the stage cannot be changed again", async () => {
+  let answer: (response: Response) => void = () => {};
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => { answer = resolve; })));
+  const joinedJo = invitation({ id: "i2", name: "Jo", link: "/guest/def", joined_name: "Jo", acs_id: "8:fake:3", present: true });
+  show(peopleDoc({ invites: [joinedSam, joinedJo] }));
+  const button = (name: string) => screen.getByRole("button", { name }) as HTMLButtonElement;
+  fireEvent.click(button("Add Sam to stage"));
+  await waitFor(() => expect(button("Add Jo to stage").disabled).toBe(true));
+  expect(button("Add Sam to stage").disabled).toBe(true);
+  await act(async () => answer(new Response(JSON.stringify(peopleDoc()), { status: 200 })));
+  await waitFor(() => expect(button("Add Jo to stage").disabled).toBe(false));
+});
+
+test("a host on stage without their camera can still take themselves off", async () => {
+  const sent = serve();
+  show(peopleDoc({ host_acs_id: "8:fake:host", stage: [{ id: "host", name: "Host", acs_id: "8:fake:host", present: false }] }));
+  fireEvent.click(screen.getByRole("button", { name: "Remove me from stage" }));
+  await waitFor(() => expect(sent.at(-1)).toMatchObject({ url: "/api/broadcasts/b1/people/stage", method: "PUT", body: { people: [] } }));
+});
+
+test("a link that cannot be copied is explained", async () => {
+  serve();
+  const writeText = vi.fn(async () => {
+    throw new Error("Denied");
+  });
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  show(peopleDoc({ invites: [joinedSam] }));
+  fireEvent.click(screen.getByRole("button", { name: "Copy link for Sam" }));
+  expect(await screen.findByText("The link could not be copied. Select it and copy it yourself.")).toBeTruthy();
+});
+
 test("a guest who has not joined cannot be put on stage yet", () => {
   serve();
   show(peopleDoc({ invites: [invitation()] }));

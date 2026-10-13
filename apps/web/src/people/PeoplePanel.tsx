@@ -42,6 +42,7 @@ export function PeoplePanel({ broadcastId, people, live, onPeople, newCall = ope
   const [role, setRole] = useState<Role>("speaker");
   const [name, setName] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
+  const [staging, setStaging] = useState(false);
   const [call, setCall] = useState<RoomCall | null>(null);
   useCallUpdates(call);
   const currentCall = useRef(call);
@@ -79,8 +80,20 @@ export function PeoplePanel({ broadcastId, people, live, onPeople, newCall = ope
       setProblem(caught instanceof Error ? caught.message : "The change was not made.");
     }
   };
-  const toggleStage = (personId: string) =>
-    void run(() => setStage(broadcastId, stage.includes(personId) ? stage.filter((id) => id !== personId) : [...stage, personId]));
+  // The new stage is built from the one shown, so a second change must wait for the first.
+  const toggleStage = async (personId: string) => {
+    setStaging(true);
+    try {
+      await run(() => setStage(broadcastId, stage.includes(personId) ? stage.filter((id) => id !== personId) : [...stage, personId]));
+    } finally {
+      setStaging(false);
+    }
+  };
+  const hostStageButton = (
+    <Button size="small" disabled={staging || (!hostOnStage && !people.host_acs_id)} onClick={() => void toggleStage(HOST)}>
+      {hostOnStage ? "Remove me from stage" : "Add me to stage"}
+    </Button>
+  );
   const joinHost = async () => {
     const made = newCall(service);
     setCall(made);
@@ -109,7 +122,10 @@ export function PeoplePanel({ broadcastId, people, live, onPeople, newCall = ope
           {hostOnStage && <Badge color="danger">On stage</Badge>}
         </div>
         {call === null ? (
-          <Button icon={<VideoRegular />} onClick={() => void joinHost()}>Join with camera</Button>
+          <div className={styles.row}>
+            <Button icon={<VideoRegular />} onClick={() => void joinHost()}>Join with camera</Button>
+            {hostOnStage && hostStageButton}
+          </div>
         ) : (
           <>
             <VideoBox call={call} acsId={null} label="You" />
@@ -119,9 +135,7 @@ export function PeoplePanel({ broadcastId, people, live, onPeople, newCall = ope
                 onClick={() => void call.setMuted(!call.muted).catch((caught: unknown) => setProblem(muteProblem(caught)))}>
                 {call.muted ? "Unmute" : "Mute"}
               </Button>
-              <Button size="small" disabled={!hostOnStage && !people.host_acs_id} onClick={() => toggleStage(HOST)}>
-                {hostOnStage ? "Remove me from stage" : "Add me to stage"}
-              </Button>
+              {hostStageButton}
             </div>
           </>
         )}
@@ -145,12 +159,12 @@ export function PeoplePanel({ broadcastId, people, live, onPeople, newCall = ope
                 <Input readOnly size="small" className={styles.grow} aria-label={`Invite link for ${label}`} value={url} />
                 <Tooltip content="Copy link" relationship="description">
                   <Button size="small" appearance="subtle" icon={<CopyRegular />} aria-label={`Copy link for ${label}`}
-                    onClick={() => void navigator.clipboard?.writeText(url)} />
+                    onClick={() => void navigator.clipboard?.writeText(url).catch(() => setProblem("The link could not be copied. Select it and copy it yourself."))} />
                 </Tooltip>
               </div>
               <div className={styles.row}>
                 {item.role !== "member" && (
-                  <Button size="small" disabled={!onStage && !item.acs_id} onClick={() => toggleStage(item.id)}>
+                  <Button size="small" disabled={staging || (!onStage && !item.acs_id)} onClick={() => void toggleStage(item.id)}>
                     {onStage ? `Remove ${label} from stage` : `Add ${label} to stage`}
                   </Button>
                 )}
