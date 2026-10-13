@@ -8,7 +8,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from kickstream.adapters.chromium_capture import ChromiumCapture, browser_args, find_browser
+from kickstream.adapters.chromium_capture import (
+    ChromiumCapture,
+    browser_args,
+    find_browser,
+    honest_user_agent,
+)
 from kickstream.adapters.process_group import KillOnExit
 from kickstream.ports.output import OutputFailure
 
@@ -181,3 +186,9 @@ async def test_the_picture_recorded_is_exactly_the_chosen_size_at_full_hd_too(pa
     capture = ChromiumCapture()
     await capture.start(f"{pages}/captures?size=1920x1080", 1920, 1080)
     await capture.stop()
+
+
+def test_the_hidden_browser_does_not_call_itself_headless():
+    agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36"
+    assert honest_user_agent(agent) == agent.replace("HeadlessChrome", "Chrome")
+    assert honest_user_agent("Mozilla/5.0 Chrome/141.0") == "Mozilla/5.0 Chrome/141.0"

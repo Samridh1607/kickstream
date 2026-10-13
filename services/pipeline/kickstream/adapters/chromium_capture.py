@@ -103,6 +103,11 @@ def _without_token(url: str) -> str:
     return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(query)))
 
 
+def honest_user_agent(agent: str) -> str:
+    """Calling services turn away browsers that say they are headless, and the program page joins calls."""
+    return agent.replace("HeadlessChrome", "Chrome")
+
+
 def _remove(profile: Path) -> None:
     """Windows keeps a killed browser's files locked for a moment, so try a few times."""
     for _ in range(20):
@@ -171,6 +176,7 @@ class ChromiumCapture:
                     close_timeout=1,
                 ),
             )
+            await self._within(browser_late, self._honest_user_agent())
             await self._within(browser_late, self._call("Page.navigate", url=url))
             await self._within(page_late, self._until_ready())
             await self._within(browser_late, self._size_content(width, height))
@@ -239,6 +245,12 @@ class ChromiumCapture:
                 if "error" in message:
                     raise OutputFailure(f"The hidden browser refused {method}.")
                 return message.get("result", {})
+
+    async def _honest_user_agent(self) -> None:
+        answer = await self._call("Runtime.evaluate", expression="navigator.userAgent", returnByValue=True)
+        agent = answer.get("result", {}).get("value")
+        if isinstance(agent, str) and agent != honest_user_agent(agent):
+            await self._call("Emulation.setUserAgentOverride", userAgent=honest_user_agent(agent))
 
     async def _until_ready(self) -> None:
         while True:

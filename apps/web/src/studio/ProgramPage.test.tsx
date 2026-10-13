@@ -1,7 +1,8 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import { useMatch } from "../stream/store";
+import { FakeRoomCall } from "../test/FakeRoomCall";
 import {
-  element, envelope, FakeEventSource, FakeEventSourceCtor, scene, status, studio,
+  broadcast, broadcasts, callSeat, element, envelope, FakeEventSource, FakeEventSourceCtor, peopleDoc, scene, status, studio,
 } from "../test/fixtures";
 import { renderUi } from "../test/render";
 import { isOutputView, ProgramPage, withReplayFallback } from "./ProgramPage";
@@ -184,4 +185,71 @@ test("after a failed capture a later call may try again", async () => {
   } finally {
     window.history.pushState({}, "", "/studio?output");
   }
+});
+
+function serveSeats() {
+  const asked: string[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    asked.push(url);
+    if (url.endsWith("/program/seat")) return new Response(JSON.stringify(callSeat({ acs_id: "8:fake:program" })), { status: 200 });
+    return new Response("{}", { status: 404 });
+  }));
+  return asked;
+}
+
+function showWithGuests(call: FakeRoomCall, connectAudio = vi.fn(() => () => {})) {
+  renderUi(<ProgramPage eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} newCall={() => call} connectAudio={connectAudio} rejoinMs={10} />);
+  push(studio());
+  act(() => {
+    const doc = stream("/api/broadcasts/stream")!;
+    doc.open();
+    doc.emitRaw(JSON.stringify(broadcasts({ broadcasts: [broadcast({ state: "live" })], current_id: "b1" })));
+  });
+  act(() => {
+    const doc = stream("/api/broadcasts/b1/people/stream")!;
+    doc.open();
+    doc.emitRaw(JSON.stringify(peopleDoc({ stage: [{ id: "i1", name: "Sam", acs_id: "8:fake:2", present: true }] })));
+  });
+  return connectAudio;
+}
+
+test("the program joins the room of the broadcast on air, shows who is on stage and carries their voices", async () => {
+  const asked = serveSeats();
+  const call = new FakeRoomCall();
+  call.audio = {} as MediaStream;
+  const connectAudio = showWithGuests(call);
+  await waitFor(() => expect(call.joined).toHaveLength(1));
+  expect(asked).toContain("/api/broadcasts/b1/people/program/seat");
+  expect(call.joined[0]).toMatchObject({ roomId: "room-1", token: "t1", name: "Program", receiveOnly: true });
+  expect(screen.getByTestId("camera-tile").textContent).toContain("Sam");
+  await waitFor(() => expect(call.rendered).toContain("8:fake:2"));
+  await waitFor(() => expect(connectAudio).toHaveBeenCalledWith(call.audio));
+});
+
+test("the program rejoins by itself when the call drops", async () => {
+  serveSeats();
+  const call = new FakeRoomCall();
+  showWithGuests(call);
+  await waitFor(() => expect(call.joined).toHaveLength(1));
+  act(() => call.drop());
+  await waitFor(() => expect(call.joined).toHaveLength(2));
+});
+
+test("with no room the program joins nothing", async () => {
+  serveSeats();
+  const call = new FakeRoomCall();
+  renderUi(<ProgramPage eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} newCall={() => call} />);
+  push(studio());
+  act(() => {
+    const doc = stream("/api/broadcasts/stream")!;
+    doc.open();
+    doc.emitRaw(JSON.stringify(broadcasts({ broadcasts: [broadcast()], current_id: "b1" })));
+  });
+  act(() => {
+    const doc = stream("/api/broadcasts/b1/people/stream")!;
+    doc.open();
+    doc.emitRaw(JSON.stringify(peopleDoc({ room_id: null })));
+  });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(call.joined).toHaveLength(0);
 });
