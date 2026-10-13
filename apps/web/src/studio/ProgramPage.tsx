@@ -4,6 +4,7 @@ import type { Audience, Scene, Studio, ViewerProfile } from "../contracts";
 import { useMatch } from "../stream/store";
 import { useLiveDocument } from "../stream/useLiveDocument";
 import { type CurrentMatchOptions, useCurrentMatch } from "../stream/useCurrentMatch";
+import { startCapture } from "./capture";
 import { fitScale, nextLayer } from "./geometry";
 import { SceneCanvas } from "./SceneCanvas";
 import { useNow, useStudio } from "./useStudio";
@@ -45,7 +46,7 @@ function useWindowSize() {
 }
 
 /** The clean output: the active scene, scaled to the window, with no controls. */
-export function ProgramPage({ eventSource, retryMs, pollMs }: CurrentMatchOptions) {
+export function ProgramPage({ eventSource, retryMs, pollMs, capture = startCapture }: CurrentMatchOptions & { capture?: typeof startCapture }) {
   const { studio, offset } = useStudio(eventSource, retryMs);
   const { doc: audience } = useLiveDocument<Audience>(AUDIENCE_STREAM, eventSource, retryMs);
   const mode = studio?.settings.mode;
@@ -58,6 +59,22 @@ export function ProgramPage({ eventSource, retryMs, pollMs }: CurrentMatchOption
   const match = useMatch((state) => state.data);
   const now = useNow() + offset;
   const size = useWindowSize();
+
+  // Opened by the pipeline's hidden browser with a token, the page offers to record itself. It
+  // waits for the studio document, so the stream never begins on an empty frame. The pipeline
+  // calls the function; a page may only ask to be captured in answer to an action.
+  const token = useMemo(() => new URLSearchParams(window.location.search).get("capture"), []);
+  const ready = Boolean(studio);
+  useEffect(() => {
+    if (!token || !ready) return;
+    const page = window as unknown as { __kickstreamStartCapture?: () => Promise<void> };
+    page.__kickstreamStartCapture = async () => {
+      await capture(token, { width: window.innerWidth, height: window.innerHeight });
+    };
+    return () => {
+      delete page.__kickstreamStartCapture;
+    };
+  }, [token, ready, capture]);
 
   const active = studio?.scenes.find((scene) => scene.id === studio.active_scene_id) ?? studio?.scenes[0];
   return (

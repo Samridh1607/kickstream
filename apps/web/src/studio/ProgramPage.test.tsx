@@ -103,3 +103,27 @@ test("after the stream is refused the page reconnects and takes the server's doc
   push(studio({ revision: 0, active_scene_id: "s2" }));
   expect(screen.getByTestId("element-countdown")).toBeTruthy();
 });
+
+test("the page offers to record itself only when opened with a capture token, and only once it has the studio", async () => {
+  serve(null);
+  const page = window as unknown as { __kickstreamStartCapture?: () => Promise<void> };
+  const capture = vi.fn(async () => () => {});
+  window.history.pushState({}, "", "/program?capture=run-token");
+  try {
+    renderUi(<ProgramPage eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10_000} capture={capture} />);
+    expect(page.__kickstreamStartCapture).toBeUndefined();
+    push(studio());
+    expect(typeof page.__kickstreamStartCapture).toBe("function");
+    await page.__kickstreamStartCapture!();
+    expect(capture).toHaveBeenCalledWith("run-token", { width: window.innerWidth, height: window.innerHeight });
+  } finally {
+    window.history.pushState({}, "", "/program");
+  }
+});
+
+test("without a capture token the page never offers to record itself", () => {
+  serve(null);
+  renderUi(<ProgramPage eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10_000} />);
+  push(studio());
+  expect((window as unknown as { __kickstreamStartCapture?: unknown }).__kickstreamStartCapture).toBeUndefined();
+});
