@@ -95,11 +95,13 @@ test("a guest whose invite is revoked leaves the room", async () => {
   await waitFor(() => expect(call.left).toBeGreaterThan(0));
 });
 
-test("a co-host can open the studio once they have joined", async () => {
+test("a co-host can open the studio in a new tab once they have joined, staying in the call", async () => {
   serve();
   const call = open(guestDoc({ role: "cohost", broadcast_id: "b1" }));
   await join(call);
-  expect(screen.getByRole("link", { name: "Open studio" }).getAttribute("href")).toBe("/broadcasts/b1/studio");
+  const link = screen.getByRole("link", { name: "Open studio" });
+  expect(link.getAttribute("href")).toBe("/broadcasts/b1/studio");
+  expect(link.getAttribute("target")).toBe("_blank");
 });
 
 test("a camera that cannot be used is explained and the guest can still join", async () => {

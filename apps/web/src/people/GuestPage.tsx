@@ -71,7 +71,7 @@ export function GuestPage({ secret, eventSource, retryMs, newCall = openRoomCall
     currentCall.current = call;
     return () => {
       currentCall.current = null;
-      // The page is going away; there is nowhere to show a failed leave.
+      // The call is being given up; there is nowhere to show a failed leave.
       call?.leave().catch(() => undefined);
     };
   }, [call]);
@@ -137,7 +137,7 @@ export function GuestPage({ secret, eventSource, retryMs, newCall = openRoomCall
               onClick={() => void devices.chooseCamera(call.cameraOn ? null : (devices.cameras[0]?.id ?? null))}>
               {call.cameraOn ? "Turn camera off" : "Turn camera on"}
             </Button>
-            {doc.role === "cohost" && doc.broadcast_id && <Link href={studioPath(doc.broadcast_id)}>Open studio</Link>}
+            {doc.role === "cohost" && doc.broadcast_id && <Link href={studioPath(doc.broadcast_id)} target="_blank" rel="noopener">Open studio</Link>}
           </div>
           <div className={styles.tiles}>
             <VideoBox call={call} acsId={null} label={`${shownName} (you)`} />
