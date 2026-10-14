@@ -1,11 +1,33 @@
-"""StatsBomb Open Data: past matches with every event located, turned into Kickstream events and team sheets."""
+"""StatsBomb Open Data: past matches with every event located, turned into Kickstream events and team sheets.
 
+Files are downloaded on first use and kept in a cache directory, so a match played once replays offline.
+"""
+
+import asyncio
+import json
+import re
+import threading
+import time
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from pathlib import Path
 from typing import Any
 
-from kickstream.contracts import MatchEvent, Player, TeamSheet
+from kickstream.adapters.http_json import Get, get_json, http_get
+from kickstream.contracts import Competition, MatchEvent, MatchListing, Player, TeamSheet
 from kickstream.domain.teams import short_name, team_colors
 from kickstream.domain.types import Side
-from kickstream.ports.match_source import ReplayMatch
+from kickstream.ports.match_source import ReplayMatch, SourceFailure
+
+OPEN_DATA = "https://raw.githubusercontent.com/hudl/open-data/master/data/"
+# competitions and season lists are refreshed weekly; events and line-ups never change
+LISTS_FRESH_S = 7 * 86400
+UNREACHABLE = (
+    "StatsBomb's open data could not be reached. Check the internet connection and try again. "
+    "Matches downloaded before still play offline."
+)
+UNREADABLE = "StatsBomb sent a file Kickstream could not read. Try again later."
+_REF = re.compile(r"([0-9]+)/([0-9]+)/([0-9]+)")
 
 SB_LENGTH, SB_WIDTH = 120.0, 80.0
 SAVE_TYPES = {"Shot Saved", "Penalty Saved", "Shot Saved to Post", "Shot Saved Off Target", "Save"}
@@ -232,3 +254,110 @@ def convert(match_id: str, listing: Event, lineups: list[Event], events: list[Ev
         events=convert_events(match_id, events, listing["home_team"]["home_team_id"]),
         competition=competition,
     )
+
+
+@contextmanager
+def _reading() -> Iterator[None]:
+    try:
+        yield
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise SourceFailure(UNREADABLE) from exc
+
+
+class StatsBombOpenData:
+    id = "statsbomb"
+    name = "StatsBomb Open Data"
+    credit = "Data: StatsBomb"
+
+    def __init__(
+        self,
+        cache_dir: Path,
+        base_url: str = OPEN_DATA,
+        get: Get = http_get,
+        now: Callable[[], float] = time.time,
+    ) -> None:
+        self._cache = cache_dir
+        self._base = base_url
+        self._get = get
+        self._now = now
+        self._writing = threading.Lock()
+
+    async def competitions(self) -> list[Competition]:
+        return await asyncio.to_thread(self._competitions)
+
+    async def matches(self, competition_id: int, season_id: int) -> list[MatchListing]:
+        return await asyncio.to_thread(self._matches, competition_id, season_id)
+
+    async def load(self, ref: str, match_id: str) -> ReplayMatch:
+        return await asyncio.to_thread(self._load, ref, match_id)
+
+    def _competitions(self) -> list[Competition]:
+        rows = self._read("competitions.json", LISTS_FRESH_S)
+        with _reading():
+            found = [
+                Competition(
+                    competition_id=row["competition_id"],
+                    season_id=row["season_id"],
+                    competition_name=row["competition_name"],
+                    season_name=row["season_name"],
+                    country_name=row["country_name"],
+                )
+                for row in rows
+            ]
+        by_name = sorted(found, key=lambda c: c.competition_name.casefold())
+        return sorted(by_name, key=lambda c: c.season_name, reverse=True)
+
+    def _matches(self, competition_id: int, season_id: int) -> list[MatchListing]:
+        rows = self._read(f"matches/{competition_id}/{season_id}.json", LISTS_FRESH_S)
+        with _reading():
+            listings = [
+                MatchListing(
+                    ref=f"{competition_id}/{season_id}/{row['match_id']}",
+                    date=row["match_date"],
+                    kick_off=(row.get("kick_off") or "")[:5] or None,
+                    home=row["home_team"]["home_team_name"],
+                    away=row["away_team"]["away_team_name"],
+                    stage=(row.get("competition_stage") or {}).get("name"),
+                )
+                for row in rows
+            ]
+        return sorted(listings, key=lambda m: (m.date, m.kick_off or ""))
+
+    def _load(self, ref: str, match_id: str) -> ReplayMatch:
+        parts = _REF.fullmatch(ref)
+        if parts is None:
+            raise SourceFailure(f"StatsBomb has no match {ref}. Choose one from the list.")
+        competition_id, season_id, statsbomb_id = (int(part) for part in parts.groups())
+        rows = self._read(f"matches/{competition_id}/{season_id}.json", LISTS_FRESH_S)
+        with _reading():
+            listing = next((row for row in rows if row["match_id"] == statsbomb_id), None)
+        if listing is None:
+            raise SourceFailure(f"StatsBomb has no match {ref}. Choose one from the list.")
+        events = self._read(f"events/{statsbomb_id}.json", None)
+        lineups = self._read(f"lineups/{statsbomb_id}.json", None)
+        with _reading():
+            return convert(match_id, listing, lineups, events)
+
+    def _read(self, path: str, fresh_s: float | None) -> Any:
+        cached = self._cache / path
+        if cached.exists() and (fresh_s is None or self._now() - cached.stat().st_mtime < fresh_s):
+            return self._cached(cached)
+        try:
+            data, _ = get_json(
+                self._get, self._base + path, {}, unreachable=UNREACHABLE, unreadable=UNREADABLE
+            )
+        except SourceFailure:
+            if cached.exists():
+                return self._cached(cached)
+            raise
+        with self._writing:
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            temporary = cached.with_suffix(".tmp")
+            temporary.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+            temporary.replace(cached)
+        return data
+
+    @staticmethod
+    def _cached(path: Path) -> Any:
+        with _reading():
+            return json.loads(path.read_text(encoding="utf-8"))

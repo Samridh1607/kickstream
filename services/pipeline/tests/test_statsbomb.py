@@ -1,14 +1,49 @@
 import json
+import time
+import urllib.error
 from pathlib import Path
 
-from kickstream.adapters.statsbomb import convert, convert_events, formation, to_pitch
+import pytest
+
+from kickstream.adapters import http_json
+from kickstream.adapters.http_json import get_json, http_get
+from kickstream.adapters.statsbomb import (
+    LISTS_FRESH_S,
+    OPEN_DATA,
+    StatsBombOpenData,
+    convert,
+    convert_events,
+    formation,
+    to_pitch,
+)
+from kickstream.ports.match_source import SourceFailure
 from kickstream.tools.trim_statsbomb import trim_events
 
 FIX = Path(__file__).parent / "fixtures" / "statsbomb"
+BASE = "https://sb.test/data/"
 
 
 def load(name: str):
     return json.loads((FIX / name).read_text("utf-8"))
+
+
+class FixtureGet:
+    def __init__(self, root: Path, body: bytes | None = None) -> None:
+        self.root, self.body, self.calls = root, body, []
+
+    def __call__(self, url: str, headers) -> tuple[bytes, dict[str, str]]:
+        self.calls.append(url)
+        if self.body is not None:
+            return self.body, {}
+        return (self.root / url.removeprefix(BASE)).read_bytes(), {"content-type": "text/plain"}
+
+
+def failing_get(url: str, headers) -> tuple[bytes, dict[str, str]]:
+    raise urllib.error.URLError("no network")
+
+
+def source(cache: Path, get=None, now=time.time) -> StatsBombOpenData:
+    return StatsBombOpenData(cache, base_url=BASE, get=get or FixtureGet(FIX), now=now)
 
 
 def final():
@@ -182,3 +217,155 @@ def test_the_trim_keeps_what_the_conversion_reads_and_drops_the_bulk():
     trimmed = trim_events([sb("Carry"), *passes, shot, sb("Pressure")])
     assert [e["type"]["name"] for e in trimmed] == ["Pass"] * 4 + ["Shot"]
     assert "related_events" not in trimmed[-1] and "freeze_frame" not in trimmed[-1]["shot"]
+
+
+def test_the_open_data_comes_from_hudl():
+    assert OPEN_DATA == "https://raw.githubusercontent.com/hudl/open-data/master/data/"
+
+
+async def test_a_match_is_downloaded_once_and_then_plays_offline(tmp_path):
+    served = FixtureGet(FIX)
+    first = await source(tmp_path, served).load("43/3/8658", "m-1")
+    assert served.calls == [f"{BASE}matches/43/3.json", f"{BASE}events/8658.json", f"{BASE}lineups/8658.json"]
+    assert first == final()
+    for path in ("matches/43/3.json", "events/8658.json", "lineups/8658.json"):
+        assert json.loads((tmp_path / path).read_text("utf-8")) == load(path)
+    assert not list(tmp_path.rglob("*.tmp"))
+    offline = await source(tmp_path, failing_get).load("43/3/8658", "m-2")
+    assert offline.home.name == first.home.name and offline.events[0].match_id == "m-2"
+
+
+async def test_events_and_line_ups_are_kept_for_good(tmp_path):
+    await source(tmp_path).load("43/3/8658", "m-1")
+    later = time.time() + 365 * 86400
+    served = FixtureGet(FIX)
+    await source(tmp_path, served, now=lambda: later).load("43/3/8658", "m-2")
+    assert served.calls == [f"{BASE}matches/43/3.json"]
+
+
+async def test_the_match_list_never_gives_away_the_score(tmp_path):
+    listings = await source(tmp_path).matches(43, 3)
+    final_listing = next(m for m in listings if m.ref == "43/3/8658")
+    assert (final_listing.home, final_listing.away, final_listing.stage) == ("France", "Croatia", "Final")
+    assert (final_listing.date, final_listing.kick_off) == ("2018-07-15", "17:00")
+    assert "score" not in json.dumps([m.model_dump() for m in listings])
+
+
+async def test_matches_are_listed_by_date_and_kick_off(tmp_path):
+    listings = await source(tmp_path).matches(43, 3)
+    assert [m.ref for m in listings] == ["43/3/7584", "43/3/8650", "43/3/8658"]
+
+
+async def test_competitions_are_newest_first(tmp_path):
+    competitions = await source(tmp_path).competitions()
+    assert [(c.competition_name, c.season_name) for c in competitions] == [
+        ("1. Bundesliga", "2023/2024"),
+        ("FIFA World Cup", "2018"),
+        ("1. Bundesliga", "2015/2016"),
+    ]
+    world_cup = competitions[1]
+    assert (world_cup.competition_id, world_cup.season_id, world_cup.country_name) == (43, 3, "International")
+
+
+async def test_a_fresh_list_is_read_from_the_cache(tmp_path):
+    served = FixtureGet(FIX)
+    await source(tmp_path, served).competitions()
+    await source(tmp_path, served).competitions()
+    assert served.calls == [f"{BASE}competitions.json"]
+
+
+async def test_a_list_older_than_a_week_is_downloaded_again(tmp_path):
+    await source(tmp_path).competitions()
+    later = time.time() + LISTS_FRESH_S + 60
+    served = FixtureGet(FIX)
+    await source(tmp_path, served, now=lambda: later).competitions()
+    assert served.calls == [f"{BASE}competitions.json"]
+
+
+async def test_a_stale_list_is_used_when_the_network_fails(tmp_path):
+    fresh = await source(tmp_path).competitions()
+    later = time.time() + 8 * 86400
+    assert await source(tmp_path, failing_get, now=lambda: later).competitions() == fresh
+
+
+async def test_no_cache_and_no_network_says_what_to_do(tmp_path):
+    with pytest.raises(SourceFailure, match="internet connection") as caught:
+        await StatsBombOpenData(tmp_path, get=failing_get).competitions()
+    assert "Matches downloaded before still play offline." in caught.value.message
+    assert not list(tmp_path.rglob("*.json"))
+
+
+async def test_a_file_that_is_not_json_is_refused_and_not_cached(tmp_path):
+    with pytest.raises(SourceFailure, match="could not read"):
+        await source(tmp_path, FixtureGet(FIX, body=b"<html>rate limited</html>")).competitions()
+    assert not (tmp_path / "competitions.json").exists()
+
+
+async def test_a_match_missing_from_the_season_list_is_refused(tmp_path):
+    with pytest.raises(SourceFailure, match=r"StatsBomb has no match 43/3/1\. Choose one from the list\."):
+        await source(tmp_path).load("43/3/1", "m-1")
+
+
+@pytest.mark.parametrize("ref", ["8658", "43/3/../x", "43/3/8658/1", "a/b/c", "43/3/", "4３/3/8658"])
+async def test_refs_that_are_not_three_numbers_are_refused(tmp_path, ref):
+    served = FixtureGet(FIX)
+    with pytest.raises(SourceFailure, match="StatsBomb has no match"):
+        await source(tmp_path, served).load(ref, "m-1")
+    assert served.calls == []
+
+
+def test_get_json_says_what_failed_in_the_callers_words():
+    with pytest.raises(SourceFailure, match="^offline$"):
+        get_json(failing_get, "https://x.test/", {}, unreachable="offline", unreadable="garbled")
+    with pytest.raises(SourceFailure, match="^garbled$"):
+        get_json(
+            lambda url, headers: (b"{", {}),
+            "https://x.test/",
+            {},
+            unreachable="offline",
+            unreadable="garbled",
+        )
+    body, headers = get_json(
+        lambda url, headers: (b'{"a": 1}', {"x-left": "9"}),
+        "https://x.test/",
+        {},
+        unreachable="",
+        unreadable="",
+    )
+    assert (body, headers) == ({"a": 1}, {"x-left": "9"})
+
+
+def test_http_get_names_kickstream_and_lower_cases_the_headers(monkeypatch):
+    sent = {}
+
+    class Response:
+        headers = {"X-RateLimit-Requests-Remaining": "90", "Content-Type": "application/json"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self) -> bytes:
+            return b"[]"
+
+    def urlopen(request, timeout):
+        sent.update(url=request.full_url, agent=request.get_header("User-agent"), timeout=timeout)
+        sent["key"] = request.get_header("X-apisports-key")
+        return Response()
+
+    monkeypatch.setattr(http_json.urllib.request, "urlopen", urlopen)
+    body, headers = http_get("https://x.test/a", {"x-apisports-key": "k"}, timeout=5.0)
+    assert body == b"[]" and headers["x-ratelimit-requests-remaining"] == "90"
+    assert sent == {"url": "https://x.test/a", "agent": "Kickstream", "timeout": 5.0, "key": "k"}
+
+
+def test_http_get_leaves_http_errors_to_the_adapter(monkeypatch):
+    def urlopen(request, timeout):
+        raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", None, None)
+
+    monkeypatch.setattr(http_json.urllib.request, "urlopen", urlopen)
+    with pytest.raises(urllib.error.HTTPError) as caught:
+        http_get("https://x.test/a", {})
+    assert caught.value.code == 403
