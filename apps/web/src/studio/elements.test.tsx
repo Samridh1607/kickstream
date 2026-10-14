@@ -33,6 +33,40 @@ test("the scoreboard holds its box when there is no match", () => {
   expect(screen.getByTestId("program-score").textContent).toBe("–");
 });
 
+test("before kick-off the scoreboard says so instead of a minute", () => {
+  show("scoreboard", { match: { ...EMPTY, status: status({ state: "pre_match" }) }, language: "es" });
+  expect(screen.getByText("Antes del inicio")).toBeTruthy();
+  expect(screen.queryByText("0'")).toBeNull();
+});
+
+const keyEvents: MatchData = { ...live, events: [matchEvent()], status: status({ detail: "key_events", score_home: 2, score_away: 1 }) };
+
+test("on a key-events match the pitch says it is not available, and the scoreboard still shows", () => {
+  const { unmount } = show("pitch", { match: keyEvents }, { pressure: true });
+  expect(screen.getByTestId("live-data-only").textContent).toBe("Not available with live data");
+  expect(screen.queryByTestId("marker")).toBeNull();
+  unmount();
+  show("scoreboard", { match: keyEvents });
+  expect(screen.queryByTestId("live-data-only")).toBeNull();
+  expect(screen.getByTestId("program-score").textContent).toBe("2 - 1");
+});
+
+test("on a full-detail match the pitch draws as before", () => {
+  show("pitch", { match: { ...live, events: [matchEvent()], status: status({ detail: "full" }) } }, { pressure: true });
+  expect(screen.queryByTestId("live-data-only")).toBeNull();
+  expect(screen.getAllByTestId("marker")).toHaveLength(1);
+});
+
+test("on a key-events match a replay says it is not available while one plays, and is empty otherwise", () => {
+  const replay = { match_id: "m-1", moment_id: "m-1-k1", minute: 23, started_at: 1000, duration_s: 8 };
+  const { unmount } = show("replay", { match: keyEvents, studio: studio({ replay }) });
+  expect(screen.getByTestId("live-data-only")).toBeTruthy();
+  expect(screen.queryByTestId("program-replay")).toBeNull();
+  unmount();
+  show("replay", { match: keyEvents });
+  expect(screen.queryByTestId("live-data-only")).toBeNull();
+});
+
 test("narration shows the newest lines up to the number asked for", () => {
   show("narration", {}, { lines: 2 });
   expect(screen.getByText("Third line")).toBeTruthy();
@@ -91,6 +125,20 @@ test("text is drawn with its size and alignment", () => {
   const text = screen.getByText("Kick-off soon");
   expect(text.style.fontSize).toBe("96px");
   expect(text.style.textAlign).toBe("left");
+});
+
+test("a title can name the playing teams", () => {
+  const playing = { ...live, status: status({ home: { ...live.status!.home, name: "France" }, away: { ...live.status!.away, name: "Croatia" } }) };
+  show("text", { match: playing }, { text: "{home} vs {away}" });
+  expect(screen.getByText("France vs Croatia")).toBeTruthy();
+});
+
+test("with no match a title that names the teams is blank, and other text is kept", () => {
+  const { container, unmount } = show("text", { match: EMPTY }, { text: "{home} vs {away}" });
+  expect(container.textContent).toBe("");
+  unmount();
+  show("text", { match: EMPTY }, { text: "Kick-off soon" });
+  expect(screen.getByText("Kick-off soon")).toBeTruthy();
 });
 
 test("an image is drawn from the image store, and a missing one shows a placeholder", () => {

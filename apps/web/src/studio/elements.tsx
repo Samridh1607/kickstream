@@ -2,8 +2,9 @@ import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 
 import { Pitch } from "../components/Pitch";
 import { StatsPanel } from "../components/StatsPanel";
 import { Timeline } from "../components/Timeline";
-import type { Banner, FanZone, MatchEvent, Replay, SceneElement, Studio } from "../contracts";
+import type { Banner, FanZone, MatchEvent, MatchStatus, Replay, SceneElement, Studio } from "../contracts";
 import { type Language, t } from "../i18n";
+import { limitedByLiveData } from "../matches/liveData";
 import type { MatchData } from "../stream/store";
 import { fetchReplay, imageUrl } from "./api";
 import { countdownLabel, formatRemaining, tickerItems } from "./format";
@@ -55,7 +56,21 @@ function Enlarged({ children }: { children: ReactNode }) {
   );
 }
 
-function Scoreboard({ match }: { match: MatchData }) {
+function LiveDataOnly({ language }: { language: Language }) {
+  return (
+    <Panel style={CENTERED}>
+      <span data-testid="live-data-only" style={{ opacity: 0.72, textAlign: "center" }}>{t(language, "liveDataOnly")}</span>
+    </Panel>
+  );
+}
+
+/** A text's `{home}` and `{away}` become the playing teams; with no match such a text stays blank. */
+function withTeams(text: string, status: MatchStatus | null): string {
+  if (!status) return /\{(home|away)\}/.test(text) ? "" : text;
+  return text.replace(/\{(home|away)\}/g, (_, side: "home" | "away") => status[side].name);
+}
+
+function Scoreboard({ match, language }: { match: MatchData; language: Language }) {
   const status = match.status;
   if (!status) {
     return (
@@ -71,7 +86,7 @@ function Scoreboard({ match }: { match: MatchData }) {
         {status.score_home} - {status.score_away}
       </span>
       <span style={{ fontWeight: 600 }}>{status.away.name}</span>
-      <span style={{ opacity: 0.8 }}>{Math.max(status.minute, match.minute)}'</span>
+      <span style={{ opacity: 0.8 }}>{status.state === "pre_match" ? t(language, "preMatch") : `${Math.max(status.minute, match.minute)}'`}</span>
     </Panel>
   );
 }
@@ -229,12 +244,15 @@ function CamerasView({ data, names }: { data: ProgramData; names: boolean }) {
 export function ElementView({ element, data }: { element: SceneElement; data: ProgramData }) {
   const { match, studio, language } = data;
   const props = element.props as Record<string, unknown>;
+  if (limitedByLiveData(element, match.status)) {
+    return element.type === "replay" && !studio.replay ? null : <LiveDataOnly language={language} />;
+  }
   if (isWidget(element.type)) {
     return <WidgetView element={{ ...element, type: element.type }} data={{ match, fans: data.fans ?? null, now: data.now, language }} />;
   }
   switch (element.type) {
     case "scoreboard":
-      return <Scoreboard match={match} />;
+      return <Scoreboard match={match} language={language} />;
     case "pitch":
       return (
         <Panel style={{ padding: 12 }}>
@@ -272,7 +290,7 @@ export function ElementView({ element, data }: { element: SceneElement; data: Pr
       return (
         <div style={{ ...PANEL, ...CENTERED, backgroundColor: "transparent" }}>
           <span style={{ width: "100%", fontSize: typeof props.size === "number" ? props.size : 48, fontWeight: 700, textAlign: (props.align as CSSProperties["textAlign"]) ?? "center" }}>
-            {typeof props.text === "string" ? props.text : ""}
+            {typeof props.text === "string" ? withTeams(props.text, match.status) : ""}
           </span>
         </div>
       );

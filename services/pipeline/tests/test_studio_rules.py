@@ -82,6 +82,13 @@ def test_there_are_nine_built_in_templates_that_fit_the_canvas():
             assert rules.normalize_element(e) == e, f"{template.name}/{e.type} is not already normal"
 
 
+def test_the_starting_soon_title_names_whichever_teams_are_playing():
+    starting = next(t for t in builtin_templates() if t.name == STARTING_SOON)
+    titles = [e.props["text"] for e in starting.elements if e.type == "text"]
+    assert titles == ["Kick-off soon", "{home} vs {away}"]
+    assert not any("Northbridge" in title for title in titles)
+
+
 def test_a_new_studio_starts_with_the_match_templates_and_starting_soon_live():
     doc = default_studio()
     assert [s.template for s in doc.scenes] == [STARTING_SOON, LIVE_MATCH, ANALYST_DESK, BREAK, FULL_TIME]

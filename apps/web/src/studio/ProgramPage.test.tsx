@@ -77,6 +77,20 @@ test("it follows the current match in the studio's mode and language", async () 
   expect(screen.getByTestId("program-score").textContent).toBe("3 - 0");
 });
 
+test("the program credits the data of the match it is showing", async () => {
+  serve("m-1");
+  renderUi(<ProgramPage eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} />);
+  push(studio());
+  await waitFor(() => expect(stream("/api/matches/")).toBeTruthy());
+  expect(screen.queryByTestId("program-credit")).toBeNull();
+  act(() => {
+    const match = stream("/api/matches/")!;
+    match.open();
+    match.emit(envelope(1, "match_status", status({ source: "statsbomb", credit: "Data: StatsBomb" })));
+  });
+  expect(screen.getByTestId("program-credit").textContent).toBe("Data: StatsBomb");
+});
+
 test("cutting to a Fan or Analyst scene switches the commentary to that scene's", async () => {
   serve("m-1");
   renderUi(<ProgramPage eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} />);

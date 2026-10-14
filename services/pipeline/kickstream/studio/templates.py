@@ -55,7 +55,7 @@ def builtin_templates() -> list[Scene]:
         STARTING_SOON: [
             _title(1, "Kick-off soon", 160, 96),
             _el(2, "countdown", 660, 380, 600, 260),
-            _title(3, "Northbridge FC vs Harbour City", 700, 56),
+            _title(3, "{home} vs {away}", 700, 56),
             _el(4, "ticker", 0, 1000, 1920, 80),
         ],
         LIVE_MATCH: [

@@ -1,6 +1,6 @@
 import { FluentProvider } from "@fluentui/react-components";
 import { type CSSProperties, type KeyboardEvent, type PointerEvent, useRef, useState } from "react";
-import type { Scene, SceneElement } from "../contracts";
+import type { MatchStatus, Scene, SceneElement } from "../contracts";
 import { EASE, leave, MotionStyles, rise, usePresence } from "../motion/motion";
 import { darkTheme } from "../theme";
 import { ElementView, type ProgramData } from "./elements";
@@ -41,6 +41,25 @@ const LABEL: CSSProperties = {
   position: "absolute", left: 0, top: 0, padding: "2px 12px", fontSize: 24, color: "#FFFFFF",
   backgroundColor: "rgba(15, 108, 189, 0.9)", borderBottomRightRadius: 8, pointerEvents: "none",
 };
+const CREDIT: CSSProperties = {
+  position: "absolute", right: 24, bottom: 16, display: "flex", alignItems: "center", gap: 12, padding: "6px 16px",
+  borderRadius: 999, fontSize: 22, color: "rgba(255, 255, 255, 0.8)", backgroundColor: "rgba(11, 18, 32, 0.72)",
+  pointerEvents: "none", userSelect: "none",
+};
+
+/** Who the match data comes from. StatsBomb's terms ask for their logo; it is drawn for light backgrounds. */
+function Credit({ status, zIndex }: { status: MatchStatus; zIndex: number }) {
+  return (
+    <div data-testid="program-credit" style={{ ...CREDIT, zIndex }}>
+      {status.source === "statsbomb" && (
+        <span style={{ display: "flex", padding: "4px 10px", borderRadius: 999, backgroundColor: "#FFFFFF" }}>
+          <img src="/statsbomb-logo.png" alt="StatsBomb" style={{ height: 24, display: "block" }} />
+        </span>
+      )}
+      {status.credit}
+    </div>
+  );
+}
 
 /** Draws a scene on the 16:9 canvas. The same component is the program and, with `editable`, the editor. */
 export function SceneCanvas({ scene, data, scale, editable = false, selectedId = null, onSelect, onChange }: SceneCanvasProps) {
@@ -49,6 +68,7 @@ export function SceneCanvas({ scene, data, scale, editable = false, selectedId =
   const drawn = scene.elements.filter((element) => editable || element.visible).sort((a, b) => a.layer - b.layer);
   // An element taken off the scene stays for a moment, to fade out instead of vanishing.
   const shown = usePresence(drawn, elementId);
+  const status = data.match.status;
 
   const commit = (id: string, rect: Rect) =>
     onChange?.(scene.elements.map((element) => (element.id === id ? { ...element, ...rect } : element)));
@@ -126,6 +146,7 @@ export function SceneCanvas({ scene, data, scale, editable = false, selectedId =
             </div>
           );
         })}
+        {status?.credit && <Credit status={status} zIndex={Math.max(0, ...shown.map(({ item }) => item.layer)) + 1} />}
       </div>
     </FluentProvider>
   );

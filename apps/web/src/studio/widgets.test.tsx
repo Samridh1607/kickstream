@@ -41,6 +41,26 @@ test("the score card waits for a match", () => {
   expect(screen.getByTestId("scorecard-score").textContent).toBe("–:–");
 });
 
+test("before kick-off the score card says so instead of a minute", () => {
+  show("scorecard", {}, { match: { ...EMPTY, status: status({ state: "pre_match" }) } });
+  expect(screen.getByText("Before kick-off")).toBeTruthy();
+  expect(screen.queryByText("0'")).toBeNull();
+});
+
+test("on a key-events match the 3D pitch and momentum say they are not available; win probability still draws", () => {
+  const keyEvents = { match: { ...live, status: status({ detail: "key_events" }) } };
+  const { unmount: pitch } = show("pitch3d", { camera: "auto" }, keyEvents);
+  expect(screen.getByTestId("live-data-only").textContent).toBe("Not available with live data");
+  expect(screen.queryByTestId("pitch3d")).toBeNull();
+  pitch();
+  const { unmount: momentum } = show("graph", { metric: "momentum" }, keyEvents);
+  expect(screen.getByTestId("live-data-only")).toBeTruthy();
+  momentum();
+  show("graph", { metric: "win_probability" }, keyEvents);
+  expect(screen.queryByTestId("live-data-only")).toBeNull();
+  expect(screen.getByTestId("program-graph")).toBeTruthy();
+});
+
 test("a chart compares the two sides, with each value written out", () => {
   show("chart", { metric: "overview" });
   const possession = screen.getByTestId("compare-possession");

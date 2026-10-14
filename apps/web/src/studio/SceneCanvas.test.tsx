@@ -1,6 +1,6 @@
 import { fireEvent, screen } from "@testing-library/react";
 import { EMPTY } from "../stream/store";
-import { element, scene, studio } from "../test/fixtures";
+import { element, scene, status, studio } from "../test/fixtures";
 import { renderUi } from "../test/render";
 import type { ProgramData } from "./elements";
 import { SceneCanvas } from "./SceneCanvas";
@@ -95,6 +95,40 @@ test("arrow keys move by one grid step and Shift with arrows resizes", () => {
   expect(handlers.onChange.mock.calls[1][0].find((item: { id: string }) => item.id === "a")).toMatchObject({ width: 400, height: 180 });
   fireEvent.keyDown(handle, { key: "Enter" });
   expect(handlers.onChange).toHaveBeenCalledTimes(2);
+});
+
+const playing = (over: Parameters<typeof status>[0]): ProgramData => ({ ...data, match: { ...EMPTY, status: status(over) } });
+
+test("the credit is drawn in the corner, above every element, while a sourced match plays", () => {
+  renderUi(<SceneCanvas scene={layout} data={playing({ source: "api_football", credit: "Data: API-Football" })} scale={0.5} />);
+  const credit = screen.getByTestId("program-credit");
+  expect(credit.textContent).toBe("Data: API-Football");
+  expect([credit.style.right, credit.style.bottom, credit.style.fontSize]).toEqual(["24px", "16px", "22px"]);
+  const layers = ["element-text", "element-countdown"].map((id) => Number(screen.getByTestId(id).style.zIndex));
+  expect(Number(credit.style.zIndex)).toBeGreaterThan(Math.max(...layers));
+  expect(screen.queryByRole("img")).toBeNull();
+});
+
+test("a StatsBomb match is credited with StatsBomb's logo", () => {
+  renderUi(<SceneCanvas scene={layout} data={playing({ source: "statsbomb", credit: "Data: StatsBomb" })} scale={0.5} />);
+  expect(screen.getByTestId("program-credit").textContent).toBe("Data: StatsBomb");
+  expect(screen.getByRole("img", { name: "StatsBomb" }).getAttribute("src")).toBe("/statsbomb-logo.png");
+});
+
+test("no credit for the simulated match or before any match", () => {
+  const { unmount } = renderUi(<SceneCanvas scene={layout} data={playing({ source: "simulated", credit: null })} scale={0.5} />);
+  expect(screen.queryByTestId("program-credit")).toBeNull();
+  unmount();
+  renderUi(<SceneCanvas scene={layout} data={data} scale={0.5} />);
+  expect(screen.queryByTestId("program-credit")).toBeNull();
+});
+
+test("in the editor the credit shows but cannot be selected or moved", () => {
+  const handlers = { onSelect: vi.fn(), onChange: vi.fn() };
+  renderUi(<SceneCanvas scene={layout} data={playing({ source: "statsbomb", credit: "Data: StatsBomb" })} scale={1} editable {...handlers} />);
+  const credit = screen.getByTestId("program-credit");
+  expect([credit.style.pointerEvents, credit.style.userSelect]).toEqual(["none", "none"]);
+  expect(screen.queryByRole("button", { name: /credit/i })).toBeNull();
 });
 
 test("clicking the empty canvas clears the selection", () => {

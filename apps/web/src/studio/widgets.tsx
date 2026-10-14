@@ -50,7 +50,7 @@ const Empty = ({ children }: { children: ReactNode }) => <span style={{ ...MUTED
 
 // --- score card ----------------------------------------------------------------------------------
 
-function ScorecardView({ match }: { match: MatchData }) {
+function ScorecardView({ match, language }: { match: MatchData; language: Language }) {
   const status = match.status;
   const colors = colorsOf(status);
   const names = namesOf(status);
@@ -82,7 +82,7 @@ function ScorecardView({ match }: { match: MatchData }) {
           {digit(status?.score_home, "home")}<span style={{ opacity: 0.5, margin: "0 0.12em" }}>:</span>{digit(status?.score_away, "away")}
         </span>
         <span style={{ fontSize: 24, fontWeight: 600, padding: "2px 16px", marginTop: 8, borderRadius: 999, backgroundColor: "rgba(255, 255, 255, 0.14)" }}>
-          {status ? `${Math.max(status.minute, match.minute)}'` : "–"}
+          {!status ? "–" : status.state === "pre_match" ? t(language, "preMatch") : `${Math.max(status.minute, match.minute)}'`}
         </span>
       </div>
       {side("away")}
@@ -441,7 +441,7 @@ export function WidgetView({ element, data }: { element: SceneElement & { type: 
   const props = element.props as Record<string, unknown>;
   switch (element.type) {
     case "scorecard":
-      return <ScorecardView match={match} />;
+      return <ScorecardView match={match} language={language} />;
     case "chart":
       return <ChartView match={match} metric={text(props.metric, "overview")} language={language} />;
     case "graph":
