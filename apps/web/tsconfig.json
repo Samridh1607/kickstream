@@ -11,5 +11,5 @@
     "isolatedModules": true,
     "types": ["vitest/globals", "node"]
   },
-  "include": ["src", "scripts", "e2e", "e2e-acs", "vite.config.ts", "playwright.config.ts", "playwright.acs.config.ts"]
+  "include": ["src", "scripts", "e2e", "e2e-acs", "e2e-network", "vite.config.ts", "playwright.config.ts", "playwright.acs.config.ts", "playwright.network.config.ts"]
 }

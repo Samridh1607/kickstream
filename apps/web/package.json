@@ -10,7 +10,8 @@
     "test": "vitest run",
     "gen:contracts": "node scripts/gen-contracts.mjs",
     "e2e": "playwright test",
-    "e2e:acs": "playwright test --config playwright.acs.config.ts"
+    "e2e:acs": "playwright test --config playwright.acs.config.ts",
+    "e2e:network": "playwright test --config playwright.network.config.ts"
   },
   "dependencies": {
     "@azure/communication-calling": "2.0.0",
