@@ -1,11 +1,11 @@
 import { Button, Field, Input, Link, makeStyles, MessageBar, MessageBarBody, Spinner, Text, tokens } from "@fluentui/react-components";
 import { MicOffRegular, MicRegular, VideoOffRegular, VideoRegular } from "@fluentui/react-icons";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { studioPath } from "../broadcasts/api";
 import { DevicePickers } from "../calls/DevicePickers";
 import { openRoomCall } from "../calls/open";
 import type { RoomCall } from "../calls/RoomCall";
-import { useCallUpdates } from "../calls/useCallUpdates";
+import { useCallLifecycle } from "../calls/useHostCall";
 import { useDevices } from "../calls/useDevices";
 import { VideoBox } from "../calls/VideoBox";
 import type { CallSeat, Guest } from "../contracts";
@@ -65,30 +65,13 @@ export function GuestPage({ secret, eventSource, retryMs, newCall = openRoomCall
   const valid = !missing && (doc?.valid ?? true);
   const service = valid ? (doc?.service ?? null) : null;
   const call = useMemo(() => (service ? newCall(service) : null), [service, newCall]);
-  useCallUpdates(call);
-  const currentCall = useRef(call);
-  useEffect(() => {
-    currentCall.current = call;
-    return () => {
-      currentCall.current = null;
-      // The call is being given up; there is nowhere to show a failed leave.
-      call?.leave().catch(() => undefined);
-    };
-  }, [call]);
-  const devices = useDevices(call);
   const [name, setName] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const mutedLive = doc?.muted_live ?? false;
-  const mutedLiveNow = useRef(mutedLive);
+  const { currentCall, mutedLiveNow } = useCallLifecycle(call, mutedLive, (caught) => setProblem(muteProblem(caught)));
+  const devices = useDevices(call);
   const joined = call?.state === "joined";
-  useEffect(() => {
-    mutedLiveNow.current = mutedLive;
-    if (!call || !mutedLive) return;
-    call.setMuted(true).catch((caught: unknown) => {
-      if (currentCall.current === call) setProblem(muteProblem(caught));
-    });
-  }, [call, mutedLive, joined]);
 
   if (!valid) {
     return (

@@ -1,22 +1,18 @@
 import { Badge, Button, Field, Input, makeStyles, MessageBar, MessageBarBody, Select, Text, tokens, Tooltip } from "@fluentui/react-components";
 import { CopyRegular, DeleteRegular, MicOffRegular, MicRegular, PersonAddRegular, VideoRegular } from "@fluentui/react-icons";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { DevicePickers } from "../calls/DevicePickers";
-import { openRoomCall } from "../calls/open";
 import type { RoomCall } from "../calls/RoomCall";
-import { useCallUpdates } from "../calls/useCallUpdates";
-import { useDevices } from "../calls/useDevices";
+import { muteProblem, useHostCall } from "../calls/useHostCall";
 import { VideoBox } from "../calls/VideoBox";
 import type { CallSeat, Invite, People } from "../contracts";
-import { hostSeat, invite, inviteLink, revokeInvite, type Role, ROLE_NAMES, setStage } from "./api";
+import { invite, inviteLink, revokeInvite, type Role, ROLE_NAMES, setStage } from "./api";
 
 export const HOST = "host";
 export const SETUP = "Guests need Azure Communication Services. Put KICKSTREAM_ACS_CONNECTION_STRING in the .env file at the top of the project, then restart the pipeline.";
 const MAX_INVITES = 12;
 
 export const inviteLabel = (item: Invite) => item.joined_name ?? item.name ?? ROLE_NAMES[item.role];
-
-const muteProblem = (caught: unknown) => (caught instanceof Error ? caught.message : "The microphone could not be changed.");
 
 const useStyles = makeStyles({
   panel: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM },
@@ -37,36 +33,15 @@ interface PeoplePanelProps {
 }
 
 /** Who takes part in the broadcast: invite links by role, who is here, the stage, and the host's own camera. */
-export function PeoplePanel({ broadcastId, people, live, onPeople, newCall = openRoomCall }: PeoplePanelProps) {
+export function PeoplePanel({ broadcastId, people, live, onPeople, newCall }: PeoplePanelProps) {
   const styles = useStyles();
   const [role, setRole] = useState<Role>("speaker");
   const [name, setName] = useState("");
-  const [problem, setProblem] = useState<string | null>(null);
   const [staging, setStaging] = useState(false);
-  const [call, setCall] = useState<RoomCall | null>(null);
-  useCallUpdates(call);
-  const currentCall = useRef(call);
-  useEffect(() => {
-    currentCall.current = call;
-    return () => {
-      currentCall.current = null;
-      // The call is being given up; there is nowhere to show a failed leave.
-      call?.leave().catch(() => undefined);
-    };
-  }, [call]);
-  const devices = useDevices(call);
   const stage = people?.stage.map((person) => person.id) ?? [];
   const hostOnStage = stage.includes(HOST);
   const mutedLive = live && !hostOnStage;
-  const mutedLiveNow = useRef(mutedLive);
-  const joined = call?.state === "joined";
-  useEffect(() => {
-    mutedLiveNow.current = mutedLive;
-    if (!call || !mutedLive) return;
-    call.setMuted(true).catch((caught: unknown) => {
-      if (currentCall.current === call) setProblem(muteProblem(caught));
-    });
-  }, [call, mutedLive, joined]);
+  const { call, devices, problem, setProblem, join, toggleMute } = useHostCall({ broadcastId, people, mutedLive, newCall });
 
   if (!people) return <Text>Loading people…</Text>;
   const service = people.service;
@@ -94,21 +69,6 @@ export function PeoplePanel({ broadcastId, people, live, onPeople, newCall = ope
       {hostOnStage ? "Remove me from stage" : "Add me to stage"}
     </Button>
   );
-  const joinHost = async () => {
-    const made = newCall(service);
-    setCall(made);
-    try {
-      const seat = await hostSeat(broadcastId, people.host_name);
-      await made.setMuted(mutedLiveNow.current);
-      await made.join({ roomId: seat.room_id, token: seat.token, name: people.host_name, refresh: async () => (await hostSeat(broadcastId, people.host_name)).token });
-      setProblem(null);
-    } catch (caught) {
-      // Leaving a call rejects its join that is still starting; that is not the host's problem.
-      if (currentCall.current !== made) return;
-      setCall(null);
-      setProblem(caught instanceof Error ? caught.message : "Your camera could not join.");
-    }
-  };
   const open = people.invites.filter((item) => !item.revoked);
   const inRoom = call?.state === "joined";
 
@@ -123,7 +83,7 @@ export function PeoplePanel({ broadcastId, people, live, onPeople, newCall = ope
         </div>
         {call === null ? (
           <div className={styles.row}>
-            <Button icon={<VideoRegular />} onClick={() => void joinHost()}>Join with camera</Button>
+            <Button icon={<VideoRegular />} onClick={() => void join()}>Join with camera</Button>
             {hostOnStage && hostStageButton}
           </div>
         ) : (
@@ -132,7 +92,7 @@ export function PeoplePanel({ broadcastId, people, live, onPeople, newCall = ope
             <DevicePickers devices={devices} />
             <div className={styles.row}>
               <Button size="small" icon={call.muted ? <MicOffRegular /> : <MicRegular />} disabled={call.muted && mutedLive}
-                onClick={() => void call.setMuted(!call.muted).catch((caught: unknown) => setProblem(muteProblem(caught)))}>
+                onClick={() => void toggleMute()}>
                 {call.muted ? "Unmute" : "Mute"}
               </Button>
               {hostStageButton}
