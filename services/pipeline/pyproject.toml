@@ -35,6 +35,7 @@ packages = ["kickstream"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = ["network: reaches real services on the internet; never part of the default run"]
 
 [tool.ruff]
 line-length = 110

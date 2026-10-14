@@ -1,27 +1,56 @@
+import re
 from collections.abc import Awaitable, Callable, Collection
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Header, HTTPException, WebSocket
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import APIRouter, Header, HTTPException, Response, WebSocket
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sse_starlette.sse import EventSourceResponse
 
 from kickstream.contracts import TeamSheet, ViewerProfile
 from kickstream.domain.demo import DEMO_SEED
+from kickstream.domain.errors import Refusal
 from kickstream.domain.sockets import NOT_FOUND, REFUSED, pump, refuse
 from kickstream.domain.types import Language, Mode
 from kickstream.gateway.stream import stream_items
 from kickstream.ports.broadcaster import Broadcaster
+from kickstream.ports.match_source import SourceFailure, SourceUnavailable
 from kickstream.ports.store import MatchStore
 
 MAX_SPEED = 600.0
 _MAX_ID_DIGITS = 18
+_REPLAY_REF = re.compile(r"[0-9]+/[0-9]+/[0-9]+")
+_LIVE_REF = re.compile(r"[0-9]+")
 
 
 class StartMatch(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    seed: int = Field(default=DEMO_SEED, ge=0, le=2**31 - 1)
+    source: Literal["simulated", "statsbomb", "api_football", "openligadb"] = "simulated"
+    seed: int | None = Field(default=None, ge=0, le=2**31 - 1)
+    # ASCII digits only: \d would also let other scripts' digits through
+    ref: str | None = Field(default=None, pattern=r"^[0-9]{1,10}(/[0-9]{1,10}){0,2}$")
     speed: float = Field(default=30.0, ge=1.0, le=MAX_SPEED)
+
+    @model_validator(mode="after")
+    def _fits_the_source(self) -> "StartMatch":
+        if self.source == "simulated":
+            if self.ref is not None:
+                raise ValueError("a simulated match takes no ref")
+            return self
+        if self.seed is not None:
+            raise ValueError(f"a {self.source} match takes no seed")
+        shape = _REPLAY_REF if self.source == "statsbomb" else _LIVE_REF
+        if self.ref is None or shape.fullmatch(self.ref) is None:
+            raise ValueError(f"choose a {self.source} match by its ref")
+        return self
+
+
+class StartRefusal(Refusal):
+    """A match could not be started from its source: 409 when unavailable as configured, 502 when it failed."""
+
+    def __init__(self, failure: SourceFailure) -> None:
+        status = 409 if isinstance(failure, SourceUnavailable) else 502
+        super().__init__(status, "source", failure.message)
 
 
 def parse_last_event_id(value: str | None) -> int:
@@ -35,8 +64,9 @@ def build_router(
     *,
     store: MatchStore,
     broadcaster: Broadcaster,
-    teams: tuple[TeamSheet, TeamSheet],
-    start_match: Callable[[int, float], Awaitable[str]],
+    teams: Callable[[], tuple[TeamSheet, TeamSheet]],
+    start_match: Callable[..., Awaitable[str]],
+    stop_match: Callable[[], Awaitable[None]],
     current_match: Callable[[], str | None],
     match_exists: Callable[[str], bool],
     socket_hosts: Collection[str] = (),
@@ -48,13 +78,24 @@ def build_router(
             raise HTTPException(status_code=404, detail=f"unknown match {match_id}")
 
     @router.get("/teams")
-    def get_teams() -> dict[str, TeamSheet]:
-        return {"home": teams[0], "away": teams[1]}
+    async def get_teams() -> dict[str, TeamSheet]:
+        home, away = teams()
+        return {"home": home, "away": away}
 
     @router.post("/matches", status_code=201)
     async def post_match(body: StartMatch | None = None) -> dict[str, str]:
         request = body or StartMatch()
-        return {"match_id": await start_match(request.seed, request.speed)}
+        seed = request.seed if request.seed is not None else DEMO_SEED
+        try:
+            match_id = await start_match(seed, request.speed, source=request.source, ref=request.ref)
+        except SourceFailure as exc:
+            raise StartRefusal(exc) from exc
+        return {"match_id": match_id}
+
+    @router.post("/matches/stop", status_code=204)
+    async def post_stop() -> Response:
+        await stop_match()
+        return Response(status_code=204)
 
     @router.get("/matches/current")
     def get_current() -> dict[str, str]:

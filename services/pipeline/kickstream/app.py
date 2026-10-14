@@ -19,6 +19,7 @@ from kickstream.adapters.agent_copilot import AgentCopilotWriter
 from kickstream.adapters.agent_explainer import AgentExplainer
 from kickstream.adapters.agent_reels import AgentReelProducer
 from kickstream.adapters.agent_writer import AgentNarrativeWriter
+from kickstream.adapters.api_football import API_FOOTBALL, ApiFootball, DailyBudget
 from kickstream.adapters.chromium_capture import ChromiumCapture
 from kickstream.adapters.clocks import RealClock
 from kickstream.adapters.demo_feed import DemoFeed
@@ -30,10 +31,12 @@ from kickstream.adapters.json_record_store import JsonRecordStore
 from kickstream.adapters.json_studio_store import JsonStudioStore
 from kickstream.adapters.memory_bus import InMemoryEventBus
 from kickstream.adapters.memory_store import InMemoryMatchStore
+from kickstream.adapters.openligadb import OPENLIGADB, OpenLigaDb
 from kickstream.adapters.scripted_explainer import ScriptedExplainer
 from kickstream.adapters.scripted_reels import ScriptedReelProducer
 from kickstream.adapters.scripted_writer import ScriptedNarrativeWriter
 from kickstream.adapters.sse_broadcaster import InProcessBroadcaster
+from kickstream.adapters.statsbomb import OPEN_DATA, StatsBombOpenData
 from kickstream.adapters.web_search import TavilySearch, WikipediaSearch
 from kickstream.adapters.x_feed import XRecentSearch
 from kickstream.agents.api import build_agents_router
@@ -70,16 +73,19 @@ from kickstream.ports.calls import CallRooms
 from kickstream.ports.clock import Clock
 from kickstream.ports.copilot import CopilotWriter, WebSearch
 from kickstream.ports.explainer import Explainer
+from kickstream.ports.match_source import LiveSource, ReplaySource
 from kickstream.ports.output import Encoder, ProgramCapture, Sender
 from kickstream.ports.reels import ClipCutter, ReelProducer
 from kickstream.ports.social import SocialFeed
 from kickstream.ports.writer import NarrativeWriter
+from kickstream.sources.api import build_sources_router
 from kickstream.studio.api import build_studio_router, find_moment
 from kickstream.studio.rules import sanitize_raw
 from kickstream.studio.service import StudioService
 from kickstream.studio.stage import StudioStage
 
 STUDIO_MATCH_SPEED = 30.0  # playback speed of a match the studio starts at the end of a countdown
+OPENLIGADB_LEAGUES = ("pl", "la1", "ucl")
 _READ_ONLY_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
@@ -246,6 +252,14 @@ def _hosts(text: str) -> tuple[str, ...]:
     return tuple(host.strip().lower() for host in text.split(",") if host.strip())
 
 
+def _names(text: str) -> tuple[str, ...]:
+    return tuple(name.strip() for name in text.split(",") if name.strip())
+
+
+def _seconds(text: str | None) -> float | None:
+    return float(text) if text else None
+
+
 @dataclass(frozen=True)
 class Settings:
     llm_base_url: str | None
@@ -275,6 +289,13 @@ class Settings:
     # Ask Copilot's web search: Wikipedia unless a Tavily key is given; "off" turns it off.
     web_search: str | None = None
     tavily_api_key: str | None = field(default=None, repr=False)
+    # Real match data. The addresses change only for tests, which serve recorded answers locally.
+    api_football_key: str | None = field(default=None, repr=False)
+    statsbomb_url: str = OPEN_DATA
+    api_football_url: str = API_FOOTBALL
+    openligadb_url: str = OPENLIGADB
+    openligadb_leagues: tuple[str, ...] = OPENLIGADB_LEAGUES
+    live_poll_s: float | None = None  # tests only: poll every N seconds instead of the source's schedule
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ) -> "Settings":
@@ -296,6 +317,12 @@ class Settings:
             x_query=env.get("KICKSTREAM_X_QUERY") or None,
             web_search=env.get("KICKSTREAM_WEB_SEARCH") or None,
             tavily_api_key=env.get("KICKSTREAM_TAVILY_API_KEY") or None,
+            api_football_key=env.get("KICKSTREAM_API_FOOTBALL_KEY") or None,
+            statsbomb_url=env.get("KICKSTREAM_STATSBOMB_URL") or OPEN_DATA,
+            api_football_url=env.get("KICKSTREAM_API_FOOTBALL_URL") or API_FOOTBALL,
+            openligadb_url=env.get("KICKSTREAM_OPENLIGADB_URL") or OPENLIGADB,
+            openligadb_leagues=_names(env.get("KICKSTREAM_OPENLIGADB_LEAGUES", "")) or OPENLIGADB_LEAGUES,
+            live_poll_s=_seconds(env.get("KICKSTREAM_LIVE_POLL_S")),
         )
 
     @property
@@ -326,6 +353,8 @@ class Pipeline:
     fans: FanService
     copilot: CopilotService
     stages: list
+    replays: Mapping[str, ReplaySource]
+    live: Mapping[str, LiveSource]
     tasks: list[asyncio.Task] = field(default_factory=list)
 
     def start(self) -> None:
@@ -360,6 +389,18 @@ def _search(settings: Settings) -> WebSearch | None:
     return WikipediaSearch()
 
 
+def _replays(settings: Settings) -> dict[str, ReplaySource]:
+    return {"statsbomb": StatsBombOpenData(settings.data_dir / "statsbomb", settings.statsbomb_url)}
+
+
+def _live(settings: Settings) -> dict[str, LiveSource]:
+    budget = DailyBudget(JsonRecordStore(settings.data_dir / "api-football-budget.json"))
+    return {
+        "api_football": ApiFootball(settings.api_football_key, budget, settings.api_football_url),
+        "openligadb": OpenLigaDb(settings.openligadb_leagues, settings.openligadb_url),
+    }
+
+
 def _rooms(settings: Settings) -> CallRooms | None:
     if settings.acs_connection_string:
         return AcsRooms(settings.acs_connection_string)
@@ -385,6 +426,8 @@ def build_pipeline(
     feeds: Mapping[str, SocialFeed] | None = None,
     search: WebSearch | None = None,
     copilot_writer: CopilotWriter | None = None,
+    replays: Mapping[str, ReplaySource] | None = None,
+    live: Mapping[str, LiveSource] | None = None,
 ) -> Pipeline:
     bus, store, broadcaster = InMemoryEventBus(), InMemoryMatchStore(), InProcessBroadcaster()
     primary = writer
@@ -396,7 +439,18 @@ def build_pipeline(
         budget=Budget(settings.llm_max_calls, settings.llm_reserve, settings.llm_min_gap_s),
         cache=DiskCache(settings.cache_dir) if primary is not None else None,
     )
-    controller = MatchController(bus, clock_factory, HOME, AWAY, prefix=match_prefix)
+    replays = replays if replays is not None else _replays(settings)
+    live = live if live is not None else _live(settings)
+    controller = MatchController(
+        bus,
+        clock_factory,
+        HOME,
+        AWAY,
+        prefix=match_prefix,
+        replays=replays,
+        live=live,
+        live_poll_s=settings.live_poll_s,
+    )
     studio = StudioService(
         JsonStudioStore(settings.data_dir / "studio.json", sanitize=sanitize_raw),
         DirImageStore(settings.data_dir / "images"),
@@ -483,6 +537,8 @@ def build_pipeline(
         fans,
         copilot,
         stages,
+        replays,
+        live,
     )
 
 
@@ -503,6 +559,8 @@ def create_app(
     feeds: Mapping[str, SocialFeed] | None = None,
     search: WebSearch | None = None,
     copilot_writer: CopilotWriter | None = None,
+    replays: Mapping[str, ReplaySource] | None = None,
+    live: Mapping[str, LiveSource] | None = None,
 ) -> FastAPI:
     # Match IDs are unique to this process, so an ID a browser kept from before a restart is
     # reported as unknown instead of silently naming a different match.
@@ -523,6 +581,8 @@ def create_app(
         feeds=feeds,
         search=search,
         copilot_writer=copilot_writer,
+        replays=replays,
+        live=live,
     )
 
     @asynccontextmanager
@@ -550,11 +610,17 @@ def create_app(
         build_router(
             store=pipeline.store,
             broadcaster=pipeline.broadcaster,
-            teams=(HOME, AWAY),
+            teams=lambda: pipeline.controller.teams,
             start_match=pipeline.controller.start,
+            stop_match=pipeline.controller.stop,
             current_match=lambda: pipeline.controller.current,
             match_exists=pipeline.controller.exists,
             socket_hosts=settings.socket_hosts,
+        )
+    )
+    app.include_router(
+        build_sources_router(
+            replays=pipeline.replays, live=pipeline.live, running=pipeline.controller.running
         )
     )
     app.include_router(

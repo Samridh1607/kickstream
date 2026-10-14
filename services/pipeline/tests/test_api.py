@@ -1,17 +1,54 @@
+import asyncio
 import time
 
 import pytest
 from fastapi.testclient import TestClient
 
 from kickstream.adapters.clocks import InstantClock
+from kickstream.adapters.statsbomb import StatsBombOpenData
 from kickstream.app import Settings, create_app
 from kickstream.gateway.api import parse_last_event_id
+from tests.test_statsbomb import BASE as STATSBOMB_BASE
+from tests.test_statsbomb import FIX as STATSBOMB_FIX
+from tests.test_statsbomb import FixtureGet
 
 
 @pytest.fixture
 def client(tmp_path):
     settings = Settings(None, None, None, cache_dir=tmp_path / "cache", data_dir=tmp_path / "data")
     app = create_app(settings, clock_factory=lambda speed: InstantClock(), match_prefix="m")
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def client_with_sources(tmp_path):
+    settings = Settings(None, None, None, cache_dir=tmp_path / "cache", data_dir=tmp_path / "data")
+    statsbomb = StatsBombOpenData(
+        tmp_path / "statsbomb", base_url=STATSBOMB_BASE, get=FixtureGet(STATSBOMB_FIX)
+    )
+    app = create_app(
+        settings,
+        clock_factory=lambda speed: InstantClock(),
+        match_prefix="m",
+        replays={"statsbomb": statsbomb},
+        live={},
+    )
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+class HeldClock:
+    """Holds the match at its first event, so it is still running when stopped."""
+
+    async def sleep(self, match_seconds: float) -> None:
+        await asyncio.sleep(3600)
+
+
+@pytest.fixture
+def held_client(tmp_path):
+    settings = Settings(None, None, None, cache_dir=tmp_path / "cache", data_dir=tmp_path / "data")
+    app = create_app(settings, clock_factory=lambda speed: HeldClock(), match_prefix="m")
     with TestClient(app) as test_client:
         yield test_client
 
@@ -50,6 +87,83 @@ def test_current_match_is_404_until_one_starts_then_names_the_latest(client):
 def test_out_of_range_start_requests_are_rejected_and_start_nothing(client, body):
     response = client.post("/api/matches", json=body)
     assert response.status_code == 422
+    assert client.get("/api/matches/current").status_code == 404
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"source": "statsbomb"},
+        {"source": "statsbomb", "ref": "8658"},
+        {"source": "statsbomb", "ref": "43/3"},
+        {"source": "statsbomb", "ref": "43/3/8658", "seed": 1},
+        {"source": "statsbomb", "ref": "43/3/８６５８"},
+        {"source": "simulated", "ref": "1"},
+        {"source": "api_football", "ref": "1/2"},
+        {"source": "api_football"},
+        {"source": "api_football", "ref": "1", "seed": 1},
+        {"source": "openligadb", "ref": "../1"},
+        {"source": "sportapi", "ref": "1"},
+        {"source": "statsbomb", "ref": 8658},
+    ],
+    ids=str,
+)
+def test_a_start_that_does_not_fit_its_source_is_rejected_and_starts_nothing(client, body):
+    assert client.post("/api/matches", json=body).status_code == 422
+    assert client.get("/api/matches/current").status_code == 404
+
+
+def test_a_simulated_start_can_name_its_source(client):
+    response = client.post("/api/matches", json={"source": "simulated", "seed": 3, "speed": 600})
+    assert response.status_code == 201 and response.json() == {"match_id": "m-1"}
+
+
+def test_a_source_kickstream_does_not_have_is_refused_with_a_409(client_with_sources):
+    response = client_with_sources.post("/api/matches", json={"source": "openligadb", "ref": "83194"})
+    assert response.status_code == 409
+    [detail] = response.json()["detail"]
+    assert detail["loc"] == ["body", "source"] and "openligadb" in detail["msg"]
+    assert client_with_sources.get("/api/matches/current").status_code == 404
+
+
+def test_teams_are_the_current_matchs(client_with_sources):
+    assert client_with_sources.get("/api/teams").json()["home"]["name"] == "Northbridge FC"
+    response = client_with_sources.post(
+        "/api/matches", json={"source": "statsbomb", "ref": "43/3/8658", "speed": 600}
+    )
+    assert response.status_code == 201
+    teams = client_with_sources.get("/api/teams").json()
+    assert (teams["home"]["name"], teams["away"]["name"]) == ("France", "Croatia")
+
+
+def test_a_replay_that_cannot_be_found_is_a_502_with_the_sources_message(client_with_sources):
+    response = client_with_sources.post("/api/matches", json={"source": "statsbomb", "ref": "43/3/1"})
+    assert response.status_code == 502
+    [detail] = response.json()["detail"]
+    assert detail["loc"] == ["body", "source"] and detail["msg"].startswith("StatsBomb has no match 43/3/1.")
+    assert client_with_sources.get("/api/matches/current").status_code == 404
+
+
+def _statuses(client, match_id):
+    log = client.app.state.pipeline.store.read(match_id)
+    return [item.payload for item in log if item.type == "match_status"]
+
+
+def test_stop_ends_the_running_match(held_client):
+    match_id = held_client.post("/api/matches").json()["match_id"]
+    deadline = time.monotonic() + 10
+    while not _statuses(held_client, match_id):
+        assert time.monotonic() < deadline, "the match did not start"
+        time.sleep(0.02)
+    response = held_client.post("/api/matches/stop")
+    assert response.status_code == 204 and response.content == b""
+    assert _statuses(held_client, match_id)[-1].state == "abandoned"
+    assert held_client.get("/api/sources").json()["running"] is None
+    assert held_client.get("/api/matches/current").json() == {"match_id": match_id}
+
+
+def test_stop_with_nothing_running_does_nothing(client):
+    assert client.post("/api/matches/stop").status_code == 204
     assert client.get("/api/matches/current").status_code == 404
 
 

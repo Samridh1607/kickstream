@@ -16,6 +16,7 @@ STAGES = {
     "fans",
     "copilot",
     "live",
+    "sources",
 }
 SHARED = {"contracts", "domain", "ports"}
 
