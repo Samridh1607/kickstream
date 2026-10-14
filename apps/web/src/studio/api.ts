@@ -38,6 +38,7 @@ export async function send<T>(method: string, path: string, body?: unknown, head
       : { method, headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) };
   const response = await fetch(path, init);
   if (!response.ok) throw await toError(response);
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 

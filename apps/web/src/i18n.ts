@@ -105,6 +105,9 @@ const en = {
   winner: "Winner",
   pollResult: "Poll result",
   fanComment: "Fan comment",
+  liveDataOnly: "Not available with live data",
+  preMatch: "Before kick-off",
+  chooseMatch: "Choose match",
 };
 
 export type StringKey = keyof typeof en;
@@ -209,6 +212,9 @@ const es: Record<StringKey, string> = {
   winner: "Ganador",
   pollResult: "Resultado de la encuesta",
   fanComment: "Comentario de un aficionado",
+  liveDataOnly: "No disponible con datos en directo",
+  preMatch: "Antes del inicio",
+  chooseMatch: "Elegir partido",
 };
 
 const hi: Record<StringKey, string> = {
@@ -311,6 +317,9 @@ const hi: Record<StringKey, string> = {
   winner: "विजेता",
   pollResult: "पोल का नतीजा",
   fanComment: "प्रशंसक की टिप्पणी",
+  liveDataOnly: "लाइव डेटा के साथ उपलब्ध नहीं",
+  preMatch: "किक-ऑफ़ से पहले",
+  chooseMatch: "मैच चुनें",
 };
 
 export const STRINGS: Record<Language, Record<StringKey, string>> = { en, es, hi };
