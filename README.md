@@ -1,6 +1,6 @@
 # Kickstream
 
-Kickstream is live-streaming software for football, in the spirit of Streamlabs and StreamYard: create a broadcast, compose scenes, go live to YouTube, X, Facebook and Twitch at once. Every broadcast keeps its sessions, recording and stats, and AI agents turn its best moments into vertical reels. What it puts on screen comes from a match event stream turned into live intelligence, AI narratives and recaps. This repository runs one synthetic match locally through the full pipeline.
+Kickstream is live-streaming software for football, in the spirit of Streamlabs and StreamYard: create a broadcast, compose scenes, go live to YouTube, X, Facebook and Twitch at once. Every broadcast keeps its sessions, recording and stats, and AI agents turn its best moments into vertical reels. What it puts on screen comes from a match event stream turned into live intelligence, AI narratives and recaps. This repository runs a synthetic match, or a real one from free match data, locally through the full pipeline.
 
 ```
 simulator ──► analytics ──► narration ──► overlay ──► gateway ──SSE──► web
@@ -34,6 +34,57 @@ Open `http://127.0.0.1:5173`, the streaming home, press **Create a broadcast**, 
 
 Every streamer page has the same top bar. While the stream is on, its right side shows how long you have been live and the status of each destination. The sun and moon button switches between light and dark themes.
 
+## Real match data
+
+Instead of the simulated match, you can play a real one from three free sources. Choose it in the studio's **Match** tool, or with **Choose match** on the **Match data** page.
+
+| Source | Kind | What it gives | Key | Free limits | Credit |
+|---|---|---|---|---|---|
+| [StatsBomb Open Data](https://github.com/hudl/open-data) | Replay | Past matches with every event, its position on the pitch, and StatsBomb's own xG | None | Files come from GitHub, which allows about 5,000 requests an hour from one address. Free for non-commercial use with attribution | StatsBomb's logo and "Data: StatsBomb" |
+| [API-Football](https://www.api-football.com) | Live | Fixtures worldwide: score, goals, cards, substitutions, line-ups and team stats | Free key | 100 requests a day and 10 a minute | "Data: API-Football" |
+| [OpenLigaDB](https://www.openligadb.de) | Live | Scores and scorers for the leagues you list | None | No documented limit. Data under the ODbL licence | "Data: OpenLigaDB" |
+
+- **StatsBomb** files are downloaded on first use into `.data/statsbomb/`, so a match played once replays offline. The first start of a match waits a few seconds for the download. The match list never shows a score, so a replay is not spoiled. StatsBomb's [licence](https://github.com/hudl/open-data/blob/master/LICENSE.pdf) allows non-commercial use with attribution and asks for their logo, which is why the program shows it in a corner while a StatsBomb match plays.
+- **API-Football** is polled every 90 seconds while a match is live (every 5 minutes at half-time, every 10 before kick-off and every 2 in the last 15 minutes before it). That is about 80 requests for one match, fixture lists included. Every request is counted; the Match tool shows the day's count, kept in `.data/api-football-budget.json`, which resets at midnight UTC and follows API-Football's own count, so other programs using the same key spend the same 100. When the day's requests are spent, the match keeps its last state and resumes after midnight UTC. The free plan does not cover every season; when it refuses a match, the Match tool shows API-Football's own message and what to do.
+- **OpenLigaDB** is entered by its community, so goals can arrive late or be corrected. It has no live clock, so the minute and half-time are estimated from the kick-off time. It is polled every 60 seconds while live. The leagues offered are the Premier League, LaLiga and the Champions League (`pl,la1,ucl`); set `KICKSTREAM_OPENLIGADB_LEAGUES` to OpenLigaDB league shortcuts to change them, for example `bl1` for the Bundesliga.
+
+To get and set the API-Football key:
+
+1. Register at [dashboard.api-football.com/register](https://dashboard.api-football.com/register).
+2. Copy the key from the dashboard.
+3. Add it to the `.env` file at the top of the project (it is ignored by git; never commit it):
+
+       KICKSTREAM_API_FOOTBALL_KEY=<key>
+
+4. Restart the pipeline. API-Football then becomes available in the Match tool; until then it shows these steps.
+
+In the **Match** tool, choose a source. For StatsBomb, choose a competition and season, then a match; for a live source, today's fixtures are listed with their state, and can be filtered by competition. The simulated match plays at 30× by default and StatsBomb replays in real time; both can be played at real time, 2×, 5×, 10× or 30×. Live matches play as they happen. **Start** plays the match now and **Stop match** ends it. A failed start leaves the match that is playing as it was and shows the source's message.
+
+Whatever you choose is also the **next match**: when a studio countdown ends, it starts, as long as automatic start is on in Settings. The tool shows it under **Starts when the countdown ends**, with **Clear**. With no choice, the simulated match starts as before. If the chosen match cannot start then, the simulated match plays instead and the studio shows why. On the **Match data** page, the header shows the competition and the credit, and the **Choose match** dialog is translated like the rest of the page.
+
+**Live data has key events only.** API-Football and OpenLigaDB send the score, goals, cards and substitutions, and API-Football some team stats, but no ball positions. With live data, the score, timeline, events, stats the source measured, narration and banners work as usual; what would need positions shows **Not available with live data** instead of invented numbers:
+
+- On scenes: the pitch, the 3D pitch, replays, the momentum and xG graphs, the next-action prediction and the tactics chart.
+- On the **Match data** page: the pitch with its pressure map, the 3D pitch, the tactics card and where the danger has come from. The Tactical Analyst and the Visualization Agent sit out.
+- **Ask Copilot** quotes only the stats the source measured, and a tactics or pitch question is answered by saying the feed has no positions.
+
+| Variable | Meaning |
+|---|---|
+| `KICKSTREAM_API_FOOTBALL_KEY` | Your API-Football key, in `.env` |
+| `KICKSTREAM_OPENLIGADB_LEAGUES` | OpenLigaDB league shortcuts, comma-separated (default `pl,la1,ucl`) |
+| `KICKSTREAM_STATSBOMB_URL`, `KICKSTREAM_API_FOOTBALL_URL`, `KICKSTREAM_OPENLIGADB_URL` | For tests only: where each source is read from |
+| `KICKSTREAM_LIVE_POLL_S` | For tests only: poll live sources every N seconds instead of their schedule |
+
+| Endpoint | Use |
+|---|---|
+| `GET /api/sources` | Every source, whether it is available (and if not, how to set it up), API-Football's count for the day, and the match playing now |
+| `GET /api/sources/{source}/competitions` | A replay source's competitions and seasons |
+| `GET /api/sources/{source}/competitions/{competition_id}/{season_id}/matches` | That season's matches, without scores |
+| `GET /api/sources/{source}/fixtures?date=` | A live source's fixtures for a day (`YYYY-MM-DD`; default today) |
+| `POST /api/matches` | `{source, seed?, ref?, speed}`: start a match. `ref` is `competition/season/match` for StatsBomb and the fixture id for a live source; `seed` is for the simulated match only |
+| `POST /api/matches/stop` | Stop the match that is playing |
+| `PUT /api/studio/queued-match` | `{source, ref?, speed, title?}`: the match the countdown starts; `null` clears it |
+
 ## AI narratives
 
 With no configuration, narratives come from templates and are marked **Scripted**. To have the agents write them, point Kickstream at any OpenAI-compatible Chat Completions endpoint before starting the pipeline:
@@ -60,7 +111,7 @@ The studio is laid out around the picture, as in StreamYard: what goes out is al
 | **Stage** | The program exactly as viewers see it, scaled to fit, marked **Program · LIVE** while streaming |
 | **Backstage** | You and your guests as tiles: **Join with camera**, **Add to stage** or **Backstage only**, mute, and **Invite a guest** |
 | **Scenes** | A strip of live thumbnails under the stage. Click one, or press 1 to 9, to put it on air; its menu edits, renames, duplicates, saves as a template, deletes or sets its commentary. **Add scene** starts from a template or a saved one |
-| **Tools** | A rail on the right; one tool opens at a time beside the stage: **Banners**, **Comments** (the fan zone), **Guests** (invites), **Replays**, **Timer** (countdowns), **Stream** (destinations and quality) and **Settings** |
+| **Tools** | A rail on the right; one tool opens at a time beside the stage: **Match** (what plays; see Real match data), **Banners**, **Comments** (the fan zone), **Guests** (invites), **Replays**, **Timer** (countdowns), **Stream** (destinations and quality) and **Settings** |
 
 | Address | Use |
 |---|---|
@@ -72,7 +123,7 @@ The studio is laid out around the picture, as in StreamYard: what goes out is al
 - **Fan and Analyst scenes:** each scene's commentary is Fan, Analyst, or the studio default (from the scene's menu). Live match is a Fan scene and Analyst desk an Analyst scene, so switching between them while live changes the program's narration from the Commentator's to the Tactical Analyst's.
 - **Banners** appear by themselves for goals and red cards. Any narration line can be sent to the banner, and the Banners tool takes your own text and the ticker.
 - **Replays** animate the 20 seconds of play before a key moment on the pitch.
-- **Timer**: a start countdown starts the match and cuts to the Live scene at zero; a break cuts to the Break scene and returns to where you were.
+- **Timer**: a start countdown starts the match chosen in the Match tool (else the simulated one) and cuts to the Live scene at zero; a break cuts to the Break scene and returns to where you were.
 - **Widgets**: the element library adds a score card, chart, graph, prediction, "why it matters" card, 3D pitch, player card, comments, poll, superchats or spotlight. Added to the scene on air, it appears on the program at once. Select a widget to choose what it shows in the Inspector.
 - **Motion**: an element fades and rises in, fades out when removed, and glides when moved or resized; numbers count and bars ease to each new value. With the operating system's *reduce motion* setting on, they change at once.
 
@@ -260,6 +311,7 @@ A co-host can do everything you can in the studio: go live, end or delete the br
 | `packages/contracts/` | JSON Schema for every message; the Python and TypeScript types are generated from it |
 | `services/pipeline/kickstream/` | The five stages, the ports they depend on, and the adapters behind those ports |
 | `services/pipeline/kickstream/app.py` | The composition root: the only place adapters are chosen |
+| `services/pipeline/kickstream/sources/`, `live/` | Browsing the match data sources, and turning a live source's polls into match events |
 | `services/pipeline/kickstream/people/` | Invites, the stage and call rooms for guests |
 | `services/pipeline/kickstream/agents/` | The seven match agents, one module each, and the orchestrator that routes payloads to them |
 | `services/pipeline/kickstream/fans/` | The fan zone: comments, the summary, polls, superchats and the spotlight |
@@ -276,9 +328,10 @@ pnpm test:api                         # pipeline unit and integration tests
 pnpm test:web                         # web unit and component tests
 (cd apps/web && pnpm e2e)             # home, broadcasts and reels, studio, output, guests, agents, fan zone, Ask Copilot and match data, in a real browser
 (cd apps/web && pnpm e2e:acs)         # guests over Azure; runs only with KICKSTREAM_ACS_CONNECTION_STRING in .env
+(cd apps/web && pnpm e2e:network)     # real StatsBomb and OpenLigaDB; API-Football only with KICKSTREAM_API_FOOTBALL_KEY in .env
 ```
 
-No test calls a live model or a live platform.
+No test calls a live model or a live platform, and only `e2e:network` reaches the match data sources; the others use recorded or stand-in answers.
 
 The browser tests start their own pipeline (port 8010) and dev server (port 5183) with a fresh data directory, so they never touch a Kickstream you have running.
 
