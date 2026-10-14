@@ -8,13 +8,10 @@ test("a seeded match plays through every stage to the full-time recap", async ({
   const rail = page.getByRole("navigation", { name: "Match intelligence" });
   await rail.getByRole("button", { name: "Match", exact: true }).click();
 
-  // Ingest -> Interpret -> Explain: a goal becomes a Fan narrative in English.
-  await expect(page.getByText(/^GOAL!/).first()).toBeVisible({ timeout: 30_000 });
-
-  // Personalize: Analyst mode replays the same moments in the analyst variant.
-  await page.getByRole("tab", { name: "Analyst", exact: true }).click();
+  // Ingest -> Interpret -> Explain: a goal becomes an analyst narrative in English.
   await expect(page.getByText(/The goal reflects the balance of play/).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/^GOAL!/)).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "Fan", exact: true })).toHaveCount(0);
 
   // Personalize: switching language changes narratives and interface text.
   await page.getByLabel("Language").selectOption("es");

@@ -117,7 +117,6 @@ export function App({ eventSource, retryMs = 2000, pollMs = 3000, initialView = 
         status={hasMatch && data.status ? { ...data.status, minute: Math.max(data.status.minute, data.minute) } : null}
         connection={connection}
         profile={profile}
-        onModeChange={(mode) => updateProfile({ ...profile, mode })}
         onLanguageChange={(next) => updateProfile({ ...profile, language: next })}
         onOpenPreferences={() => setPreferencesOpen(true)}
         onStart={start}

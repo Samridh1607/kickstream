@@ -1,6 +1,6 @@
-import { Badge, Button, makeStyles, Select, Tab, TabList, Text, tokens } from "@fluentui/react-components";
+import { Badge, Button, makeStyles, Select, Text, tokens } from "@fluentui/react-components";
 import type { MatchStatus, ViewerProfile } from "../contracts";
-import { LANGUAGE_NAMES, LANGUAGES, type Language, type Mode, type StringKey, t } from "../i18n";
+import { LANGUAGE_NAMES, LANGUAGES, type Language, type StringKey, t } from "../i18n";
 import type { Connection } from "../stream/store";
 
 const useStyles = makeStyles({
@@ -26,13 +26,12 @@ interface HeaderProps {
   status: MatchStatus | null;
   connection: Connection;
   profile: ViewerProfile;
-  onModeChange(mode: Mode): void;
   onLanguageChange(language: Language): void;
   onOpenPreferences(): void;
   onStart(): void;
 }
 
-export function Header({ status, connection, profile, onModeChange, onLanguageChange, onOpenPreferences, onStart }: HeaderProps) {
+export function Header({ status, connection, profile, onLanguageChange, onOpenPreferences, onStart }: HeaderProps) {
   const styles = useStyles();
   const language = profile.language;
   const state = CONNECTION[connection];
@@ -57,15 +56,6 @@ export function Header({ status, connection, profile, onModeChange, onLanguageCh
         <Badge color={state.color}>{t(language, state.label)}</Badge>
       </div>
       <div className={styles.controls}>
-        <TabList
-          size="small"
-          aria-label={t(language, "mode")}
-          selectedValue={profile.mode}
-          onTabSelect={(_, data) => onModeChange(data.value as Mode)}
-        >
-          <Tab value="fan">{t(language, "fan")}</Tab>
-          <Tab value="analyst">{t(language, "analyst")}</Tab>
-        </TabList>
         <Select
           aria-label={t(language, "language")}
           value={language}

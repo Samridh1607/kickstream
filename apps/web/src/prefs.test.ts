@@ -9,7 +9,12 @@ test("a saved profile is read back", () => {
 
 test("nothing saved gives the defaults", () => {
   expect(loadProfile()).toEqual(DEFAULT_PROFILE);
-  expect(DEFAULT_PROFILE).toEqual({ mode: "fan", language: "en", club: null, player: null });
+  expect(DEFAULT_PROFILE).toEqual({ mode: "analyst", language: "en", club: null, player: null });
+});
+
+test("a saved fan profile is read back as analyst", () => {
+  saveProfile({ mode: "fan", language: "es", club: "nbr", player: null });
+  expect(loadProfile()).toEqual({ mode: "analyst", language: "es", club: "nbr", player: null });
 });
 
 test.each([
@@ -25,7 +30,7 @@ test.each([
 test("unknown or mistyped fields fall back one by one", () => {
   localStorage.setItem(KEY, JSON.stringify({ mode: "coach", language: "fr", club: 7, player: "" }));
   expect(loadProfile()).toEqual(DEFAULT_PROFILE);
-  localStorage.setItem(KEY, JSON.stringify({ mode: "analyst", language: "de", club: "nbr" }));
+  localStorage.setItem(KEY, JSON.stringify({ mode: "fan", language: "de", club: "nbr" }));
   expect(loadProfile()).toEqual({ mode: "analyst", language: "en", club: "nbr", player: null });
 });
 

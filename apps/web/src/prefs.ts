@@ -1,13 +1,16 @@
 import type { ViewerProfile } from "./contracts";
-import { LANGUAGES, MODES } from "./i18n";
+import { LANGUAGES } from "./i18n";
 
 const KEY = "kickstream.profile";
 
-export const DEFAULT_PROFILE: ViewerProfile = { mode: "fan", language: "en", club: null, player: null };
+export const DEFAULT_PROFILE: ViewerProfile = { mode: "analyst", language: "en", club: null, player: null };
 
 const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
 
-/** Reads saved preferences. Anything missing, mistyped or unsupported falls back to its default. */
+/**
+ * Reads saved preferences. Anything missing, mistyped or unsupported falls back to its default.
+ * The match data page is analyst-only, so a saved mode is ignored.
+ */
 export function loadProfile(storage?: Pick<Storage, "getItem">): ViewerProfile {
   try {
     // Some browsers throw on any access to localStorage, so it is resolved inside the try.
@@ -15,7 +18,7 @@ export function loadProfile(storage?: Pick<Storage, "getItem">): ViewerProfile {
     if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return DEFAULT_PROFILE;
     const saved = raw as Record<string, unknown>;
     return {
-      mode: MODES.find((mode) => mode === saved.mode) ?? DEFAULT_PROFILE.mode,
+      mode: DEFAULT_PROFILE.mode,
       language: LANGUAGES.find((language) => language === saved.language) ?? DEFAULT_PROFILE.language,
       club: text(saved.club),
       player: text(saved.player),

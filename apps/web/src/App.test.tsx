@@ -37,7 +37,7 @@ beforeEach(() => {
   useMatch.setState({ data: useMatch.getInitialState().data, connection: "idle", selectedId: null });
 });
 
-async function joined(matchId = "m-1", query = "mode=fan&lang=en") {
+async function joined(matchId = "m-1", query = "mode=analyst&lang=en") {
   renderUi(<App eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} initialView="match" />);
   await waitFor(() => expect(lastUrl()).toBe(`/api/matches/${matchId}/stream?${query}`), { timeout: 10_000 });
   const source = FakeEventSource.last;
@@ -65,7 +65,7 @@ test("with no match running, starting one connects to it", async () => {
   await screen.findByText("No match is running. Start one to begin.");
   expect(FakeEventSource.instances).toHaveLength(0);
   fireEvent.click(screen.getByRole("button", { name: "Start match" }));
-  await waitFor(() => expect(lastUrl()).toBe("/api/matches/m-5/stream?mode=fan&lang=en"));
+  await waitFor(() => expect(lastUrl()).toBe("/api/matches/m-5/stream?mode=analyst&lang=en"));
   expect(calls.find((call) => call.method === "POST")).toEqual({ url: "/api/matches", method: "POST", body: { speed: 30 } });
 });
 
@@ -76,17 +76,14 @@ test("a failed start tells the viewer", async () => {
   expect(await screen.findByText("The match could not be started. Try again.")).toBeTruthy();
 });
 
-test("switching mode reconnects for the new variant and clears the old feed", async () => {
+test("a viewer who saved the fan variant still streams the analyst one", async () => {
+  localStorage.setItem("kickstream.profile", JSON.stringify({ mode: "fan", language: "en", club: null, player: null }));
   serve({ current: ["m-1"] });
-  const first = await joined();
-  fireEvent.click(screen.getByRole("tab", { name: "Analyst" }));
-  await waitFor(() => expect(lastUrl()).toBe("/api/matches/m-1/stream?mode=analyst&lang=en"));
-  expect(first.closed).toBe(true);
-  expect(screen.queryByText(/^GOAL! Luca Marrowby scores/)).toBeNull();
-  expect(JSON.parse(localStorage.getItem("kickstream.profile") ?? "{}").mode).toBe("analyst");
+  await joined();
+  expect(screen.queryByRole("tab", { name: "Fan" })).toBeNull();
 });
 
-test("saved preferences choose the variant and the interface language", async () => {
+test("saved preferences choose the interface language", async () => {
   localStorage.setItem("kickstream.profile", JSON.stringify({ mode: "analyst", language: "es", club: "nbr", player: null }));
   serve({ current: ["m-1"] });
   await joined("m-1", "mode=analyst&lang=es&club=nbr");
@@ -103,7 +100,7 @@ test("when the match is replaced, the viewer is moved to the new one", async () 
   serve({ current: ["m-1", "m-2"] });
   const first = await joined();
   act(() => first.emit(envelope(4, "match_status", status({ state: "abandoned" }))));
-  await waitFor(() => expect(lastUrl()).toBe("/api/matches/m-2/stream?mode=fan&lang=en"));
+  await waitFor(() => expect(lastUrl()).toBe("/api/matches/m-2/stream?mode=analyst&lang=en"));
   expect(first.closed).toBe(true);
   expect(screen.queryByText(/^GOAL! Luca Marrowby scores/)).toBeNull();
 });
@@ -160,7 +157,7 @@ test("if the server is not up yet, the dashboard keeps trying until it is", asyn
   serve({ current: ["m-1"], currentFailures: 2 });
   renderUi(<App eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} initialView="match" />);
   await screen.findByText("Reconnecting");
-  await waitFor(() => expect(lastUrl()).toBe("/api/matches/m-1/stream?mode=fan&lang=en"));
+  await waitFor(() => expect(lastUrl()).toBe("/api/matches/m-1/stream?mode=analyst&lang=en"));
 });
 
 test("a stream the server refused is reopened once the same match is reachable again", async () => {
@@ -168,7 +165,7 @@ test("a stream the server refused is reopened once the same match is reachable a
   const first = await joined();
   act(() => first.fail(2));
   await waitFor(() => expect(FakeEventSource.instances).toHaveLength(2));
-  expect(lastUrl()).toBe("/api/matches/m-1/stream?mode=fan&lang=en");
+  expect(lastUrl()).toBe("/api/matches/m-1/stream?mode=analyst&lang=en");
   expect(first.closed).toBe(true);
 });
 
@@ -176,6 +173,6 @@ test("a viewer left on a finished match is moved when the next one starts", asyn
   serve({ current: ["m-1", "m-1", "m-2"] });
   const first = await joined();
   act(() => first.emit(envelope(4, "match_status", status({ state: "finished", minute: 90 }))));
-  await waitFor(() => expect(lastUrl()).toBe("/api/matches/m-2/stream?mode=fan&lang=en"));
+  await waitFor(() => expect(lastUrl()).toBe("/api/matches/m-2/stream?mode=analyst&lang=en"));
   expect(first.closed).toBe(true);
 });

@@ -78,7 +78,7 @@ beforeEach(() => {
 
 async function opened() {
   renderUi(<App eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} />);
-  await waitFor(() => expect(FakeEventSource.last?.url).toBe("/api/matches/m-1/stream?mode=fan&lang=en"), { timeout: 10_000 });
+  await waitFor(() => expect(FakeEventSource.last?.url).toBe("/api/matches/m-1/stream?mode=analyst&lang=en"), { timeout: 10_000 });
   const source = FakeEventSource.last;
   act(() => {
     source.open();
