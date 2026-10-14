@@ -29,6 +29,7 @@ import { TOOLS, type ToolName, ToolRail } from "./ToolRail";
 import { BannersTool } from "./tools/BannersTool";
 import { CommentsTool } from "./tools/CommentsTool";
 import { GuestsTool } from "./tools/GuestsTool";
+import { MatchTool } from "./tools/MatchTool";
 import { ReplaysTool } from "./tools/ReplaysTool";
 import { SettingsTool } from "./tools/SettingsTool";
 import { StreamTool } from "./tools/StreamTool";
@@ -277,6 +278,8 @@ export function StudioPage({ broadcastId, eventSource, retryMs, pollMs }: Studio
 
   const toolPanel = (tool: ToolName | null): ReactNode => {
     switch (tool) {
+      case "Match":
+        return <MatchTool onStarted={() => setProblem(null)} />;
       case "Banners":
         return (
           <BannersTool studio={studio}

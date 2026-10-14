@@ -34,6 +34,11 @@ function serve(initial: Studio = studio(), answers: { broadcasts?: Broadcasts; p
     const method = init?.method ?? "GET";
     const body = typeof init?.body === "string" ? JSON.parse(init.body) : init?.body;
     if (url === "/api/matches/current") return reply(200, { match_id: "m-1" });
+    if (url === "/api/sources") return reply(200, { sources: [{ id: "simulated", name: "Simulated", kind: "simulated", detail: "full", available: true }], running: null });
+    if (url === "/api/matches" && method === "POST") {
+      others.push({ url, method, body });
+      return reply(201, { match_id: "m-2" });
+    }
     if (url.endsWith("/host/seat")) return reply(200, callSeat({ acs_id: "8:fake:host" }));
     if (url.startsWith("/api/broadcasts/")) {
       others.push({ url, method, body });
@@ -352,6 +357,19 @@ test("a refusal shows as a toast that can be dismissed", async () => {
   expect(await errors.findByText("That scene is busy.")).toBeTruthy();
   fireEvent.click(errors.getByRole("button", { name: "Dismiss" }));
   expect(errors.queryByText("That scene is busy.")).toBeNull();
+});
+
+test("a match started from the Match tool clears an earlier refusal", async () => {
+  const server = await opened();
+  server.refuse = { status: 409, field: "scene", msg: "That scene is busy." };
+  fireEvent.click(screen.getByRole("button", { name: "Switch to Break" }));
+  expect(await region("Studio errors").findByText("That scene is busy.")).toBeTruthy();
+  openTool("Match");
+  const tool = region("Match tool");
+  fireEvent.click(await tool.findByRole("radio", { name: "Simulated match" }));
+  fireEvent.click(tool.getByRole("button", { name: "Start match" }));
+  await waitFor(() => expect(server.others.at(-1)).toEqual({ url: "/api/matches", method: "POST", body: { source: "simulated", speed: 30 } }));
+  await waitFor(() => expect(region("Studio errors").queryByText("That scene is busy.")).toBeNull());
 });
 
 test("a document pushed by another control page replaces what is shown", async () => {
