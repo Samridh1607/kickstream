@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test } from "@playwright/test";
-import { openStudio } from "../e2e/broadcasts";
+import { expect, type Locator, test } from "@playwright/test";
+import { openStudio, openTool } from "../e2e/broadcasts";
 
 // The test pipeline; see playwright.config.ts.
 const OUTPUT = "http://127.0.0.1:8010/api/studio/output";
@@ -22,13 +22,31 @@ function find(file: string): string {
   return found[0];
 }
 
-test("a guest's camera reaches the program and their voice reaches the recording", async ({ page, browser, request }) => {
+/** A camera tile whose video is playing: it has a size and its picture moves on. */
+async function expectMovingVideo(tile: Locator) {
+  const video = tile.locator("video");
+  await expect(video).toBeVisible({ timeout: 60_000 });
+  await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.videoWidth), { timeout: 60_000 }).toBeGreaterThan(0);
+  const before = await video.evaluate((element: HTMLVideoElement) => element.currentTime);
+  await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.currentTime), { timeout: 15_000 }).toBeGreaterThan(before);
+}
+
+test("the host's camera and a guest speaker are on the program and the live stream carries their voices", async ({ page, browser, request }) => {
   test.skip(!test.info().config.metadata.acs, "put KICKSTREAM_ACS_CONNECTION_STRING in the .env file to run against Azure");
   await openStudio(page, request, `ACS test ${Date.now()}`);
-  const people = page.getByRole("region", { name: "People" });
-  await people.getByLabel("Name (optional)").fill("Riley");
-  await people.getByRole("button", { name: "Invite", exact: true }).click();
-  const path = new URL(await people.getByLabel("Invite link for Riley").inputValue()).pathname;
+  const backstage = page.getByRole("region", { name: "Backstage" });
+
+  await backstage.getByRole("button", { name: "Join with camera" }).click();
+  await expect(backstage.getByRole("button", { name: "Add me to stage" })).toBeEnabled({ timeout: 60_000 });
+  await backstage.getByRole("button", { name: "Add me to stage" }).click();
+  await expect(backstage.getByRole("button", { name: "Remove me from stage" })).toBeVisible();
+
+  const guests = await openTool(page, "Guests");
+  await guests.getByLabel("Name (optional)").fill("Riley");
+  await guests.getByRole("button", { name: "Invite", exact: true }).click();
+  const link = guests.getByLabel("Invite link for Riley");
+  await expect(link).toBeVisible({ timeout: 15_000 });
+  const path = new URL(await link.inputValue()).pathname;
 
   const guestContext = await browser.newContext({ permissions: ["camera", "microphone"] });
   try {
@@ -36,24 +54,28 @@ test("a guest's camera reaches the program and their voice reaches the recording
     await guest.goto(path);
     await guest.getByRole("button", { name: "Join" }).click();
     await expect(guest.getByText("You're backstage")).toBeVisible({ timeout: 60_000 });
-    await expect(people.getByText("Present")).toBeVisible();
-    await people.getByRole("button", { name: "Add Riley to stage" }).click();
+    await backstage.getByRole("button", { name: "Add Riley to stage" }).click();
     await expect(guest.getByText("You're on stage")).toBeVisible();
 
+    // The program is what the hidden browser records and streams: both people, named, with moving video.
     const program = await page.context().newPage();
     await program.goto("/studio?output");
-    await expect(program.getByTestId("camera-tile").locator("video")).toBeVisible({ timeout: 60_000 });
+    const tiles = program.getByTestId("camera-tile");
+    await expect(tiles).toHaveCount(2, { timeout: 60_000 });
+    await expect(tiles.filter({ hasText: "Riley" })).toHaveCount(1);
+    for (const tile of await tiles.all()) await expectMovingVideo(tile);
     await program.close();
 
-    await page.getByLabel("Platform").selectOption("file");
-    await page.getByRole("button", { name: "Add destination" }).click();
-    await page.getByRole("button", { name: "Go live", exact: true }).click();
-    const stream = page.getByRole("region", { name: "Stream", exact: true });
-    await expect(stream.getByText("Live", { exact: true })).toBeVisible({ timeout: 60_000 });
+    const stream = await openTool(page, "Stream");
+    await stream.getByLabel("Platform").selectOption("file");
+    await stream.getByRole("button", { name: "Add destination" }).click();
+    const bar = page.getByRole("region", { name: "Studio top bar" });
+    await bar.getByRole("button", { name: "Go live", exact: true }).click();
+    await expect(stream.getByRole("region", { name: "Stream", exact: true }).getByText("Live", { exact: true })).toBeVisible({ timeout: 60_000 });
     await expect(guest.getByText("You're on stage — you're live")).toBeVisible();
     await page.waitForTimeout(10_000);
-    await page.getByRole("button", { name: "Stop" }).click();
-    await expect(stream.getByText("Off air")).toBeVisible({ timeout: 15_000 });
+    await bar.getByRole("button", { name: "End broadcast" }).click();
+    await expect((await openTool(page, "Stream")).getByRole("region", { name: "Stream", exact: true }).getByText("Off air")).toBeVisible({ timeout: 15_000 });
 
     const doc = await (await request.get(OUTPUT)).json();
     const level = loudest(find(doc.recordings[0].file));
