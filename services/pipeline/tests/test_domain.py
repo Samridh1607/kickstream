@@ -1,7 +1,9 @@
+import pytest
+
 from kickstream.contracts import StatFact
 from kickstream.domain.labels import FACT_LABELS, KIND_LABELS, fact_text
 from kickstream.domain.pitch import COLS, ROWS, attacking_third, attacking_x, xg, zone_index
-from kickstream.domain.teams import AWAY, HOME, find_player
+from kickstream.domain.teams import AWAY, HOME, PALETTE, find_player, short_name, team_colors
 from kickstream.domain.types import LANGUAGES, VARIANTS, other
 
 
@@ -44,6 +46,25 @@ def test_team_sheets_are_complete_and_distinct():
         assert len({p.id for p in sheet.players}) == 14
     assert HOME.id != AWAY.id
     assert not {p.id for p in HOME.players} & {p.id for p in AWAY.players}
+
+
+def test_the_fictional_clubs_name_their_starting_eleven():
+    for sheet in (HOME, AWAY):
+        assert [p.starting for p in sheet.players] == [True] * 11 + [False] * 3
+
+
+def test_team_colors_keep_a_sources_colours_and_never_repeat():
+    assert team_colors("#FFFFFF", "#000000") == ("#FFFFFF", "#000000")
+    home, away = team_colors(None, None)
+    assert home != away and {home, away} <= set(PALETTE)
+    assert team_colors("#0F6CBD", "#0F6CBD")[0] != team_colors("#0F6CBD", "#0F6CBD")[1]
+    assert team_colors("red", None)[0] in PALETTE
+    assert team_colors(None, "#0F6CBD") == ("#C50F1F", "#0F6CBD")
+
+
+@pytest.mark.parametrize("name, short", [("France", "FRA"), ("Bayern München", "BAY"), ("1. FC Köln", "FCK")])
+def test_short_names(name, short):
+    assert short_name(name) == short
 
 
 def test_find_player_returns_none_for_unknown_or_missing_ids():
