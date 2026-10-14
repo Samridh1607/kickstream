@@ -52,23 +52,33 @@ Four Microsoft Agent Framework agents do the writing: a Commentator and a Tactic
 
 The pages follow one path: **Home › Broadcast › Studio**. The studio always works on a broadcast. Open it with **Open studio** on Home or on a broadcast's page; its top bar names the broadcast and links back to it and to Home. Opening a broadcast's studio makes it the current broadcast, so **Go live** there goes live with it. An ended broadcast's studio cannot go live; create a new broadcast instead. Scenes are one library shared by every broadcast, so a layout built once is ready for the next show.
 
-A streamer composes the picture in the studio, watches it in the **Program** preview, and sends it out from the **Output** box (see Going live below).
+The studio is laid out around the picture, as in StreamYard: what goes out is always the biggest thing on the screen.
+
+| Area | What it holds |
+|---|---|
+| **Top bar** | The broadcast's name, the output state (Off air, Connecting, LIVE with the elapsed time), the scene on air, **Edit layout**, Ask Copilot, and the one **Go live** / **End broadcast** button |
+| **Stage** | The program exactly as viewers see it, scaled to fit, marked **Program · LIVE** while streaming |
+| **Backstage** | You and your guests as tiles: **Join with camera**, **Add to stage** or **Backstage only**, mute, and **Invite a guest** |
+| **Scenes** | A strip of live thumbnails under the stage. Click one, or press 1 to 9, to put it on air; its menu edits, renames, duplicates, saves as a template, deletes or sets its commentary. **Add scene** starts from a template or a saved one |
+| **Tools** | A rail on the right; one tool opens at a time beside the stage: **Banners**, **Comments** (the fan zone), **Guests** (invites), **Replays**, **Timer** (countdowns), **Stream** (destinations and quality) and **Settings** |
 
 | Address | Use |
 |---|---|
-| `http://127.0.0.1:5173/broadcasts/{id}/studio` | Arrange scenes on a 16:9 canvas, switch them, and control banners, the ticker, replays, countdowns and invite guests |
+| `http://127.0.0.1:5173/broadcasts/{id}/studio` | The studio for that broadcast |
 | `http://127.0.0.1:5173/studio?output` | The scene that is on air, full window, with no controls. This is what Go live streams. To use another tool instead, such as an OBS browser source, point it here at 1920 × 1080 |
 
-- **Scenes** are saved canvases. Eight templates are built in: Starting soon, Live match, Analyst desk, Break, Full-time, Interview, Match intelligence and Fan zone. Drag and resize elements, or select one and use the arrow keys (Shift with the arrow keys resizes). Press **Switch** on a scene to put it on air.
-- **Fan and Analyst scenes:** each scene's commentary is Fan, Analyst, or the studio default (set it with the selector above the editor). Live match is a Fan scene and Analyst desk an Analyst scene, so switching between them while live changes the program's narration from the Commentator's to the Tactical Analyst's.
-- **Banners** appear by themselves for goals and red cards. Any narration line can be sent to the banner from the Highlights tab, and the Banner tab takes your own text.
+- **Edit layout** swaps the stage for the scene's 16:9 canvas with an element library on the left and **Layers** and an **Inspector** on the right. Drag and resize elements; they snap to the canvas centre and edges and to each other. Arrow keys move the selection (Shift resizes). The scene strip stays in view, so you can switch which scene you are editing.
+- **Templates** built in: Starting soon, Live match, Analyst desk, Break, Full-time, Interview, Match intelligence, Fan zone and 3D pitch.
+- **Fan and Analyst scenes:** each scene's commentary is Fan, Analyst, or the studio default (from the scene's menu). Live match is a Fan scene and Analyst desk an Analyst scene, so switching between them while live changes the program's narration from the Commentator's to the Tactical Analyst's.
+- **Banners** appear by themselves for goals and red cards. Any narration line can be sent to the banner, and the Banners tool takes your own text and the ticker.
 - **Replays** animate the 20 seconds of play before a key moment on the pitch.
-- **Countdowns**: a start countdown starts the match and cuts to the Live scene at zero; a break cuts to the Break scene and returns to where you were.
-
-- **Widgets**: under **Add to this scene** on the Elements tab, one click adds a score card, chart, graph, prediction, "why it matters" card, 3D pitch, player card, comments, poll, superchats or spotlight. Added to the scene on air, it appears on the program at once. Select a widget to choose what it shows.
+- **Timer**: a start countdown starts the match and cuts to the Live scene at zero; a break cuts to the Break scene and returns to where you were.
+- **Widgets**: the element library adds a score card, chart, graph, prediction, "why it matters" card, 3D pitch, player card, comments, poll, superchats or spotlight. Added to the scene on air, it appears on the program at once. Select a widget to choose what it shows in the Inspector.
 - **Motion**: an element fades and rises in, fades out when removed, and glides when moved or resized; numbers count and bars ease to each new value. With the operating system's *reduce motion* setting on, they change at once.
 
-Scenes, settings and uploaded images are kept in `.data/` (set `KICKSTREAM_DATA_DIR` to move it). The program uses the on-air scene's commentary, or the **Default commentary** and language from the studio's Settings tab.
+Scenes, settings and uploaded images are kept in `.data/` (set `KICKSTREAM_DATA_DIR` to move it). The program uses the on-air scene's commentary, or the **Default commentary** and language from the Settings tool.
+
+The **Match data** page (`/match`) is for analysts: its narration and agent output are always in the Analyst wording.
 
 ## Match agents
 
@@ -114,16 +124,19 @@ The **Ask Copilot** button in the top bar of every streamer page opens a chat pa
 - **The record is what Kickstream has seen.** The two clubs are fictional, so a head to head or a player's record counts the matches finished on this installation, kept in `.data/matches.json` (the newest 50). Before the first one finishes, it says there is nothing on record.
 - **Web search** is a switch under the question box, off until you turn it on. It is used only for a question the match cannot answer, and it sends that question to the search service. The default is Wikipedia, which needs no key; with `KICKSTREAM_TAVILY_API_KEY` set, Tavily searches the whole web instead. `KICKSTREAM_WEB_SEARCH=off` turns it off. The Tavily adapter is tested against its documented response shape and has not been run against Tavily itself.
 - **Wording**: without a model, answers are assembled from the recorded numbers. With the `KICKSTREAM_LLM_*` variables set, a Microsoft Agent Framework agent words each answer from those same facts and the web results, for at most 40 answers a match, falling back to the assembled answer on any failure. The cards never come from the model.
+- **Ask one agent**: type `@` (or press **Tag an agent**) and pick one of the seven agents, or type a tag such as `@tactics`, `@prediction`, `@highlights` or `@TacticalAnalyst`. The question goes to that agent's part of the match: the latest plays, the tactics, the forecast, why something matters, where play is happening, a player, or the highlights. The reply says **Answered by** that agent.
+- **Answers** are written in Markdown (headings, lists, tables) with charts: the two sides' numbers as bars, the forecast as a donut, where play happens by thirds.
+- **When Ask Copilot cannot be reached**, the pane shows a sample answer of the same kind, marked **Sample — not live data**, with the reason, so the layout of an answer can still be seen. Its numbers are made up.
 - Answers are in English. The conversation is kept while the page is open.
 
 | Endpoint | Use |
 |---|---|
 | `GET /api/copilot` | Whether a model words the answers, which search service is used, and how many matches are on record |
-| `POST /api/copilot/ask` | `{question, mode?, web?, match_id?}`: the answer, its cards, any web sources and questions to ask next. Without `match_id` it answers about the current match |
+| `POST /api/copilot/ask` | `{question, mode?, web?, match_id?, agent?}`: the answer, its cards and charts, any web sources, which agent answered and questions to ask next. Without `match_id` it answers about the current match |
 
 ## Fan zone
 
-The studio's **Fans** tab is where the audience comes in. Fans stay on the platforms; their comments reach Kickstream through a source.
+The studio's **Comments** tool is where the audience comes in. Fans stay on the platforms; their comments reach Kickstream through a source.
 
 - **Comments**: the newest 200, each with its platform. **Like** one to keep it and mark it on screen, or put it on the spotlight.
 - **Quick summary**: comments a minute, the mood, the topics most mentioned, each platform's share and what superchats have raised, with one sentence saying so. The mood is read from a short word list; it is a guide, not a measure.
@@ -160,11 +173,11 @@ The fan zone is kept in `.data/fans.json`. What fans write is cut to length and 
 
 ## Going live
 
-The studio's **Output** box sends the program to several platforms at once.
+The studio's **Stream** tool sends the program to several platforms at once.
 
 1. On the platform (YouTube Studio, X Media Studio, Facebook Live Producer, Twitch), create a live stream. It shows a server address and a stream key.
-2. In the Output box, choose the platform and paste the key. YouTube, Facebook and Twitch addresses are filled in; X gives each account its own, so paste that too. **Record to file** needs neither and writes an MP4 to `.data/recordings/`, which is a good first test.
-3. Press **Go live**, in the studio, or on the home page for the current broadcast. Each destination shows connecting, live, retrying or failed, in the Output box and in the top bar. One failing does not stop the others.
+2. In the Stream tool, choose the platform and paste the key. YouTube, Facebook and Twitch addresses are filled in; X gives each account its own, so paste that too. **Record to file** needs neither and writes an MP4 to `.data/recordings/`, which is a good first test.
+3. Press **Go live**, in the studio, or on the home page for the current broadcast. Each destination shows connecting, live, retrying or failed, in the Stream tool and in the top bar. One failing does not stop the others.
 
 Kickstream opens the studio's clean output (`/studio?output`) in a hidden browser, encodes it once with ffmpeg, and copies that stream to every destination. It needs [ffmpeg](https://ffmpeg.org) and a Chromium-based browser (Microsoft Edge is used when present).
 
@@ -202,7 +215,7 @@ On an ended broadcast's page, **Generate reels** cuts up to four 15-second verti
 
 ## Guests
 
-In a broadcast's studio, the **People** tab invites guests by link, as on StreamYard. Each invite has a role:
+In a broadcast's studio, the **Guests** tool (or **Invite a guest** under Backstage) invites guests by link, as on StreamYard. Each invite has a role:
 
 | Role | Camera and mic | On stage | Studio |
 |---|---|---|---|
