@@ -248,3 +248,11 @@ test("a viewer left on a finished match is moved when the next one starts", asyn
   await waitFor(() => expect(lastUrl()).toBe("/api/matches/m-2/stream?mode=analyst&lang=en"));
   expect(first.closed).toBe(true);
 });
+
+test("a viewer left on a stopped match is moved when the next one starts", async () => {
+  serve({ current: ["m-1", "m-1", "m-1", "m-2"] });
+  const first = await joined();
+  act(() => first.emit(envelope(4, "match_status", status({ state: "abandoned" }))));
+  await waitFor(() => expect(lastUrl()).toBe("/api/matches/m-2/stream?mode=analyst&lang=en"));
+  expect(first.closed).toBe(true);
+});

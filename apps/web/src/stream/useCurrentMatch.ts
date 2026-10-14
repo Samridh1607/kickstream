@@ -10,7 +10,7 @@ export interface CurrentMatchOptions {
   eventSource?: new (url: string) => EventSource;
   /** Delay before retrying when the server cannot be reached. */
   retryMs?: number;
-  /** How often to check for a new match while there is none, or the current one has finished. */
+  /** How often to check for a new match while there is none, or the current one has finished or been stopped. */
   pollMs?: number;
   /**
    * How long envelopes are gathered before the page draws them together. A match sends hundreds in
@@ -85,8 +85,9 @@ export function useCurrentMatch(
     return () => clearTimeout(timer);
   }, [connection, joinCurrent, retryMs]);
 
-  // With no match, or a finished one, nothing more will arrive: check now and then for the next.
-  const waiting = answered && (matchId === null || matchState === "finished");
+  // With no match, a finished one, or one stopped with nothing in its place, nothing more will arrive:
+  // check now and then for the next.
+  const waiting = answered && (matchId === null || matchState === "finished" || matchState === "abandoned");
   useEffect(() => {
     if (!waiting) return;
     const timer = setInterval(() => void joinCurrent(), pollMs);
