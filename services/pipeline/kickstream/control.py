@@ -2,14 +2,16 @@
 
 import asyncio
 import contextlib
-from collections.abc import Callable, Mapping
+import functools
+from collections.abc import Awaitable, Callable, Mapping
 from types import MappingProxyType
 
 from kickstream.contracts import MatchStatus, RunningMatch, TeamSheet
 from kickstream.domain.demo import DEMO_SEED
+from kickstream.live.runner import LiveMatch
 from kickstream.ports.bus import STATUS, EventBus
 from kickstream.ports.clock import Clock
-from kickstream.ports.match_source import ReplaySource, SourceFailure, SourceUnavailable
+from kickstream.ports.match_source import LiveSource, ReplaySource, SourceFailure, SourceUnavailable
 from kickstream.simulator.generate import generate
 from kickstream.simulator.stage import Simulator
 
@@ -24,16 +26,21 @@ class MatchController:
         prefix: str = "m",
         *,
         replays: Mapping[str, ReplaySource] = MappingProxyType({}),
+        live: Mapping[str, LiveSource] = MappingProxyType({}),
+        live_match: Callable[..., LiveMatch] | None = None,
+        live_poll_s: float | None = None,
     ) -> None:
         self._bus = bus
         self._clock_factory = clock_factory
         self._home = home
         self._away = away
         self._replays = replays
+        self._live = live
+        self._live_match = live_match or functools.partial(LiveMatch, poll_s=live_poll_s)
         self._started: list[str] = []
         self._teams = (home, away)
         self._running: RunningMatch | None = None
-        self._simulator: Simulator | None = None
+        self._runner: Simulator | LiveMatch | None = None
         self._task: asyncio.Task | None = None
         self._prefix = prefix
         # Starting and stopping each span several awaits; overlapping calls must not interleave.
@@ -46,7 +53,8 @@ class MatchController:
     @property
     def teams(self) -> tuple[TeamSheet, TeamSheet]:
         """The current match's teams, or the simulated match's before any match."""
-        return self._teams
+        status = self._runner.status if self._runner is not None else None
+        return (status.home, status.away) if status is not None else self._teams
 
     def exists(self, match_id: str) -> bool:
         return match_id in self._started
@@ -54,6 +62,8 @@ class MatchController:
     def running(self) -> RunningMatch | None:
         if self._task is None or self._task.done():
             return None
+        if isinstance(self._runner, LiveMatch):
+            return self._running.model_copy(update={"problem": self._runner.problem})
         return self._running
 
     async def start(
@@ -62,24 +72,10 @@ class MatchController:
         """Raises SourceFailure, leaving the running match playing, when the source cannot give the match."""
         async with self._lock:
             match_id = f"{self._prefix}-{len(self._started) + 1}"
-            if source == "simulated":
-                home, away = self._home, self._away
-                events = generate(match_id, seed, home, away)
-                play = {}
-            else:
-                replay_source = self._replays.get(source)
-                if replay_source is None:
-                    raise SourceUnavailable(f"Kickstream has no source called {source}.")
-                if not ref:
-                    raise SourceFailure("Choose a match to replay first.")
-                replay = await replay_source.load(ref, match_id)
-                home, away, events = replay.home, replay.away, replay.events
-                play = {"source": source, "credit": replay_source.credit, "competition": replay.competition}
+            home, away, runner, run = await self._prepare(match_id, seed, speed, source, ref)
             interrupted = await self._cancel_running()
-            self._simulator = Simulator(self._bus, self._clock_factory(speed))
-            self._task = asyncio.create_task(
-                self._simulator.play(match_id, events, home, away, speed, **play)
-            )
+            self._runner = runner
+            self._task = asyncio.create_task(run())
             self._started.append(match_id)
             self._teams = (home, away)
             self._running = RunningMatch(
@@ -90,21 +86,65 @@ class MatchController:
             await self._announce_abandoned(interrupted)
             return match_id
 
+    async def _prepare(
+        self, match_id: str, seed: int, speed: float, source: str, ref: str | None
+    ) -> tuple[TeamSheet, TeamSheet, Simulator | LiveMatch, Callable[[], Awaitable[None]]]:
+        """Everything that can fail happens here, before the running match is touched."""
+        if source == "simulated":
+            home, away = self._home, self._away
+            simulator = Simulator(self._bus, self._clock_factory(speed))
+            events = generate(match_id, seed, home, away)
+            play = functools.partial(simulator.play, match_id, events, home, away, speed)
+            return home, away, simulator, play
+        if source in self._live:
+            live_source = self._live[source]
+            if not live_source.available:
+                raise SourceUnavailable(live_source.setup or f"{live_source.name} is not set up.")
+            if not ref:
+                raise SourceFailure("Choose a match to follow first.")
+            first = await live_source.snapshot(ref)
+            runner = self._live_match(self._bus, live_source, ref, match_id, first)
+            return first.home, first.away, runner, runner.run
+        replay_source = self._replays.get(source)
+        if replay_source is None:
+            raise SourceUnavailable(f"Kickstream has no source called {source}.")
+        if not ref:
+            raise SourceFailure("Choose a match to replay first.")
+        replay = await replay_source.load(ref, match_id)
+        simulator = Simulator(self._bus, self._clock_factory(speed))
+        play = functools.partial(
+            simulator.play,
+            match_id,
+            replay.events,
+            replay.home,
+            replay.away,
+            speed,
+            source=source,
+            credit=replay_source.credit,
+            competition=replay.competition,
+        )
+        return replay.home, replay.away, simulator, play
+
     async def stop(self) -> None:
         async with self._lock:
             await self._announce_abandoned(await self._cancel_running())
 
     async def _cancel_running(self) -> MatchStatus | None:
         """Cancel the running match. Returns its last status if it was cut short."""
-        task, simulator = self._task, self._simulator
-        self._task = self._simulator = None
-        if task is None or task.done():
+        task, runner = self._task, self._runner
+        self._task = self._runner = None
+        if runner is None or task is None:
             return None
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
-        status = simulator.status
-        return status if status is not None and status.state != "finished" else None
+        cut_short = not task.done()
+        if cut_short:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        status = runner.status
+        if status is None:
+            return None
+        self._teams = (status.home, status.away)
+        return status if cut_short and status.state != "finished" else None
 
     async def _announce_abandoned(self, status: MatchStatus | None) -> None:
         if status is not None:
