@@ -63,6 +63,21 @@ test("a ready broadcast offers Go live, which calls onGoLive", () => {
   expect(onGoLive).toHaveBeenCalledTimes(1);
 });
 
+test("a blocked Go live is disabled and says why", () => {
+  const onGoLive = vi.fn();
+  show({ onGoLive, goLiveBlocked: "Turn on a destination in the Stream tool first." });
+  const go = bar().getByRole("button", { name: "Go live" });
+  expect(go.getAttribute("aria-disabled")).toBe("true");
+  expect(go.getAttribute("title")).toBe("Turn on a destination in the Stream tool first.");
+  fireEvent.click(go);
+  expect(onGoLive).not.toHaveBeenCalled();
+});
+
+test("what the page adds sits in the bar", () => {
+  show({ extras: <button type="button">Ask Copilot</button> });
+  expect(bar().getByRole("button", { name: "Ask Copilot" })).toBeTruthy();
+});
+
 test("without onGoLive there is no Go live button", () => {
   show();
   expect(bar().queryByRole("button", { name: "Go live" })).toBeNull();

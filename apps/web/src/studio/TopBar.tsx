@@ -1,5 +1,6 @@
-import { Badge, Button, makeStyles, MessageBar, MessageBarBody, Text, ToggleButton, tokens } from "@fluentui/react-components";
+import { Badge, Button, makeStyles, mergeClasses, MessageBar, MessageBarBody, Text, ToggleButton, tokens } from "@fluentui/react-components";
 import { KeyboardRegular, LiveFilled, RecordRegular, RecordStopRegular, SlideLayoutRegular } from "@fluentui/react-icons";
+import type { ReactNode } from "react";
 import { broadcastPath, studioPath } from "../broadcasts/api";
 import { STATE } from "../broadcasts/format";
 import type { StudioBroadcast } from "../broadcasts/StudioBroadcast";
@@ -49,6 +50,7 @@ const useStyles = makeStyles({
   },
   pressed: { color: "#1C0F33", backgroundColor: "#FFFFFF", ":hover": { color: "#1C0F33", backgroundColor: "#F0EBFA" } },
   red: { color: "#FFFFFF", backgroundColor: "#D92D20", border: "none", ":hover": { color: "#FFFFFF", backgroundColor: "#B42318" } },
+  unavailable: { opacity: 0.55, cursor: "not-allowed" },
 });
 
 /** Always with hours: `0:05:12`, `1:01:01`. */
@@ -76,15 +78,21 @@ export interface TopBarProps {
   onToggleEdit(): void;
   /** Absent where going live is not offered from the bar. */
   onGoLive?(): void;
+  /** Why going live is not possible yet; Go live is offered but disabled, with this as its tooltip. */
+  goLiveBlocked?: string;
   onEnd?(broadcast: Broadcast): void;
   /** A go live or end is in flight. */
   busy?: boolean;
   /** Server time, in seconds. */
   now: number;
+  /** What the page adds beside the bar's own buttons. */
+  extras?: ReactNode;
 }
 
 /** Across the top of the studio: the broadcast, whether it is live and for how long, and the one main action. */
-export function TopBar({ link, output, connected, onAirName, editing, onToggleEdit, onGoLive, onEnd, busy = false, now }: TopBarProps) {
+export function TopBar({
+  link, output, connected, onAirName, editing, onToggleEdit, onGoLive, goLiveBlocked, onEnd, busy = false, now, extras,
+}: TopBarProps) {
   const styles = useStyles();
   const broadcast = link?.broadcast ?? null;
   const broadcastLive = broadcast?.state === "live";
@@ -125,6 +133,7 @@ export function TopBar({ link, output, connected, onAirName, editing, onToggleEd
           </div>
         )}
         <span className={styles.grow} />
+        {extras}
         <Button icon={<KeyboardRegular />} className={styles.ghost} disabledFocusable title="Coming in a later phase">Shortcuts</Button>
         <ToggleButton icon={<SlideLayoutRegular />} className={editing ? styles.pressed : styles.ghost} checked={editing} onClick={onToggleEdit}>
           Edit layout
@@ -133,7 +142,10 @@ export function TopBar({ link, output, connected, onAirName, editing, onToggleEd
           <Button icon={<RecordStopRegular />} className={styles.red} disabled={busy} onClick={() => onEnd(broadcast)}>End broadcast</Button>
         )}
         {canGoLive && (
-          <Button icon={<LiveFilled />} className={styles.red} disabled={busy} onClick={onGoLive}>Go live</Button>
+          <Button icon={<LiveFilled />} className={mergeClasses(styles.red, (busy || goLiveBlocked !== undefined) && styles.unavailable)} disabled={busy} disabledFocusable={goLiveBlocked !== undefined}
+            title={goLiveBlocked} onClick={onGoLive}>
+            Go live
+          </Button>
         )}
       </div>
       {link?.doc && broadcast === null && (

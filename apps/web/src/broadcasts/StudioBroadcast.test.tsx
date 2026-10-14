@@ -31,7 +31,8 @@ function open(doc: Broadcasts, out = output()) {
   push("/api/broadcasts/stream", doc);
 }
 
-const bar = () => within(screen.getByRole("region", { name: "Studio broadcast" }));
+const part = () => within(screen.getByRole("region", { name: "Studio broadcast" }));
+const bar = () => within(screen.getByRole("region", { name: "Studio top bar" }));
 
 beforeEach(() => {
   FakeEventSource.instances = [];
@@ -41,13 +42,12 @@ beforeEach(() => {
 test("the studio sits under its broadcast: Home, the broadcast, then the studio", () => {
   serve(broadcasts());
   open(broadcasts({ broadcasts: [broadcast()], current_id: "b1" }));
-  const trail = within(bar().getByRole("navigation", { name: "Breadcrumb" }));
+  const trail = within(part().getByRole("navigation", { name: "Breadcrumb" }));
   expect(trail.getByRole("link", { name: "Home" }).getAttribute("href")).toBe("/");
   expect(trail.getByRole("link", { name: "Derby day" }).getAttribute("href")).toBe("/broadcasts/b1");
   expect(trail.getByText("Studio").getAttribute("aria-current")).toBe("page");
-  expect(bar().getByText("Ready")).toBeTruthy();
-  expect(bar().getByText("Recording on")).toBeTruthy();
-  expect(bar().getByRole("link", { name: "Broadcast details" }).getAttribute("href")).toBe("/broadcasts/b1");
+  expect(part().getByText("Ready")).toBeTruthy();
+  expect(part().getByText("Recording on")).toBeTruthy();
   // Scenes are still worked on here.
   expect(screen.getByRole("region", { name: "Scenes" })).toBeTruthy();
 });
@@ -61,9 +61,9 @@ test("opening a broadcast's studio makes it the current broadcast", async () => 
 test("Go live in the studio goes live with its broadcast, which records with no destination switched on", async () => {
   const calls = serve(broadcasts({ broadcasts: [broadcast()], current_id: "b1" }));
   open(broadcasts({ broadcasts: [broadcast()], current_id: "b1" }), output({ destinations: [destination({ enabled: false })] }));
-  const box = within(screen.getByRole("region", { name: "Output" }));
-  const goLive = box.getByRole("button", { name: "Go live" }) as HTMLButtonElement;
+  const goLive = bar().getByRole("button", { name: "Go live" }) as HTMLButtonElement;
   expect(goLive.disabled).toBe(false);
+  expect(goLive.getAttribute("aria-disabled")).toBeNull();
   fireEvent.click(goLive);
   await waitFor(() => expect(calls).toContainEqual({ url: "/api/broadcasts/b1/live", method: "POST" }));
   expect(calls.some((call) => call.url === "/api/studio/output/start")).toBe(false);
@@ -74,7 +74,7 @@ test("while it is live, the broadcast can be ended from the studio", async () =>
   const live = broadcast({ state: "live", sessions: [{ started_at: 900, ended_at: null, destinations: [], problem: null }] });
   const calls = serve(broadcasts({ revision: 5, broadcasts: [endedBroadcast()] }));
   open(broadcasts({ broadcasts: [live], current_id: "b1" }), output({ state: "live", started_at: 900 }));
-  expect(bar().getByText("Live")).toBeTruthy();
+  expect(bar().getByText("LIVE")).toBeTruthy();
   fireEvent.click(bar().getByRole("button", { name: "End broadcast" }));
   await waitFor(() => expect(calls).toContainEqual({ url: "/api/broadcasts/b1/end", method: "POST" }));
   expect(await bar().findByText(/This broadcast has ended/)).toBeTruthy();

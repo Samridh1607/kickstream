@@ -50,11 +50,21 @@ interface AppNavProps {
   children?: ReactNode;
 }
 
+/** Switches between the light and the dark theme. */
+export function ThemeToggle({ className }: { className?: string }) {
+  const dark = useIsDark();
+  const setChoice = useThemeChoice((state) => state.setChoice);
+  return (
+    <Tooltip content={dark ? "Light theme" : "Dark theme"} relationship="label">
+      <Button appearance="subtle" className={className} icon={dark ? <WeatherSunnyRegular /> : <WeatherMoonRegular />}
+        onClick={() => setChoice(dark ? "light" : "dark")} />
+    </Tooltip>
+  );
+}
+
 /** The bar across the top of every streamer page: where to go, and whether the stream is on. */
 export function AppNav({ current, output = null, now = Date.now() / 1000, children }: AppNavProps) {
   const styles = useStyles();
-  const dark = useIsDark();
-  const setChoice = useThemeChoice((state) => state.setChoice);
   return (
     <header className={styles.nav}>
       <a href="/" className={styles.brand} aria-label="Kickstream home">
@@ -77,9 +87,7 @@ export function AppNav({ current, output = null, now = Date.now() / 1000, childr
       <div className={styles.end}>
         <LiveStatus output={output} now={now} />
         <AskCopilot />
-        <Tooltip content={dark ? "Light theme" : "Dark theme"} relationship="label">
-          <Button appearance="subtle" icon={dark ? <WeatherSunnyRegular /> : <WeatherMoonRegular />} onClick={() => setChoice(dark ? "light" : "dark")} />
-        </Tooltip>
+        <ThemeToggle />
       </div>
     </header>
   );

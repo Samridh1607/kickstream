@@ -75,6 +75,31 @@ test("revoking an invite from the guests tool stops the link", async () => {
   expect(sent.at(-1)).toMatchObject({ url: "/api/broadcasts/b1/people/invites/i1", method: "DELETE" });
 });
 
+test("each invite shows its public link to copy, its role and whether the guest is here", () => {
+  serve();
+  const writeText = vi.fn(async () => {});
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  const joinedSam = invitation({ joined_name: "Sam", acs_id: "8:fake:2", present: true });
+  showGuests(peopleDoc({ invites: [joinedSam, invitation({ id: "i2", role: "member", name: "Mia", link: "/guest/def" })] }));
+  const guests = within(screen.getByRole("list", { name: "Guests" }));
+  fireEvent.click(guests.getByRole("button", { name: "Copy link for Sam" }));
+  expect(writeText).toHaveBeenCalledWith("https://guests.example/guest/abc");
+  expect(guests.getByText("Present")).toBeTruthy();
+  expect(guests.getByText("Not joined yet")).toBeTruthy();
+  expect(guests.getByText("Member")).toBeTruthy();
+});
+
+test("a link that cannot be copied is explained", async () => {
+  serve();
+  const writeText = vi.fn(async () => {
+    throw new Error("Denied");
+  });
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  showGuests(peopleDoc({ invites: [invitation()] }));
+  fireEvent.click(screen.getByRole("button", { name: "Copy link for Sam" }));
+  expect(await screen.findByText("The link could not be copied. Select it and copy it yourself.")).toBeTruthy();
+});
+
 test("with no calling service the guests tool says how to set one up", () => {
   showGuests(peopleDoc({ service: null }));
   expect(screen.getByText(SETUP)).toBeTruthy();

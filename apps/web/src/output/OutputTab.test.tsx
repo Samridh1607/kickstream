@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { Destination, Output } from "../contracts";
 import { destination, output } from "../test/fixtures";
 import { renderUi } from "../test/render";
@@ -10,7 +10,7 @@ interface Call {
   body: any;
 }
 
-function setup(doc: Output | null = output(), accepted = true, hold = false) {
+function setup(doc: Output | null = output(), accepted = true, hold = false, liveControls?: boolean) {
   const calls: Call[] = [];
   const waiting: (() => void)[] = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
@@ -22,7 +22,7 @@ function setup(doc: Output | null = output(), accepted = true, hold = false) {
     await request();
     return accepted;
   });
-  renderUi(<OutputTab output={doc} now={1100} onRun={onRun} />);
+  renderUi(<OutputTab output={doc} now={1100} onRun={onRun} liveControls={liveControls} />);
   const release = () => act(async () => { waiting.splice(0).forEach((resolve) => resolve()); });
   return { calls, onRun, release };
 }
@@ -116,6 +116,17 @@ test("while live it shows how long, each destination's status, and only Stop", a
   expect((screen.getByRole("button", { name: "Add destination" }) as HTMLButtonElement).disabled).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "Stop" }));
   await waitFor(() => expect(last(calls).url).toBe("/api/studio/output/stop"));
+});
+
+test("without live controls there is no Go live or Stop, but the state and destinations stay", () => {
+  setup(output({ destinations: [destination()] }), true, false, false);
+  expect(screen.queryByRole("button", { name: "Go live" })).toBeNull();
+  expect(screen.getByText("Off air")).toBeTruthy();
+  expect(screen.getByRole("switch", { name: "Send to YouTube" })).toBeTruthy();
+  cleanup();
+  setup(output({ state: "live", started_at: 1000, destinations: [destination({ status: "live" })] }), true, false, false);
+  expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+  expect(screen.getByText("1:40")).toBeTruthy();
 });
 
 test("starting and stopping are shown, and Stop cannot be pressed twice", () => {

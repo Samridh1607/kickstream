@@ -78,6 +78,8 @@ interface OutputTabProps {
   onGoLive?(): Promise<boolean>;
   /** Going live turns recording on by itself, so no destination needs to be switched on first. */
   recordsItself?: boolean;
+  /** Whether this tab offers Go live and Stop; false where the page has its own. */
+  liveControls?: boolean;
 }
 
 /** While the output is on: how long it has been live, and how each stream it sends to is doing. */
@@ -107,7 +109,7 @@ export function LiveStatus({ output, now }: { output: Output | null; now: number
 }
 
 /** Where the program is sent, and the button that sends it. */
-export function OutputTab({ output, now, onRun, onGoLive, recordsItself = false }: OutputTabProps) {
+export function OutputTab({ output, now, onRun, onGoLive, recordsItself = false, liveControls = true }: OutputTabProps) {
   const styles = useStyles();
   const [platform, setPlatform] = useState<Platform>("youtube");
   const [name, setName] = useState("");
@@ -150,12 +152,12 @@ export function OutputTab({ output, now, onRun, onGoLive, recordsItself = false 
           <Badge color={look(STATE, output.state).color}>{look(STATE, output.state).label}</Badge>
           {output.state === "live" && typeof output.started_at === "number" && <Text>{elapsed(now - output.started_at)}</Text>}
           <span className={styles.grow} />
-          {idle ? (
+          {liveControls && (idle ? (
             <Button appearance="primary" icon={<LiveFilled />} disabled={busy || (!recordsItself && !output.destinations.some((item) => item.enabled))}
               onClick={() => void (onGoLive ? guard(onGoLive) : run(goLive))}>Go live</Button>
           ) : (
             <Button icon={<StopFilled />} disabled={busy || output.state === "stopping"} onClick={() => void run(stopOutput)}>Stop</Button>
-          )}
+          ))}
         </div>
         {output.problem && (
           <MessageBar intent="error">

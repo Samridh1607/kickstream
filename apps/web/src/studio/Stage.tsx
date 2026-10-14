@@ -13,8 +13,10 @@ const DEFAULT_RESERVE = 400;
 
 const useStyles = makeStyles({
   stage: { position: "relative", display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXS, minWidth: 0 },
-  frame: {
-    display: "flex", justifyContent: "center", overflow: "hidden", borderRadius: tokens.borderRadiusLarge, backgroundColor: "#05080F",
+  // Measured for the scale, so it always takes the full width; the picture inside is centred in it.
+  frame: { display: "flex", justifyContent: "center", minWidth: 0 },
+  picture: {
+    position: "relative", overflow: "hidden", borderRadius: tokens.borderRadiusLarge, backgroundColor: "#05080F",
     outline: `${tokens.strokeWidthThick} solid transparent`,
   },
   live: { outline: `${tokens.strokeWidthThicker} solid #D92D20` },
@@ -68,11 +70,13 @@ export function Stage({ scene, data, live, reserve }: StageProps) {
   const [frame, scale] = useStageScale(reserve);
   return (
     <section className={styles.stage} aria-label="Stage">
-      <span className={mergeClasses(styles.tag, live && styles.liveTag)} data-testid="stage-tag">
-        <Text size={200} weight="semibold" style={{ color: "inherit" }}>{live ? "Program · LIVE" : "Program"}</Text>
-      </span>
-      <div ref={frame} className={mergeClasses(styles.frame, live && styles.live)} data-live={live}>
-        <SceneCanvas scene={scene} data={data} scale={scale} />
+      <div ref={frame} className={styles.frame}>
+        <div className={mergeClasses(styles.picture, live && styles.live)} data-live={live}>
+          <span className={mergeClasses(styles.tag, live && styles.liveTag)} data-testid="stage-tag">
+            <Text size={200} weight="semibold" style={{ color: "inherit" }}>{live ? "Program · LIVE" : "Program"}</Text>
+          </span>
+          <SceneCanvas scene={scene} data={data} scale={scale} />
+        </div>
       </div>
     </section>
   );

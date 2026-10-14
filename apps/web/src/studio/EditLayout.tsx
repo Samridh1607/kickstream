@@ -10,8 +10,9 @@ import { SceneCanvas } from "./SceneCanvas";
 import { useStageScale } from "./Stage";
 
 const useStyles = makeStyles({
+  // Fills the height its parent gives it; the side columns scroll inside rather than growing the page.
   layout: {
-    display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM, minWidth: 0, padding: tokens.spacingHorizontalL,
+    display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM, minWidth: 0, minHeight: 0, flexGrow: 1, padding: tokens.spacingHorizontalL,
     borderRadius: tokens.borderRadiusXLarge, backgroundColor: tokens.colorNeutralBackground1, boxShadow: tokens.shadow4,
     border: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke3}`,
   },
@@ -22,12 +23,13 @@ const useStyles = makeStyles({
   },
   grow: { flexGrow: 1 },
   body: {
-    display: "grid", gridTemplateColumns: "260px minmax(0, 1fr) 280px", gap: tokens.spacingHorizontalL, alignItems: "start",
-    "@media (max-width: 1100px)": { gridTemplateColumns: "minmax(0, 1fr)" },
+    display: "grid", gridTemplateColumns: "260px minmax(0, 1fr) 280px", gridTemplateRows: "minmax(0, 1fr)", gap: tokens.spacingHorizontalL,
+    alignItems: "start", flexGrow: 1, minHeight: 0,
+    "@media (max-width: 1100px)": { gridTemplateColumns: "minmax(0, 1fr)", gridTemplateRows: "none" },
   },
   side: {
-    display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL, minWidth: 0, maxHeight: "calc(100vh - 200px)", overflowY: "auto",
-    "@media (max-width: 1100px)": { maxHeight: "none", overflowY: "visible" },
+    display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL, minWidth: 0, alignSelf: "stretch", minHeight: 0, overflowY: "auto",
+    "@media (max-width: 1100px)": { overflowY: "visible" },
   },
   frame: { display: "flex", justifyContent: "center", overflow: "hidden", borderRadius: tokens.borderRadiusLarge, backgroundColor: "#05080F", minWidth: 0 },
 });
