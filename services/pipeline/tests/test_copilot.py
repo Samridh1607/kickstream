@@ -1,5 +1,6 @@
 import asyncio
 import time
+from typing import get_args
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,13 +14,15 @@ from kickstream.adapters.web_search import (
     tavily_results,
     wikipedia_results,
 )
+from kickstream.agents.registry import AGENT_IDS, DECLARED
 from kickstream.app import Settings, create_app
 from kickstream.contracts import CopilotAnswer
-from kickstream.copilot.answer import HELP, players_in, sides_in, topic_of
+from kickstream.copilot.answer import HELP, NO_MATCH, players_in, sides_in, topic_of
+from kickstream.copilot.mentions import AgentId, Mentions
 from kickstream.copilot.view import MAX_REMEMBERED, MatchArchive, MatchView
 from kickstream.domain.demo import DEMO_SEED
 from kickstream.domain.teams import AWAY, HOME
-from kickstream.ports.copilot import SearchFailure, SearchResult
+from kickstream.ports.copilot import SearchFailure, SearchResult, Speaker
 from tests.test_agents import MemoryRecord
 
 ASK = "/api/copilot/ask"
@@ -71,6 +74,47 @@ def test_players_and_sides_are_recognised_by_name():
     assert sides_in("How are Harbour City playing?", view) == ["away"]
     assert sides_in("NBR and the away side", view) == ["home", "away"]
     assert sides_in("anything", MatchView("m-1")) == []
+
+
+# --- tagging an agent --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "question, agent, rest",
+    [
+        ("@tactical_analyst what now?", "tactical_analyst", "what now?"),
+        ("@tactical-analyst what now?", "tactical_analyst", "what now?"),
+        ("@TacticalAnalyst what now?", "tactical_analyst", "what now?"),
+        ("@TACTICAL_ANALYST", "tactical_analyst", ""),
+        ("@Tactical Analyst what now?", "tactical_analyst", "what now?"),
+        ("@tactics pressing?", "tactical_analyst", "pressing?"),
+        ("who wins @prediction", "prediction", "who wins"),
+        ("@PredictionAgent who wins", "prediction", "who wins"),
+        ("@highlights best moment", "highlights", "best moment"),
+        ("@player how is Marrowby", "player_tracking", "how is Marrowby"),
+        ("@PlayerTrackingAgent Marrowby", "player_tracking", "Marrowby"),
+        ("@events latest", "event_interpreter", "latest"),
+        ("@event_interpreter latest", "event_interpreter", "latest"),
+        ("@explain the odds", "explainability", "the odds"),
+        ("@visual where is play", "visualization", "where is play"),
+        ("@tactics and @prediction", "tactical_analyst", "and"),
+        ("mail a@prediction.com please", None, "mail a@prediction.com please"),
+        ("@someone   who   wins", None, "@someone who wins"),
+        ("no tag at all", None, "no tag at all"),
+    ],
+)
+def test_an_agent_is_tagged_by_its_id_name_or_a_short_name_and_the_tag_is_taken_out(question, agent, rest):
+    assert Mentions(declared.spec(True) for declared in DECLARED).find(question) == (agent, rest)
+
+
+def test_the_agents_that_can_be_tagged_are_the_registered_agents():
+    assert set(get_args(AgentId)) == set(AGENT_IDS)
+    # Without the catalog an agent is still tagged by its id or a short name, and named from its id.
+    bare = Mentions([])
+    assert bare.find("@tactical_analyst now") == ("tactical_analyst", "now")
+    assert bare.find("@TacticalAnalyst now") == ("tactical_analyst", "now")
+    assert bare.find("@PredictionAgent now") == (None, "@PredictionAgent now")
+    assert bare.name("player_tracking") == "Player tracking"
 
 
 # --- the archive -------------------------------------------------------------------------------
@@ -226,6 +270,15 @@ def test_the_writer_is_given_the_question_the_facts_and_the_web_results_and_noth
     assert copilot_prompt("Hi", [], []).splitlines()[-1] == "- none"
 
 
+def test_the_writer_is_told_which_agent_is_answering():
+    speaker = Speaker("Tactical Analyst", "Detects pressure, rhythm, and tactical patterns.")
+    lines = copilot_prompt("What now?", ["Pressure: 4-2"], [], speaker).splitlines()
+    assert lines[:2] == [
+        "Answering as: Tactical Analyst, who detects pressure, rhythm, and tactical patterns.",
+        "Question: What now?",
+    ]
+
+
 # --- asking, end to end ------------------------------------------------------------------------
 
 
@@ -246,10 +299,11 @@ class FakeWriter:
     model = "fake-model"
 
     def __init__(self, text="Worded by the model.", fail=False) -> None:
-        self.text, self.fail, self.calls = text, fail, []
+        self.text, self.fail, self.calls, self.speakers = text, fail, [], []
 
-    async def write(self, question, facts, sources):
+    async def write(self, question, facts, sources, speaker=None):
         self.calls.append((question, facts, sources))
+        self.speakers.append(speaker)
         if self.fail:
             raise RuntimeError("down")
         return self.text
@@ -315,6 +369,13 @@ def test_before_any_match_it_says_so_and_says_what_it_can_do(client):
     assert info == {"model": False, "search": "Wikipedia", "matches_remembered": 0}
 
 
+@pytest.mark.parametrize("agent", AGENT_IDS)
+def test_before_any_match_a_tagged_agent_says_there_is_no_match(client, agent):
+    answer = ask(client, "", agent=agent)
+    assert (answer.intent, answer.answer, answer.agent, answer.charts) == ("help", NO_MATCH, agent, [])
+    assert answer.question.startswith("What has the ") and answer.question.endswith(" found?")
+
+
 @pytest.mark.parametrize(
     "body, status",
     [
@@ -325,8 +386,22 @@ def test_before_any_match_it_says_so_and_says_what_it_can_do(client):
         ({"question": "Hi", "extra": 1}, 422),
         ({}, 422),
         ({"question": "Hi", "match_id": "m-99"}, 404),
+        ({"question": "Hi", "agent": "coach"}, 422),
+        ({"question": "Hi", "agent": "Tactical Analyst"}, 422),
+        ({"question": "", "agent": None}, 422),
     ],
-    ids=["empty", "blank", "long", "mode", "extra", "missing", "unknown match"],
+    ids=[
+        "empty",
+        "blank",
+        "long",
+        "mode",
+        "extra",
+        "missing",
+        "unknown match",
+        "agent",
+        "agent name",
+        "no agent",
+    ],
 )
 def test_a_malformed_question_is_refused(client, body, status):
     assert client.post(ASK, json=body).status_code == status
@@ -338,8 +413,118 @@ def test_the_match_is_answered_with_its_score_stats_and_scorers(played):
     assert answer.answer.startswith("It is Northbridge FC ") and "at full time" in answer.answer
     [card] = answer.cards
     assert (card.kind, card.home, card.away) == ("match", "Northbridge FC", "Harbour City")
-    assert [row.label for row in card.compare][:3] == ["Goals", "Possession %", "Shots"]
+    assert [row.label for row in card.compare] == ["Goals", "Pass accuracy %", "Fouls"]
     assert answer.followups and answer.sources == [] and answer.searched is False
+    assert answer.agent is None and answer.sample is False
+    [chart] = answer.charts
+    assert (chart.kind, chart.labels) == (
+        "bar",
+        ["Possession %", "Shots", "Shots on target", "Expected goals"],
+    )
+    assert [(s.name, s.team) for s in chart.series] == [("Northbridge FC", "home"), ("Harbour City", "away")]
+    assert f"Shots are {chart.series[0].values[1]:g}-{chart.series[1].values[1]:g}" in answer.answer
+
+
+def test_each_tagged_agent_answers_from_its_own_part_of_the_match(played):
+    def put(agent: str, question: str = "What can you tell me?") -> CopilotAnswer:
+        answer = ask(played, question, agent=agent)
+        assert answer.agent == agent and answer.question == question
+        return answer
+
+    events = put("event_interpreter")
+    assert (events.intent, events.cards[0].title) == ("history", "The latest plays")
+    assert ":" in events.cards[0].items[0].when
+    assert put("event_interpreter", "Bellweather?").cards[0].title == "Ignatius Bellweather's plays"
+
+    tactics = put("tactical_analyst")
+    assert (tactics.intent, tactics.cards[0].title) == ("tactics", "Tactics")
+    [chart] = tactics.charts
+    assert chart.kind == "bar" and chart.labels[0] == "Pressure" and len(chart.series) == 2
+    assert tactics.cards[0].compare == [] and len(tactics.cards[0].facts) == 2
+
+    forecast = put("prediction")
+    assert forecast.intent == "prediction" and forecast.answer.startswith("The match is over.")
+
+    player = put("player_tracking")
+    assert player.intent == "player" and player.answer.startswith("The best player so far is ")
+    assert put("player_tracking", "And Bellweather?").cards[0].title == "7. Ignatius Bellweather"
+
+    highlight = put("highlights")
+    assert (highlight.intent, highlight.cards[0].kind) == ("play", "play")
+
+    why = put("explainability")
+    [card] = why.cards
+    assert (why.intent, card.title) == ("explanation", "Why it matters") and card.items
+    assert why.answer.startswith("The latest, from minute ")
+    assert why.followups
+
+    pitch = put("visualization")
+    [chart] = pitch.charts
+    assert (pitch.intent, pitch.cards[0].title) == ("pitch", "Where the play is")
+    assert (chart.kind, chart.unit, chart.labels) == (
+        "bar",
+        "%",
+        ["Own third", "Middle third", "Attacking third"],
+    )
+    assert all(abs(sum(series.values) - 100) < 0.5 for series in chart.series)
+    assert "% of their plays in the attacking third" in pitch.answer
+
+
+def test_an_agent_tagged_in_the_question_answers_unless_the_request_names_another(played):
+    tagged = ask(played, "@tactics what is happening?")
+    assert (tagged.agent, tagged.intent, tagged.question) == (
+        "tactical_analyst",
+        "tactics",
+        "what is happening?",
+    )
+    only = ask(played, "@TacticalAnalyst")
+    assert only.agent == "tactical_analyst" and only.question == "What has the Tactical Analyst found?"
+    named = ask(played, "@prediction show me something", agent="highlights")
+    assert (named.agent, named.intent, named.question) == ("highlights", "play", "show me something")
+    untagged = ask(played, "mail a@prediction.com: what are the tactics?")
+    assert untagged.agent is None and untagged.question.startswith("mail a@prediction.com")
+
+
+def test_an_older_forecasts_explanation_is_dated_so_its_odds_are_not_read_as_current():
+    from kickstream.contracts import Explanation, Prediction
+    from kickstream.copilot.answer import prediction_answer
+
+    def forecast(minute: int, home: float) -> Prediction:
+        return Prediction(
+            id=f"m-1-p{minute}",
+            match_id="m-1",
+            minute=minute,
+            win_home=home,
+            draw=0.2,
+            win_away=0.8 - home,
+            next_goal_home=0.1,
+            next_goal_away=0.1,
+            next_actions=[],
+            cols=1,
+            rows=1,
+            danger=[0],
+        )
+
+    def why(minute: int) -> Explanation:
+        return Explanation(
+            id=f"x{minute}",
+            match_id="m-1",
+            minute=minute,
+            subject_id=f"m-1-p{minute}",
+            subject_kind="prediction",
+            mode="analyst",
+            headline="Odds moved",
+            why="The odds swung.",
+            evidence=[],
+            source="scripted",
+            agent="a",
+        )
+
+    view = status_view()
+    view.prediction, view.explanations = forecast(25, 0.5), {"m-1-p20": why(20)}
+    assert prediction_answer(view).answer.endswith(" When the odds last moved, in minute 20: The odds swung.")
+    view.explanations["m-1-p25"] = why(25)
+    assert prediction_answer(view).answer.endswith("chance of scoring and Harbour City 10%. The odds swung.")
 
 
 def test_a_forecast_is_given_while_the_match_is_live_and_the_result_once_it_is_over(tmp_path):
@@ -364,8 +549,18 @@ def test_a_forecast_is_given_while_the_match_is_live_and_the_result_once_it_is_o
                 break
             time.sleep(0.05)
         assert answer.intent == "prediction" and "most likely result" in answer.answer
-        assert answer.cards[0].title == "Win probability" and answer.cards[0].compare[0].label == "Win"
-        assert ask(live, "What are the tactics?").cards[0].title == "Tactics"
+        [card] = answer.cards
+        assert card.title == "Win probability"
+        assert [row.label for row in card.compare] == ["Scores in the next 10 minutes"]
+        [odds] = answer.charts
+        assert (odds.kind, odds.unit, odds.labels) == (
+            "donut",
+            "%",
+            ["Northbridge FC", "Draw", "Harbour City"],
+        )
+        assert abs(sum(odds.series[0].values) - 100) < 0.5
+        tactics = ask(live, "What are the tactics?")
+        assert tactics.cards[0].title == "Tactics" and tactics.charts[0].series[1].team == "away"
         head = ask(live, "Show the head to head")
         assert "There is no earlier match between Northbridge FC and Harbour City on record" in head.answer
         assert "Today it is Northbridge FC " in head.answer
@@ -522,6 +717,16 @@ def test_with_a_model_the_answer_is_worded_from_the_facts_and_a_failure_falls_ba
         # A question for the web is worded from what the search found.
         assert ask(client, "What is the offside rule?", web=True).source == "agent"
         assert writer.calls[1] == ("What is the offside rule?", [], [OFFSIDE])
+        assert writer.speakers == [None, None]
+        # A question put to an agent is worded as that agent.
+        tagged = ask(client, "@tactics what is happening?")
+        assert (tagged.source, tagged.agent) == ("agent", "tactical_analyst")
+        assert writer.calls[2][0] == "what is happening?" and writer.calls[2][1][0].startswith(
+            "Tactical summary"
+        )
+        assert writer.speakers[2] == Speaker(
+            "Tactical Analyst", "Detects pressure, rhythm, and tactical patterns."
+        )
     with make_client(tmp_path / "b", copilot_writer=FakeWriter(fail=True)) as client:
         play_match(client)
         fallen = ask(client, "What is the score?")

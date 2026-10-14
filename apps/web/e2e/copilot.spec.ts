@@ -16,7 +16,7 @@ test("Ask Copilot answers about the match, a player, the head to head and the pl
   // A starter question: the score, with the two sides compared.
   await pane.getByRole("button", { name: "What is the score?" }).click();
   await expect(pane.getByTestId("copilot-answer").last()).toContainText("It is Northbridge FC");
-  await expect(pane.getByTestId("copilot-card").last()).toContainText("Possession %");
+  await expect(pane.getByTestId("copilot-chart").last()).toContainText("Possession %");
   await expect(pane.getByText("From the match data").last()).toBeVisible();
 
   const ask = async (question: string) => {
@@ -46,9 +46,24 @@ test("Ask Copilot answers about the match, a player, the head to head and the pl
   await ask("What is the offside rule?");
   await expect(pane.getByTestId("copilot-answer").last()).toContainText("Turn on web search");
 
+  // A question put to one agent: typing @ offers the agents, and the one picked answers with a chart.
+  await pane.getByLabel("Ask a question").fill("@tac");
+  await pane.getByRole("listbox", { name: "Agents" }).getByRole("option", { name: /Tactical Analyst/ }).click();
+  await expect(pane.getByRole("button", { name: "Remove Tactical Analyst" })).toBeVisible();
+  await ask("Who has been pressing?");
+  await expect(pane.getByTestId("copilot-asked-agent").last()).toHaveText("Asked @Tactical Analyst");
+  await expect(pane.getByText("Answered by Tactical Analyst").last()).toBeVisible();
+  await expect(pane.getByTestId("copilot-chart").last()).toContainText("Pressure");
+
+  // The visualization agent, tagged with the button, says where the play has been.
+  await pane.getByRole("button", { name: "Tag an agent" }).click();
+  await pane.getByRole("listbox", { name: "Agents" }).getByRole("option", { name: /Visualization Agent/ }).click();
+  await ask("Where is the play?");
+  await expect(pane.getByTestId("copilot-chart").last()).toContainText("Share of plays by third");
+
   // The conversation is kept while the pane is closed.
   await pane.getByRole("button", { name: "Close" }).click();
   await expect(pane).toHaveCount(0);
   await page.getByRole("button", { name: "Ask Copilot" }).click();
-  await expect(pane.getByTestId("copilot-question")).toHaveCount(6);
+  await expect(pane.getByTestId("copilot-question")).toHaveCount(8);
 });

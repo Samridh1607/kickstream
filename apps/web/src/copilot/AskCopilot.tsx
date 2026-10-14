@@ -1,15 +1,20 @@
-import { Badge, Button, makeStyles, mergeClasses, Switch, Text, tokens, Tooltip } from "@fluentui/react-components";
+import { Badge, Button, makeStyles, mergeClasses, MessageBar, MessageBarBody, Switch, Text, tokens, Tooltip } from "@fluentui/react-components";
 import {
-  ArrowSwapRegular, ChatAddRegular, DataTrendingRegular, DismissRegular, FlashRegular, GlobeRegular, HistoryRegular, NumberSymbolRegular,
-  PersonRunningRegular, SendFilled, SparkleFilled,
+  ArrowSwapRegular, BotRegular, ChatAddRegular, DataTrendingRegular, DismissRegular, FlashRegular, GlobeRegular, HistoryRegular, MentionRegular,
+  NumberSymbolRegular, PersonRunningRegular, SendFilled, SparkleFilled,
 } from "@fluentui/react-icons";
-import { type KeyboardEvent, type ReactElement, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, type KeyboardEvent, type ReactElement, useEffect, useId, useRef, useState } from "react";
 import { create } from "zustand";
+import { type AgentId, fetchAgents } from "../agents/api";
 import { Swatch } from "../charts/charts";
 import type { CopilotAnswer, CopilotCard, CopilotInfo } from "../contracts";
 import { EASE, MotionStyles, rise } from "../motion/motion";
-import { loadProfile } from "../prefs";
+import { StudioRequestError } from "../studio/api";
+import { AGENT_OPTIONS, type AgentOption, agentName, matchAgents } from "./agents";
 import { askCopilot, fetchCopilotInfo } from "./api";
+import { CopilotChartView } from "./Chart";
+import { CopilotMarkdown } from "./Markdown";
+import { sampleAnswer } from "./sample";
 
 const SIDE_COLOR = { home: "#0F6CBD", away: "#C50F1F" } as const;
 const MAX_QUESTION = 300;
@@ -26,9 +31,11 @@ const STARTERS: { text: string; icon: ReactElement }[] = [
 interface Turn {
   id: number;
   question: string;
-  /** Absent while the answer is on its way. */
+  /** The agent the question was put to, if any. */
+  agent: AgentId | null;
+  /** Absent while the answer is on its way. A sample answer when the request failed. */
   answer?: CopilotAnswer;
-  /** Why there is no answer, when the request failed. */
+  /** Why Ask Copilot could not be reached, when the request failed. */
   failure?: string;
 }
 
@@ -38,11 +45,18 @@ interface CopilotState {
   web: boolean;
   setOpen(open: boolean): void;
   setWeb(web: boolean): void;
-  ask(question: string): Promise<void>;
+  ask(question: string, agent?: AgentId | null): Promise<void>;
   clear(): void;
 }
 
 let nextTurn = 1;
+
+function reasonOf(caught: unknown): string {
+  if (caught instanceof StudioRequestError) return caught.message;
+  if (caught instanceof SyntaxError) return "the reply was not valid JSON.";
+  if (caught instanceof TypeError) return "the network request failed.";
+  return caught instanceof Error && caught.message ? caught.message : "the request failed.";
+}
 
 /** The conversation, kept while the page is open so closing the pane does not lose it. */
 export const useCopilot = create<CopilotState>((set, get) => ({
@@ -52,17 +66,17 @@ export const useCopilot = create<CopilotState>((set, get) => ({
   setOpen: (open) => set({ open }),
   setWeb: (web) => set({ web }),
   clear: () => set({ turns: [] }),
-  ask: async (asked) => {
+  ask: async (asked, agent = null) => {
     const question = asked.trim();
-    if (question === "" || get().turns.some((turn) => !turn.answer && !turn.failure)) return;
+    if ((question === "" && agent === null) || get().turns.some((turn) => !turn.answer && !turn.failure)) return;
     const id = nextTurn++;
-    set((state) => ({ turns: [...state.turns, { id, question }] }));
+    set((state) => ({ turns: [...state.turns, { id, question, agent }] }));
     const settle = (result: Partial<Turn>) =>
       set((state) => ({ turns: state.turns.map((turn) => (turn.id === id ? { ...turn, ...result } : turn)) }));
     try {
-      settle({ answer: await askCopilot(question, { mode: loadProfile().mode, web: get().web }) });
+      settle({ answer: await askCopilot(question, { web: get().web, agent }) });
     } catch (caught) {
-      settle({ failure: caught instanceof Error ? caught.message : "The question could not be answered." });
+      settle({ answer: sampleAnswer(question, agent), failure: reasonOf(caught) });
     }
   },
 }));
@@ -107,9 +121,9 @@ const useStyles = makeStyles({
     borderRadius: `${tokens.borderRadiusXLarge} ${tokens.borderRadiusXLarge} ${tokens.borderRadiusSmall} ${tokens.borderRadiusXLarge}`,
     color: tokens.colorNeutralForegroundOnBrand, backgroundColor: tokens.colorBrandBackground,
   },
+  askedTo: { alignSelf: "flex-end", marginBottom: `calc(-1 * ${tokens.spacingVerticalS})` },
   reply: { display: "grid", gridTemplateColumns: "24px minmax(0, 1fr)", columnGap: tokens.spacingHorizontalS, alignItems: "start" },
   replyBody: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS, minWidth: 0 },
-  answer: { whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: tokens.lineHeightBase400 },
   dots: { display: "inline-flex", gap: "4px", padding: `${tokens.spacingVerticalS} 0` },
   dot: {
     width: "7px", height: "7px", borderRadius: "50%", backgroundColor: tokens.colorBrandForeground1,
@@ -142,7 +156,26 @@ const useStyles = makeStyles({
     ":hover": { backgroundColor: tokens.colorNeutralBackground3Hover },
   },
   chips: { display: "flex", flexWrap: "wrap", gap: tokens.spacingHorizontalXS },
-  composer: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXS, padding: tokens.spacingHorizontalL, borderTop: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}` },
+  composer: {
+    position: "relative", display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXS, padding: tokens.spacingHorizontalL,
+    borderTop: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
+  },
+  picker: {
+    position: "absolute", left: tokens.spacingHorizontalL, right: tokens.spacingHorizontalL, bottom: "100%", zIndex: 1, maxHeight: "300px", overflowY: "auto",
+    display: "flex", flexDirection: "column", gap: "2px", padding: tokens.spacingVerticalXS, borderRadius: tokens.borderRadiusLarge,
+    backgroundColor: tokens.colorNeutralBackground1, border: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`, boxShadow: tokens.shadow16,
+  },
+  option: {
+    display: "flex", flexDirection: "column", padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalM}`, borderRadius: tokens.borderRadiusMedium, cursor: "pointer",
+    ":hover": { backgroundColor: tokens.colorSubtleBackgroundHover },
+  },
+  active: { backgroundColor: tokens.colorSubtleBackgroundSelected, ":hover": { backgroundColor: tokens.colorSubtleBackgroundSelected } },
+  none: { padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalM}`, color: tokens.colorNeutralForeground3 },
+  chip: {
+    alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: tokens.spacingHorizontalXXS, paddingLeft: tokens.spacingHorizontalS,
+    borderRadius: tokens.borderRadiusCircular, backgroundColor: tokens.colorBrandBackground2, color: tokens.colorBrandForeground2,
+    fontSize: tokens.fontSizeBase200, fontWeight: tokens.fontWeightSemibold,
+  },
   box: {
     display: "flex", alignItems: "flex-end", gap: tokens.spacingHorizontalXS, padding: tokens.spacingVerticalXS, borderRadius: tokens.borderRadiusXLarge,
     border: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke1}`, backgroundColor: tokens.colorNeutralBackground1,
@@ -215,7 +248,7 @@ export function CopilotCardView({ card }: { card: CopilotCard }) {
   );
 }
 
-function Reply({ turn, search, onAsk }: { turn: Turn; search: string; onAsk(question: string): void }) {
+function Reply({ turn, search, agents, onAsk }: { turn: Turn; search: string; agents: AgentOption[]; onAsk(question: string): void }) {
   const styles = useStyles();
   const { answer } = turn;
   return (
@@ -227,11 +260,18 @@ function Reply({ turn, search, onAsk }: { turn: Turn; search: string; onAsk(ques
             {[0, 160, 320].map((delay) => <span key={delay} className={styles.dot} style={{ animationDelay: `${delay}ms` }} />)}
           </span>
         )}
-        {turn.failure && <Text className={styles.answer} data-testid="copilot-failure">{turn.failure}</Text>}
+        {turn.failure && (
+          <MessageBar intent="warning" layout="multiline">
+            <MessageBarBody>
+              <strong>Sample answer</strong> — Ask Copilot could not be reached: <span data-testid="copilot-failure">{turn.failure}</span>
+            </MessageBarBody>
+          </MessageBar>
+        )}
         {answer && (
           <>
-            <Text className={styles.answer} data-testid="copilot-answer">{answer.answer}</Text>
+            <CopilotMarkdown text={answer.answer} testId="copilot-answer" />
             {answer.problem && <Badge appearance="tint" color="warning">{answer.problem}</Badge>}
+            {(answer.charts ?? []).map((chart, index) => <CopilotChartView key={`${chart.title}-${index}`} chart={chart} />)}
             {answer.cards.map((card, index) => <CopilotCardView key={`${card.kind}-${index}`} card={card} />)}
             {answer.sources.length > 0 && (
               <ul className={styles.sources} aria-label="Sources">
@@ -247,7 +287,10 @@ function Reply({ turn, search, onAsk }: { turn: Turn; search: string; onAsk(ques
               </ul>
             )}
             <div className={styles.chips}>
-              <Badge appearance="outline" size="small">{answer.source === "agent" ? "Written by a model" : "From the match data"}</Badge>
+              {answer.sample
+                ? <Badge appearance="filled" color="warning" size="small">Sample — not live data</Badge>
+                : <Badge appearance="outline" size="small">{answer.source === "agent" ? "Written by a model" : "From the match data"}</Badge>}
+              {answer.agent && <Badge appearance="tint" color="brand" size="small" icon={<BotRegular />}>Answered by {agentName(agents, answer.agent)}</Badge>}
               {answer.searched && <Badge appearance="outline" size="small" icon={<GlobeRegular />}>Searched {search || "the web"}</Badge>}
             </div>
             <div className={styles.chips} aria-label="Suggested questions">
@@ -262,19 +305,41 @@ function Reply({ turn, search, onAsk }: { turn: Turn; search: string; onAsk(ques
   );
 }
 
+/** The mention picker, while open: what was typed after the @ and where that @ is, if it was typed. */
+interface Picker {
+  query: string;
+  /** Where the typed @ is in the draft; null when the picker was opened with the button. */
+  at: number | null;
+  active: number;
+}
+
+// An @ being typed: at the start or after a space, followed by what has been typed of a name so far.
+const TYPING_TAG = /(^|\s)@([\w-]*)$/;
+
 /** The pane: the conversation so far, and where the next question is typed. */
 export function CopilotPane() {
   const styles = useStyles();
   const { turns, web, setOpen, setWeb, ask, clear } = useCopilot();
   const [draft, setDraft] = useState("");
   const [info, setInfo] = useState<CopilotInfo | null>(null);
+  const [agents, setAgents] = useState<AgentOption[]>(AGENT_OPTIONS);
+  const [agent, setAgent] = useState<AgentId | null>(null);
+  const [picker, setPicker] = useState<Picker | null>(null);
   const end = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
+  const listId = useId();
   const waiting = turns.some((turn) => !turn.answer && !turn.failure);
   const search = info?.search ?? "";
+  const options = picker ? matchAgents(agents, picker.query) : [];
+  const active = picker && options.length > 0 ? Math.min(picker.active, options.length - 1) : -1;
 
   useEffect(() => {
     fetchCopilotInfo().then(setInfo).catch(() => setInfo(null));
+    fetchAgents()
+      .then((catalog) => {
+        if (catalog.agents.length > 0) setAgents(catalog.agents.map(({ id, name, description }) => ({ id, name, description })));
+      })
+      .catch(() => undefined);
     input.current?.focus();
   }, []);
 
@@ -283,11 +348,48 @@ export function CopilotPane() {
   }, [turns]);
 
   const submit = (question: string) => {
-    if (question.trim() === "" || waiting) return;
+    if ((question.trim() === "" && agent === null) || waiting) return;
     setDraft("");
-    void ask(question);
+    setAgent(null);
+    setPicker(null);
+    void ask(question, agent);
+  };
+  const onChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    const { value } = event.target;
+    setDraft(value);
+    const caret = event.target.selectionStart ?? value.length;
+    const typed = TYPING_TAG.exec(value.slice(0, caret));
+    setPicker(typed ? { query: typed[2], at: caret - typed[2].length - 1, active: 0 } : null);
+  };
+  const pick = (option: AgentOption) => {
+    if (picker?.at != null) {
+      const before = draft.slice(0, picker.at);
+      const after = draft.slice(picker.at + 1 + picker.query.length);
+      setDraft(before === "" || before.endsWith(" ") ? before + after.trimStart() : before + after);
+    }
+    setAgent(option.id);
+    setPicker(null);
+    input.current?.focus();
   };
   const onKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (picker) {
+      const moves: Record<string, number> = { ArrowDown: 1, ArrowUp: -1 };
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setPicker(null);
+        return;
+      }
+      if (options.length > 0 && event.key in moves) {
+        event.preventDefault();
+        setPicker({ ...picker, active: (active + moves[event.key] + options.length) % options.length });
+        return;
+      }
+      if (options.length > 0 && (event.key === "Tab" || (event.key === "Enter" && !event.shiftKey))) {
+        event.preventDefault();
+        pick(options[active]);
+        return;
+      }
+    }
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       submit(draft);
@@ -295,6 +397,7 @@ export function CopilotPane() {
       setOpen(false);
     }
   };
+  const optionId = (index: number) => `${listId}-${index}`;
 
   return (
     <aside className={mergeClasses(styles.pane, "ks-motion")} aria-label="Ask Copilot">
@@ -319,7 +422,9 @@ export function CopilotPane() {
         {turns.length === 0 && (
           <div className={styles.welcome} style={{ animation: rise(60) }}>
             <Text size={600} weight="semibold">What would you like to know?</Text>
-            <Text className={styles.muted}>Ask about the match, a player's record, the head to head, a play card or the play history.</Text>
+            <Text className={styles.muted}>
+              Ask about the match, a player's record, the head to head, a play card or the play history, or type @ to put a question to one of the agents.
+            </Text>
             <div className={styles.starters}>
               {STARTERS.map((starter, index) => (
                 <button key={starter.text} type="button" className={styles.starter} style={{ animation: rise(90 + index * 50) }} onClick={() => submit(starter.text)}>
@@ -332,24 +437,58 @@ export function CopilotPane() {
         )}
         {turns.map((turn) => (
           <div key={turn.id} style={{ display: "contents" }}>
-            <Text className={styles.asked} data-testid="copilot-question" style={{ animation: rise() }}>{turn.question}</Text>
-            <Reply turn={turn} search={search} onAsk={submit} />
+            {turn.agent && (
+              <Text size={200} className={mergeClasses(styles.muted, styles.askedTo)} data-testid="copilot-asked-agent">
+                Asked @{agentName(agents, turn.agent)}
+              </Text>
+            )}
+            <Text className={styles.asked} data-testid="copilot-question" style={{ animation: rise() }}>
+              {turn.question || (turn.agent && `@${agentName(agents, turn.agent)}`)}
+            </Text>
+            <Reply turn={turn} search={search} agents={agents} onAsk={submit} />
           </div>
         ))}
         <div ref={end} />
       </div>
 
       <div className={styles.composer}>
+        {picker && (
+          <div className={styles.picker} id={listId} role="listbox" aria-label="Agents">
+            {options.map((option, index) => (
+              // Pressing an option keeps the focus in the question box, so typing carries on.
+              <div key={option.id} id={optionId(index)} role="option" aria-selected={index === active}
+                className={mergeClasses(styles.option, index === active && styles.active)}
+                onMouseDown={(event) => event.preventDefault()} onClick={() => pick(option)}>
+                <Text weight="semibold" size={300}>{option.name}</Text>
+                <Text size={200} className={styles.muted}>{option.description}</Text>
+              </div>
+            ))}
+            {options.length === 0 && <Text size={200} className={styles.none}>No agent matches “{picker.query}”</Text>}
+          </div>
+        )}
+        {agent && (
+          <span className={styles.chip} data-testid="copilot-tagged">
+            @{agentName(agents, agent)}
+            <Button size="small" appearance="transparent" shape="circular" icon={<DismissRegular />} aria-label={`Remove ${agentName(agents, agent)}`}
+              onClick={() => { setAgent(null); input.current?.focus(); }} />
+          </span>
+        )}
         <div className={styles.box}>
-          <textarea ref={input} className={styles.input} rows={1} maxLength={MAX_QUESTION} aria-label="Ask a question" placeholder="Ask about the match…"
-            value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={onKey} />
+          <textarea ref={input} className={styles.input} rows={1} maxLength={MAX_QUESTION} aria-label="Ask a question"
+            placeholder={agent ? `Ask the ${agentName(agents, agent)}…` : "Ask about the match, or type @ to tag an agent…"}
+            aria-controls={picker ? listId : undefined} aria-activedescendant={active >= 0 ? optionId(active) : undefined} aria-autocomplete="list"
+            value={draft} onChange={onChange} onKeyDown={onKey} />
           <Tooltip content="Send" relationship="label">
-            <Button appearance="primary" shape="circular" icon={<SendFilled />} disabled={draft.trim() === "" || waiting} onClick={() => submit(draft)} />
+            <Button appearance="primary" shape="circular" icon={<SendFilled />} disabled={(draft.trim() === "" && agent === null) || waiting} onClick={() => submit(draft)} />
           </Tooltip>
         </div>
         <div className={styles.row}>
           <Switch label="Search the web" checked={web} disabled={info !== null && search === ""} onChange={(_, data) => setWeb(data.checked)} />
           <span className={styles.grow} />
+          <Button size="small" appearance="subtle" icon={<MentionRegular />} aria-haspopup="listbox" aria-expanded={picker !== null}
+            onClick={() => { setPicker(picker ? null : { query: "", at: null, active: 0 }); input.current?.focus(); }}>
+            Tag an agent
+          </Button>
         </div>
         <Text size={100} className={styles.muted}>
           {web && search ? `Your question is sent to ${search}. ` : ""}Answers come from recorded match data; check anything important.

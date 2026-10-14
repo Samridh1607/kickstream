@@ -9,13 +9,16 @@ from dataclasses import dataclass, field
 
 from kickstream.contracts import (
     CopilotCard,
+    CopilotChart,
     CopilotCompare,
     CopilotFact,
     CopilotItem,
+    CopilotSeries,
     Highlight,
     PlayerMetrics,
     PlayEvent,
 )
+from kickstream.copilot.mentions import AgentId
 from kickstream.copilot.view import MatchArchive, MatchView
 from kickstream.domain.types import SIDES, Side
 
@@ -169,6 +172,8 @@ FOLLOWUPS = {
     ),
     "play": ("Show the play history", "Show a hidden highlight", "Who scored?"),
     "history": ("Show the last goal's play card", "Show the head to head", "What are the tactics?"),
+    "explanation": ("Why have the odds moved?", "What are the tactics?", "Show a hidden highlight"),
+    "pitch": ("What are the tactics?", "Who will win from here?", "Show the recent plays"),
     "web": ("What is the score?", "Show the head to head", "Who is the best player so far?"),
     "help": (
         "What is the score?",
@@ -183,6 +188,9 @@ HELP = (
     "win, the tactics, a player's numbers and record, the head to head, a play card for a goal or "
     "highlight, and the play history. Turn on web search for anything beyond these matches."
 )
+NO_MATCH = (
+    "No match has been started yet, so there is nothing to answer from. Start one on the Match data page."
+)
 
 
 @dataclass
@@ -194,6 +202,7 @@ class Draft:
     facts: list[str] = field(default_factory=list)
     # False when the question could not be placed, so the web's answer should lead if there is one.
     placed: bool = True
+    charts: list[CopilotChart] = field(default_factory=list)
 
 
 def _words(text: str) -> list[str]:
@@ -242,6 +251,22 @@ def _percent(value: float) -> str:
 
 def _fact(label: str, value) -> CopilotFact:
     return CopilotFact(label=label, value=str(value))
+
+
+def _sides_chart(
+    view: MatchView, title: str, rows: list[tuple[str, float, float]], unit: str | None = None
+) -> CopilotChart:
+    """Bars for each measure, the home side's value beside the away side's."""
+    return CopilotChart(
+        kind="bar",
+        title=title,
+        unit=unit,
+        labels=[label for label, _, _ in rows],
+        series=[
+            CopilotSeries(name=view.name(side), team=side, values=[row[index] for row in rows])
+            for index, side in ((1, "home"), (2, "away"))
+        ],
+    )
 
 
 def _score_line(view: MatchView) -> str:
@@ -296,6 +321,16 @@ def match_answer(view: MatchView) -> Draft:
         scorers = ", ".join(f"{view.player_name(g.player_id) or 'unknown'} {g.minute}'" for g in goals)
         answer += f" Goals: {scorers}."
         facts.append(f"Goals: {scorers}")
+    charts = []
+    if stats is not None:
+        rows = [
+            ("Possession %", stats.home.possession, stats.away.possession),
+            ("Shots", stats.home.shots, stats.away.shots),
+            ("Shots on target", stats.home.shots_on_target, stats.away.shots_on_target),
+            ("Expected goals", stats.home.xg, stats.away.xg),
+        ]
+        charts.append(_sides_chart(view, "The two sides", rows))
+    charted = {label for chart in charts for label in chart.labels}
     card = CopilotCard(
         kind="match",
         title=line,
@@ -303,10 +338,10 @@ def match_answer(view: MatchView) -> Draft:
         home=view.name("home"),
         away=view.name("away"),
         facts=[],
-        compare=_compare_rows(view),
+        compare=[row for row in _compare_rows(view) if row.label not in charted],
         items=[],
     )
-    return Draft("match", answer, [card], facts)
+    return Draft("match", answer, [card], facts, charts=charts)
 
 
 def prediction_answer(view: MatchView) -> Draft:
@@ -335,7 +370,13 @@ def prediction_answer(view: MatchView) -> Draft:
         (e for e in reversed(list(view.explanations.values())) if e.subject_kind == "prediction"), None
     )
     if explained is not None:
-        answer += f" {explained.why}"
+        # An older forecast's explanation quotes older odds, so it is dated rather than read as current.
+        current = explained.subject_id == prediction.id
+        answer += (
+            f" {explained.why}"
+            if current
+            else f" When the odds last moved, in minute {explained.minute}: {explained.why}"
+        )
         facts.append(f"Why the odds moved ({explained.minute}'): {explained.why}")
     card = CopilotCard(
         kind="match",
@@ -343,11 +384,8 @@ def prediction_answer(view: MatchView) -> Draft:
         subtitle=f"Forecast at {prediction.minute}'",
         home=home,
         away=away,
-        facts=[_fact("Draw", _percent(prediction.draw))],
+        facts=[],
         compare=[
-            CopilotCompare(
-                label="Win", home=_percent(prediction.win_home), away=_percent(prediction.win_away)
-            ),
             CopilotCompare(
                 label="Scores in the next 10 minutes",
                 home=_percent(prediction.next_goal_home),
@@ -356,7 +394,21 @@ def prediction_answer(view: MatchView) -> Draft:
         ],
         items=[],
     )
-    return Draft("prediction", answer, [card], facts)
+    odds_chart = CopilotChart(
+        kind="donut",
+        title="Win probability",
+        unit="%",
+        labels=[home, "Draw", away],
+        series=[
+            CopilotSeries(
+                name="Win probability",
+                values=[
+                    round(p * 100, 1) for p in (prediction.win_home, prediction.draw, prediction.win_away)
+                ],
+            )
+        ],
+    )
+    return Draft("prediction", answer, [card], facts, charts=[odds_chart])
 
 
 def tactics_answer(view: MatchView) -> Draft:
@@ -384,13 +436,14 @@ def tactics_answer(view: MatchView) -> Draft:
         home=home,
         away=away,
         facts=[_fact(f"{home} patterns", patterns("home")), _fact(f"{away} patterns", patterns("away"))],
-        compare=[CopilotCompare(label=label, home=f"{h:g}", away=f"{a:g}") for label, h, a in rows],
+        compare=[],
         items=[],
     )
     facts = [f"Tactical summary: {tactics.summary}"]
     facts += [f"{label}: {h:g}-{a:g} ({home} first)" for label, h, a in rows]
     facts += [f"{view.name(side)} patterns: {patterns(side)}" for side in SIDES]
-    return Draft("tactics", tactics.summary, [card], facts)
+    chart = _sides_chart(view, f"Tactics at {tactics.minute}'", rows)
+    return Draft("tactics", tactics.summary, [card], facts, charts=[chart])
 
 
 # --- players -----------------------------------------------------------------------------------
@@ -706,29 +759,139 @@ def history_answer(
         return Draft("history", answer, [card], [answer])
 
     if any(word in asked for word in ("recent", "last plays", "play by play", "events", "moves")):
-        plays = [play for play in view.plays if play.team is not None][-MAX_ITEMS:]
-        items = [_play_item(view, play) for play in reversed(plays)]
-        title, answer = "The latest plays", f"Here are the last {len(items)} plays, newest first."
-    else:
-        key = sorted(view.highlights, key=lambda highlight: highlight.minute)
-        key = [highlight for highlight in key if highlight.kind == "key"] or key
-        items = [
-            CopilotItem(when=f"{h.minute}'", title=h.title, detail=h.reason, team=h.team)
-            for h in key[-MAX_ITEMS:]
-        ]
-        title = "The match so far"
-        answer = (
-            f"{_score_line(view)} {_state(view)}, with {len(key)} key moments so far."
-            if items
-            else f"{_score_line(view)} {_state(view)}. Nothing has stood out yet."
-        )
+        return latest_plays_answer(view)
+    key = sorted(view.highlights, key=lambda highlight: highlight.minute)
+    key = [highlight for highlight in key if highlight.kind == "key"] or key
+    items = [
+        CopilotItem(when=f"{h.minute}'", title=h.title, detail=h.reason, team=h.team)
+        for h in key[-MAX_ITEMS:]
+    ]
+    answer = (
+        f"{_score_line(view)} {_state(view)}, with {len(key)} key moments so far."
+        if items
+        else f"{_score_line(view)} {_state(view)}. Nothing has stood out yet."
+    )
+    return _history_draft(view, "The match so far", answer, items)
+
+
+def _history_draft(view: MatchView, title: str, answer: str, items: list[CopilotItem]) -> Draft:
     card = CopilotCard(
         kind="history", title=title, subtitle=_score_line(view), facts=[], compare=[], items=items
     )
     return Draft("history", answer, [card], [f"{item.when} {item.title}: {item.detail}" for item in items])
 
 
+def latest_plays_answer(view: MatchView) -> Draft:
+    plays = [play for play in view.plays if play.team is not None][-MAX_ITEMS:]
+    if not plays:
+        return Draft("history", "No play has been recorded in this match yet.", facts=["No plays yet"])
+    items = [_play_item(view, play) for play in reversed(plays)]
+    answer = f"Here are the last {len(items)} plays, newest first."
+    return _history_draft(view, "The latest plays", answer, items)
+
+
+# --- explanations and where play is ------------------------------------------------------------
+
+
+def explanations_answer(view: MatchView) -> Draft:
+    explained = sorted(view.explanations.values(), key=lambda explanation: explanation.minute)[-MAX_ITEMS:]
+    if not explained:
+        return Draft(
+            "explanation",
+            "The Explainability Agent has not explained anything in this match yet. Ask again in a minute.",
+        )
+    latest = explained[-1]
+    items = [
+        CopilotItem(when=f"{e.minute}'", title=e.headline, detail=e.why, team=e.team)
+        for e in reversed(explained)
+    ]
+    card = CopilotCard(
+        kind="history",
+        title="Why it matters",
+        subtitle=f"The latest {_count(len(items), 'explanation', 'explanations')}",
+        facts=[],
+        compare=[],
+        items=items,
+    )
+    answer = f"The latest, from minute {latest.minute}: {latest.headline}. {latest.why}"
+    facts = [f"{e.minute}' ({e.subject_kind}) {e.headline}: {e.why}" for e in explained]
+    return Draft("explanation", answer, [card], facts)
+
+
+_THIRDS = (
+    ("defensive_third", "Own third"),
+    ("middle_third", "Middle third"),
+    ("attacking_third", "Attacking third"),
+)
+_LANES = (("left", "Left flank"), ("centre", "Centre"), ("right", "Right flank"))
+
+
+def _shares(plays: list[PlayEvent], attribute: str, places: tuple[tuple[str, str], ...]) -> list[float]:
+    total = len(plays) or 1
+    return [
+        round(100 * sum(getattr(play, attribute) == place for play in plays) / total, 1)
+        for place, _ in places
+    ]
+
+
+def pitch_answer(view: MatchView) -> Draft:
+    """Where each side has had the ball, by third and by flank, as each side attacks."""
+    by_side = {side: [play for play in view.plays if play.team == side] for side in SIDES}
+    if not any(by_side.values()):
+        return Draft("pitch", "No play has been recorded in this match yet.", facts=["No plays yet"])
+    thirds = {side: _shares(plays, "zone", _THIRDS) for side, plays in by_side.items()}
+    lanes = {side: _shares(plays, "lane", _LANES) for side, plays in by_side.items()}
+    rows = [(label, thirds["home"][i], thirds["away"][i]) for i, (_, label) in enumerate(_THIRDS)]
+    rows += [(label, lanes["home"][i], lanes["away"][i]) for i, (_, label) in enumerate(_LANES)]
+    home, away = view.name("home"), view.name("away")
+    attacking = len(_THIRDS) - 1
+    answer = (
+        f"{home} have made {thirds['home'][attacking]:g}% of their plays in the attacking third and "
+        f"{away} {thirds['away'][attacking]:g}%."
+    )
+    for side in SIDES:
+        busiest = max(range(len(_LANES)), key=lambda i, side=side: lanes[side][i])
+        answer += f" {view.name(side)} use the {_LANES[busiest][1].lower()} most ({lanes[side][busiest]:g}%)."
+    card = CopilotCard(
+        kind="match",
+        title="Where the play is",
+        subtitle="Share of each side's plays, as it attacks",
+        home=home,
+        away=away,
+        facts=[_fact(f"{view.name(side)} plays", len(plays)) for side, plays in by_side.items()],
+        compare=[CopilotCompare(label=label, home=f"{h:g}%", away=f"{a:g}%") for label, h, a in rows],
+        items=[],
+    )
+    facts = [f"{label}: {home} {h:g}%, {away} {a:g}% of their own plays" for label, h, a in rows]
+    chart = _sides_chart(view, "Share of plays by third", rows[: len(_THIRDS)], unit="%")
+    return Draft("pitch", answer, [card], facts, charts=[chart])
+
+
 # --- putting it together -----------------------------------------------------------------------
+
+
+def agent_draft(agent: AgentId, question: str, view: MatchView | None, archive: MatchArchive) -> Draft:
+    """The answer from one agent's part of the match, for a question put to that agent."""
+    if view is None or view.status is None:
+        return Draft("help", NO_MATCH)
+    named = players_in(question, view)
+    if agent == "event_interpreter":
+        if named or topic_of(question) == "history":
+            return history_answer(view, archive, named, question)
+        return latest_plays_answer(view)
+    if agent == "tactical_analyst":
+        return tactics_answer(view)
+    if agent == "prediction":
+        return prediction_answer(view)
+    if agent == "player_tracking":
+        return player_answer(view, archive, named, question)
+    if agent == "highlights":
+        return play_answer(view, question)
+    if agent == "explainability":
+        return explanations_answer(view)
+    if agent == "visualization":
+        return pitch_answer(view)
+    raise ValueError(f"no answer for the agent {agent!r}")
 
 
 def draft(question: str, view: MatchView | None, archive: MatchArchive) -> Draft:
@@ -739,8 +902,7 @@ def draft(question: str, view: MatchView | None, archive: MatchArchive) -> Draft
             topic is None and archive.matches and "match" in question.lower()
         ):
             return history_answer(None, archive, [], question)
-        waiting = "No match has been started yet, so there is nothing to answer from. Start one on the Match data page."
-        return Draft("help", waiting if topic else f"{waiting} {HELP}", placed=topic is not None)
+        return Draft("help", NO_MATCH if topic else f"{NO_MATCH} {HELP}", placed=topic is not None)
 
     named = players_in(question, view)
     if topic is None and named:

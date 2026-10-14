@@ -1270,17 +1270,61 @@ export interface CopilotSource {
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "CopilotSeries".
+ */
+export interface CopilotSeries {
+  name: string;
+  team?: "home" | "away" | null;
+  /**
+   * @maxItems 24
+   */
+  values: number[];
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "CopilotChart".
+ */
+export interface CopilotChart {
+  kind: "bar" | "line" | "donut";
+  title: string;
+  unit?: string | null;
+  /**
+   * @maxItems 24
+   */
+  labels: string[];
+  /**
+   * @maxItems 4
+   */
+  series: CopilotSeries[];
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
  * via the `definition` "CopilotAnswer".
  */
 export interface CopilotAnswer {
   id: string;
   question: string;
-  intent: "match" | "prediction" | "tactics" | "player" | "head_to_head" | "play" | "history" | "web" | "help";
+  intent:
+    | "match"
+    | "prediction"
+    | "tactics"
+    | "player"
+    | "head_to_head"
+    | "play"
+    | "history"
+    | "explanation"
+    | "pitch"
+    | "web"
+    | "help";
   answer: string;
   /**
    * @maxItems 3
    */
   cards: CopilotCard[];
+  /**
+   * @maxItems 3
+   */
+  charts?: CopilotChart[];
   /**
    * @maxItems 5
    */
@@ -1292,6 +1336,16 @@ export interface CopilotAnswer {
   source: "agent" | "scripted";
   searched: boolean;
   problem?: string | null;
+  agent?:
+    | "event_interpreter"
+    | "tactical_analyst"
+    | "prediction"
+    | "explainability"
+    | "visualization"
+    | "player_tracking"
+    | "highlights"
+    | null;
+  sample?: boolean;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema

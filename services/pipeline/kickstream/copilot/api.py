@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict, Field
 
 from kickstream.contracts import CopilotAnswer, CopilotInfo
+from kickstream.copilot.mentions import AgentId
 from kickstream.copilot.service import CopilotService
 from kickstream.domain.types import Mode
 
@@ -15,6 +16,8 @@ class Ask(BaseModel):
     match_id: str | None = Field(default=None, max_length=100)
     mode: Mode = "fan"
     web: bool = False
+    # The agent the question is put to. One tagged in the question with an @ is used when this is unset.
+    agent: AgentId | None = None
 
 
 def build_copilot_router(*, service: CopilotService) -> APIRouter:
@@ -26,6 +29,8 @@ def build_copilot_router(*, service: CopilotService) -> APIRouter:
 
     @router.post("/ask")
     async def post_ask(body: Ask) -> CopilotAnswer:
-        return await service.ask(body.question, match_id=body.match_id, mode=body.mode, web=body.web)
+        return await service.ask(
+            body.question, match_id=body.match_id, mode=body.mode, web=body.web, agent=body.agent
+        )
 
     return router

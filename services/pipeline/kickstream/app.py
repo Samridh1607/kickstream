@@ -454,6 +454,7 @@ def build_pipeline(
         match_exists=controller.exists,
         search=search if search is not None else _search(settings),
         writer=copilot_writer,
+        agents=agents.catalog(model=False).agents,
         now=now,
     )
     # Every stage subscribes in its constructor, so nothing published after this point is missed.

@@ -4,14 +4,15 @@ import asyncio
 import logging
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 
-from kickstream.contracts import CopilotAnswer, CopilotInfo, CopilotSource
+from kickstream.contracts import AgentSpec, CopilotAnswer, CopilotInfo, CopilotSource
 from kickstream.copilot import answer as answering
+from kickstream.copilot.mentions import AgentId, Mentions
 from kickstream.copilot.view import MatchArchive, MatchView, read_match, summarize
 from kickstream.domain.errors import Refusal
 from kickstream.domain.types import Mode
-from kickstream.ports.copilot import CopilotWriter, SearchFailure, SearchResult, WebSearch
+from kickstream.ports.copilot import CopilotWriter, SearchFailure, SearchResult, Speaker, WebSearch
 from kickstream.ports.store import MatchStore
 
 log = logging.getLogger(__name__)
@@ -35,10 +36,12 @@ class CopilotService:
         match_exists: Callable[[str], bool],
         search: WebSearch | None = None,
         writer: CopilotWriter | None = None,
+        agents: Iterable[AgentSpec] = (),
         max_model_calls: int = 40,
         now: Callable[[], float] = time.time,
     ) -> None:
         self._store = store
+        self._mentions = Mentions(agents)
         self._archive = archive
         self._current_match = current_match
         self._match_exists = match_exists
@@ -76,13 +79,26 @@ class CopilotService:
         return view
 
     async def ask(
-        self, question: str, *, match_id: str | None = None, mode: Mode = "fan", web: bool = False
+        self,
+        question: str,
+        *,
+        match_id: str | None = None,
+        mode: Mode = "fan",
+        web: bool = False,
+        agent: AgentId | None = None,
     ) -> CopilotAnswer:
-        question = " ".join(question.split())
-        if not 1 <= len(question) <= MAX_QUESTION:
+        too_long = len(" ".join(question.split())) > MAX_QUESTION
+        tagged, question = self._mentions.find(question)
+        agent = agent or tagged
+        if agent is not None and not question:
+            question = f"What has the {self._mentions.name(agent)} found?"
+        if too_long or not question:
             raise CopilotError(422, "question", f"A question must be 1 to {MAX_QUESTION} characters.")
         view = self._view(match_id, mode)
-        draft = answering.draft(question, view, self._archive)
+        if agent is None:
+            draft = answering.draft(question, view, self._archive)
+        else:
+            draft = answering.agent_draft(agent, question, view, self._archive)
 
         results: list[SearchResult] = []
         problem = None
@@ -114,9 +130,11 @@ class CopilotService:
         asked = self._model_calls.get(key, 0)
         if self._writer is not None and (draft.facts or results) and asked < self._max_model_calls:
             self._model_calls[key] = asked + 1
+            spec = self._mentions.agents.get(agent) if agent else None
+            speaker = Speaker(spec.name, spec.description) if spec else None
             try:
                 written = await asyncio.wait_for(
-                    self._writer.write(question, draft.facts, results), WRITER_TIMEOUT_S
+                    self._writer.write(question, draft.facts, results, speaker), WRITER_TIMEOUT_S
                 )
                 if written.strip():
                     text, source = written.strip(), "agent"
@@ -129,9 +147,11 @@ class CopilotService:
             intent=intent,
             answer=text,
             cards=draft.cards,
+            charts=draft.charts,
             sources=[CopilotSource(title=r.title, url=r.url, snippet=r.snippet) for r in results],
             followups=list(answering.FOLLOWUPS[intent]),
             source=source,
             searched=searched,
             problem=problem,
+            agent=agent,
         )

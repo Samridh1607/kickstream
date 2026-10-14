@@ -1010,20 +1010,43 @@
         "snippet": { "type": "string" }
       }
     },
+    "CopilotSeries": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "values"],
+      "properties": {
+        "name": { "type": "string" },
+        "team": { "enum": ["home", "away", null], "default": null },
+        "values": { "type": "array", "items": { "type": "number" }, "maxItems": 24 }
+      }
+    },
+    "CopilotChart": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "title", "labels", "series"],
+      "properties": {
+        "kind": { "enum": ["bar", "line", "donut"] },
+        "title": { "type": "string" },
+        "unit": { "type": ["string", "null"], "default": null },
+        "labels": { "type": "array", "items": { "type": "string" }, "maxItems": 24 },
+        "series": { "type": "array", "items": { "$ref": "#/$defs/CopilotSeries" }, "maxItems": 4 }
+      }
+    },
     "CopilotAnswer": {
       "type": "object", "additionalProperties": false,
       "required": ["id", "question", "intent", "answer", "cards", "sources", "followups", "source", "searched"],
       "properties": {
         "id": { "type": "string" },
         "question": { "type": "string" },
-        "intent": { "enum": ["match", "prediction", "tactics", "player", "head_to_head", "play", "history", "web", "help"] },
+        "intent": { "enum": ["match", "prediction", "tactics", "player", "head_to_head", "play", "history", "explanation", "pitch", "web", "help"] },
         "answer": { "type": "string", "minLength": 1 },
         "cards": { "type": "array", "items": { "$ref": "#/$defs/CopilotCard" }, "maxItems": 3 },
+        "charts": { "type": "array", "items": { "$ref": "#/$defs/CopilotChart" }, "maxItems": 3, "default": [] },
         "sources": { "type": "array", "items": { "$ref": "#/$defs/CopilotSource" }, "maxItems": 5 },
         "followups": { "type": "array", "items": { "type": "string" }, "maxItems": 4 },
         "source": { "enum": ["agent", "scripted"] },
         "searched": { "type": "boolean" },
-        "problem": { "type": ["string", "null"], "default": null }
+        "problem": { "type": ["string", "null"], "default": null },
+        "agent": { "enum": ["event_interpreter", "tactical_analyst", "prediction", "explainability", "visualization", "player_tracking", "highlights", null], "default": null },
+        "sample": { "type": "boolean", "default": false }
       }
     },
     "CopilotInfo": {

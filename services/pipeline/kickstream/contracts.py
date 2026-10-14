@@ -1039,20 +1039,45 @@ class CopilotSource(BaseModel):
     snippet: str
 
 
+class CopilotSeries(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    name: str
+    team: Literal['home', 'away'] | None = None
+    values: list[float] = Field(..., max_length=24)
+
+
+class CopilotChart(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    kind: Literal['bar', 'line', 'donut']
+    title: str
+    unit: str | None = None
+    labels: list[str] = Field(..., max_length=24)
+    series: list[CopilotSeries] = Field(..., max_length=4)
+
+
 class CopilotAnswer(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
     id: str
     question: str
-    intent: Literal['match', 'prediction', 'tactics', 'player', 'head_to_head', 'play', 'history', 'web', 'help']
+    intent: Literal['match', 'prediction', 'tactics', 'player', 'head_to_head', 'play', 'history', 'explanation', 'pitch', 'web', 'help']
     answer: constr(min_length=1)
     cards: list[CopilotCard] = Field(..., max_length=3)
+    charts: list[CopilotChart] | None = Field([], max_length=3, validate_default=True)
     sources: list[CopilotSource] = Field(..., max_length=5)
     followups: list[str] = Field(..., max_length=4)
     source: Literal['agent', 'scripted']
     searched: bool
     problem: str | None = None
+    agent: Literal['event_interpreter', 'tactical_analyst', 'prediction', 'explainability', 'visualization', 'player_tracking', 'highlights'] | None = (
+        None
+    )
+    sample: bool | None = False
 
 
 class CopilotInfo(BaseModel):

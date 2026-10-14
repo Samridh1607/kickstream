@@ -26,9 +26,19 @@ class WriterFailure(Exception):
     """A writer could not produce a usable answer."""
 
 
+@dataclass(frozen=True)
+class Speaker:
+    """The agent a question was put to, which the answer is written as."""
+
+    name: str
+    description: str
+
+
 class CopilotWriter(Protocol):
     """Words an answer from the facts found for a question. It may use nothing else."""
 
     model: str
 
-    async def write(self, question: str, facts: list[str], sources: list[SearchResult]) -> str: ...
+    async def write(
+        self, question: str, facts: list[str], sources: list[SearchResult], speaker: Speaker | None = None
+    ) -> str: ...
