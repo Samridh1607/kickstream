@@ -46,6 +46,16 @@ def test_a_second_corrupt_file_replaces_the_one_set_aside_earlier(tmp_path):
     assert (tmp_path / "studio.json.corrupt").read_text(encoding="utf-8") == "second"
 
 
+def test_a_studio_saved_before_matches_could_be_queued_still_loads(tmp_path):
+    path = tmp_path / "studio.json"
+    raw = default_studio().model_dump()
+    del raw["settings"]["queued_match"], raw["problem"]
+    path.write_text(json.dumps(raw), encoding="utf-8")
+    loaded = JsonStudioStore(path, sanitize=rules.sanitize_raw).load()
+    assert loaded == default_studio()
+    assert loaded.settings.queued_match is None and loaded.problem is None
+
+
 def test_the_sanitizer_runs_before_validation(tmp_path):
     path = tmp_path / "studio.json"
     raw = default_studio().model_dump()

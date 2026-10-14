@@ -122,6 +122,12 @@ export function StudioPage({ broadcastId, eventSource, retryMs, pollMs }: Studio
   // The scene as just edited, shown until the server's answer arrives.
   const [pending, setPending] = useState<Scene | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  // A problem the server reported stays in the document until it is resolved; dismissing hides it here only.
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const studioProblem = studio?.problem ?? null;
+  useEffect(() => {
+    if (studioProblem === null) setDismissed(null);
+  }, [studioProblem]);
   const [busy, setBusy] = useState(false);
   const acting = useRef(false);
   const [topBar, topBarHeight] = useHeight();
@@ -275,11 +281,16 @@ export function StudioPage({ broadcastId, eventSource, retryMs, pollMs }: Studio
   // People are invited into a broadcast, so only a broadcast's studio has the Guests tool.
   const tools = TOOLS.filter((name) => name !== "Guests" || broadcastId !== undefined);
   const reserve = topBarHeight + stripHeight + AROUND + (editing ? EDIT_CHROME : backstageHeight);
+  const shownProblem = problem ?? (studioProblem !== dismissed ? studioProblem : null);
+  const dismiss = () => {
+    setProblem(null);
+    setDismissed(studioProblem);
+  };
 
   const toolPanel = (tool: ToolName | null): ReactNode => {
     switch (tool) {
       case "Match":
-        return <MatchTool onStarted={() => setProblem(null)} />;
+        return <MatchTool studio={studio} onRun={run} onStarted={() => setProblem(null)} />;
       case "Banners":
         return (
           <BannersTool studio={studio}
@@ -325,11 +336,11 @@ export function StudioPage({ broadcastId, eventSource, retryMs, pollMs }: Studio
           extras={<><AskCopilot /><ThemeToggle className={styles.onDark} /></>} />
       </div>
       <section aria-label="Studio errors" className={styles.errors}>
-        {problem && (
+        {shownProblem && (
           <MessageBar intent="error" className={styles.toast}>
-            <MessageBarBody>{problem}</MessageBarBody>
+            <MessageBarBody>{shownProblem}</MessageBarBody>
             <MessageBarActions
-              containerAction={<Button appearance="transparent" aria-label="Dismiss" icon={<DismissRegular />} onClick={() => setProblem(null)} />} />
+              containerAction={<Button appearance="transparent" aria-label="Dismiss" icon={<DismissRegular />} onClick={dismiss} />} />
           </MessageBar>
         )}
       </section>

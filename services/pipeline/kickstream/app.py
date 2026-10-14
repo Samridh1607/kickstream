@@ -47,6 +47,7 @@ from kickstream.analytics.stage import AnalyticsStage
 from kickstream.broadcasts.api import build_broadcasts_router
 from kickstream.broadcasts.service import BroadcastService
 from kickstream.broadcasts.stage import BroadcastStage
+from kickstream.contracts import QueuedMatch
 from kickstream.control import MatchController
 from kickstream.copilot.api import build_copilot_router
 from kickstream.copilot.service import CopilotService
@@ -451,11 +452,17 @@ def build_pipeline(
         live=live,
         live_poll_s=settings.live_poll_s,
     )
+
+    async def start_studio_match(chosen: QueuedMatch | None) -> str:
+        if chosen is None:
+            return await controller.start(DEMO_SEED, STUDIO_MATCH_SPEED)
+        return await controller.start(DEMO_SEED, chosen.speed, source=chosen.source, ref=chosen.ref)
+
     studio = StudioService(
         JsonStudioStore(settings.data_dir / "studio.json", sanitize=sanitize_raw),
         DirImageStore(settings.data_dir / "images"),
         now=now,
-        start_match=lambda: controller.start(DEMO_SEED, STUDIO_MATCH_SPEED),
+        start_match=start_studio_match,
         find_moment=lambda match_id, moment_id: find_moment(store, match_id, moment_id),
     )
     output = OutputService(

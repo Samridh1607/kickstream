@@ -288,15 +288,14 @@ class Scene(BaseModel):
     elements: list[SceneElement] = Field(..., max_length=40)
 
 
-class StudioSettings(BaseModel):
+class QueuedMatch(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    mode: Literal['fan', 'analyst']
-    language: Literal['en', 'es', 'hi']
-    auto_banner: bool
-    auto_start: bool
-    auto_half_time_break: bool
+    source: Literal['simulated', 'statsbomb', 'api_football', 'openligadb']
+    ref: constr(pattern=r'^[0-9]{1,10}(/[0-9]{1,10}){0,2}$') | None = None
+    speed: confloat(ge=1.0, le=600.0)
+    title: constr(max_length=120) | None = None
 
 
 class Banner(BaseModel):
@@ -340,24 +339,6 @@ class Replay(BaseModel):
     minute: int
     started_at: float
     duration_s: float
-
-
-class Studio(BaseModel):
-    model_config = ConfigDict(
-        extra='forbid',
-    )
-    revision: int
-    server_time: float
-    scenes: list[Scene] = Field(..., max_length=20, min_length=1)
-    active_scene_id: str
-    previous_scene_id: str | None = None
-    templates: list[Scene] = Field(..., max_length=20)
-    settings: StudioSettings
-    banner: Banner | None = None
-    banner_queue: list[Banner] = Field(..., max_length=10)
-    ticker: Ticker
-    countdown: Countdown | None = None
-    replay: Replay | None = None
 
 
 class Destination(BaseModel):
@@ -1174,3 +1155,34 @@ class Fixture(BaseModel):
     minute: int | None = None
     score_home: int | None = None
     score_away: int | None = None
+
+
+class StudioSettings(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    mode: Literal['fan', 'analyst']
+    language: Literal['en', 'es', 'hi']
+    auto_banner: bool
+    auto_start: bool
+    auto_half_time_break: bool
+    queued_match: QueuedMatch | None = None
+
+
+class Studio(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    revision: int
+    server_time: float
+    scenes: list[Scene] = Field(..., max_length=20, min_length=1)
+    active_scene_id: str
+    previous_scene_id: str | None = None
+    templates: list[Scene] = Field(..., max_length=20)
+    settings: StudioSettings
+    banner: Banner | None = None
+    banner_queue: list[Banner] = Field(..., max_length=10)
+    ticker: Ticker
+    countdown: Countdown | None = None
+    replay: Replay | None = None
+    problem: str | None = None

@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import type { People, Sources } from "../../contracts";
+import type { People, QueuedMatch, Sources, Studio } from "../../contracts";
 import { renderUi } from "../../test/render";
 import { invitation, output, peopleDoc, studio } from "../../test/fixtures";
 import { SETUP } from "../../people/PeoplePanel";
@@ -109,23 +109,37 @@ test("with no calling service the guests tool says how to set one up", () => {
 
 const SIMULATED = { id: "simulated", name: "Simulated", kind: "simulated", detail: "full", available: true } as const;
 
-/** Answers /api/sources with each of `answers` in turn, staying on the last, and stop with 204. */
+/**
+ * Answers /api/sources with each of `answers` in turn, staying on the last, stop with 204, a start with a new match,
+ * and a studio change with the studio.
+ */
 function serveSources(...answers: Sources[]) {
   const sent: Sent[] = [];
   let read = 0;
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
-    sent.push({ url, method: init?.method ?? "GET", body: undefined });
+    sent.push({ url, method: init?.method ?? "GET", body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined });
     if (url === "/api/matches/stop") return new Response(null, { status: 204 });
+    if (url === "/api/matches") return new Response(JSON.stringify({ match_id: "m-2" }), { status: 201 });
+    if (url.startsWith("/api/studio")) return new Response(JSON.stringify(studio()), { status: 200 });
     return new Response(JSON.stringify(answers[Math.min(read++, answers.length - 1)]), { status: 200 });
   }));
   return sent;
 }
 
+/** Runs each studio change as the studio page does. */
+const studioRuns = () => vi.fn(async (request: () => Promise<Studio>) => {
+  await request();
+  return true;
+});
+
+const queuing = (sent: Sent[]) => sent.filter((call) => call.url === "/api/studio/queued-match");
+const withQueued = (queued_match: QueuedMatch | null) => studio({ settings: { ...studio().settings, queued_match } });
+
 test("the Match tool shows the running match, its problem, and stops it", async () => {
   const problem = "API-Football could not be reached. Kickstream will keep trying.";
   const running = { match_id: "m-3", source: "api_football", ref: "1", title: "Arsenal vs Chelsea", problem } as const;
   const sent = serveSources({ sources: [SIMULATED], running }, { sources: [SIMULATED], running: null });
-  renderUi(<MatchTool onStarted={vi.fn()} />);
+  renderUi(<MatchTool studio={studio()} onRun={studioRuns()} onStarted={vi.fn()} />);
   const playing = within(await screen.findByRole("region", { name: "Now playing" }));
   expect(playing.getByText("Arsenal vs Chelsea")).toBeTruthy();
   expect(playing.getByText("API-Football live")).toBeTruthy();
@@ -140,8 +154,60 @@ test("the Match tool shows the running match, its problem, and stops it", async 
 
 test("the Match tool reads the sources again every so often", async () => {
   const sent = serveSources({ sources: [SIMULATED], running: null });
-  renderUi(<MatchTool onStarted={vi.fn()} pollMs={10} />);
+  renderUi(<MatchTool studio={studio()} onRun={studioRuns()} onStarted={vi.fn()} pollMs={10} />);
   await waitFor(() => expect(sent.filter((call) => call.url === "/api/sources").length).toBeGreaterThanOrEqual(3));
+});
+
+test("the Match tool shows the match the countdown will start, and clears it", async () => {
+  const sent = serveSources({ sources: [SIMULATED], running: null });
+  const onRun = studioRuns();
+  const queued = { source: "statsbomb", ref: "43/3/8658", speed: 10, title: "France vs Croatia" } as const;
+  renderUi(<MatchTool studio={withQueued(queued)} onRun={onRun} onStarted={vi.fn()} />);
+  const next = within(screen.getByRole("region", { name: "Next match" }));
+  expect(next.getByText("Starts when the countdown ends")).toBeTruthy();
+  expect(next.getByText("France vs Croatia")).toBeTruthy();
+  expect(next.getByText("StatsBomb replay · 10×")).toBeTruthy();
+
+  fireEvent.click(next.getByRole("button", { name: "Clear" }));
+  await waitFor(() => expect(onRun).toHaveBeenCalled());
+  expect(queuing(sent)).toEqual([{ url: "/api/studio/queued-match", method: "PUT", body: null }]);
+});
+
+test("with nothing chosen the Match tool shows no next match", async () => {
+  serveSources({ sources: [SIMULATED], running: null });
+  renderUi(<MatchTool studio={studio()} onRun={studioRuns()} onStarted={vi.fn()} />);
+  await screen.findByRole("radio", { name: "Simulated match" });
+  expect(screen.queryByRole("region", { name: "Next match" })).toBeNull();
+});
+
+test("choosing in the picker keeps the choice for the countdown without starting it", async () => {
+  const sent = serveSources({ sources: [SIMULATED], running: null });
+  renderUi(<MatchTool studio={studio()} onRun={studioRuns()} onStarted={vi.fn()} />);
+  await screen.findByRole("radio", { name: "Simulated match" });
+  expect(queuing(sent)).toEqual([]);
+  fireEvent.change(screen.getByLabelText("Speed"), { target: { value: "10" } });
+  await waitFor(() => expect(queuing(sent)).toEqual([
+    { url: "/api/studio/queued-match", method: "PUT", body: { source: "simulated", ref: null, speed: 10, title: null } },
+  ]));
+  expect(sent.filter((call) => call.url === "/api/matches")).toEqual([]);
+});
+
+test("a match started from the tool is kept for the countdown too, unless it already is", async () => {
+  const sent = serveSources({ sources: [SIMULATED], running: null });
+  const onStarted = vi.fn();
+  const view = renderUi(<MatchTool studio={studio()} onRun={studioRuns()} onStarted={onStarted} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Start match" }));
+  await waitFor(() => expect(onStarted).toHaveBeenCalledWith("m-2"));
+  const simulated = { source: "simulated", ref: null, speed: 30, title: null } as const;
+  await waitFor(() => expect(queuing(sent)).toEqual([{ url: "/api/studio/queued-match", method: "PUT", body: simulated }]));
+
+  view.unmount();
+  sent.length = 0;
+  renderUi(<MatchTool studio={withQueued(simulated)} onRun={studioRuns()} onStarted={onStarted} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Start match" }));
+  await waitFor(() => expect(sent.filter((call) => call.url === "/api/matches")).toHaveLength(1));
+  await waitFor(() => expect(onStarted).toHaveBeenCalledTimes(2));
+  expect(queuing(sent)).toEqual([]);
 });
 
 test("the stream tool shows the output controls with one Stream region", () => {

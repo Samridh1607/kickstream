@@ -297,7 +297,18 @@
         "language": { "enum": ["en", "es", "hi"] },
         "auto_banner": { "type": "boolean" },
         "auto_start": { "type": "boolean" },
-        "auto_half_time_break": { "type": "boolean" }
+        "auto_half_time_break": { "type": "boolean" },
+        "queued_match": { "anyOf": [{ "$ref": "#/$defs/QueuedMatch" }, { "type": "null" }], "default": null }
+      }
+    },
+    "QueuedMatch": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "speed"],
+      "properties": {
+        "source": { "enum": ["simulated", "statsbomb", "api_football", "openligadb"] },
+        "ref": { "type": ["string", "null"], "pattern": "^[0-9]{1,10}(/[0-9]{1,10}){0,2}$", "default": null },
+        "speed": { "type": "number", "minimum": 1, "maximum": 600 },
+        "title": { "type": ["string", "null"], "maxLength": 120, "default": null }
       }
     },
     "Banner": {
@@ -358,7 +369,8 @@
         "banner_queue": { "type": "array", "items": { "$ref": "#/$defs/Banner" }, "maxItems": 10 },
         "ticker": { "$ref": "#/$defs/Ticker" },
         "countdown": { "anyOf": [{ "$ref": "#/$defs/Countdown" }, { "type": "null" }], "default": null },
-        "replay": { "anyOf": [{ "$ref": "#/$defs/Replay" }, { "type": "null" }], "default": null }
+        "replay": { "anyOf": [{ "$ref": "#/$defs/Replay" }, { "type": "null" }], "default": null },
+        "problem": { "type": ["string", "null"], "default": null }
       }
     },
     "Destination": {

@@ -1,10 +1,16 @@
 import time
+import urllib.error
 
 import pytest
 from fastapi.testclient import TestClient
 
 from kickstream.adapters.clocks import InstantClock
+from kickstream.adapters.statsbomb import StatsBombOpenData
 from kickstream.app import Settings, create_app
+from kickstream.domain.teams import HOME
+from tests.test_statsbomb import BASE as STATSBOMB_BASE
+from tests.test_statsbomb import FIX as STATSBOMB_FIX
+from tests.test_statsbomb import FixtureGet
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
 
@@ -17,9 +23,11 @@ class FakeNow:
         return self.at
 
 
-def make_app(tmp_path, now):
+def make_app(tmp_path, now, **extra):
     settings = Settings(None, None, None, cache_dir=tmp_path / "cache", data_dir=tmp_path / "data")
-    return create_app(settings, clock_factory=lambda speed: InstantClock(), match_prefix="m", now=now)
+    return create_app(
+        settings, clock_factory=lambda speed: InstantClock(), match_prefix="m", now=now, **extra
+    )
 
 
 @pytest.fixture
@@ -161,7 +169,10 @@ def test_templates_settings_and_ticker_are_saved(client):
         "auto_start": False,
         "auto_half_time_break": True,
     }
-    assert client.put("/api/studio/settings", json=settings).json()["settings"] == settings
+    assert client.put("/api/studio/settings", json=settings).json()["settings"] == {
+        **settings,
+        "queued_match": None,
+    }
     ticker = {
         "enabled": True,
         "speed": 200,
@@ -215,6 +226,97 @@ def test_when_the_start_countdown_runs_out_a_match_starts_and_the_program_goes_l
     assert client.get("/api/matches/current").json() == {"match_id": "m-1"}
     doc = client.get("/api/studio").json()
     assert doc["countdown"] is None and doc["active_scene_id"] == scene(doc, "Live match")["id"]
+    assert client.get("/api/teams").json()["home"]["name"] == HOME.name
+
+
+FINAL = {"source": "statsbomb", "ref": "43/3/8658", "speed": 600.0, "title": "France vs Croatia"}
+
+
+def statsbomb(tmp_path, get=None):
+    return {
+        "statsbomb": StatsBombOpenData(
+            tmp_path / "statsbomb", base_url=STATSBOMB_BASE, get=get or FixtureGet(STATSBOMB_FIX)
+        )
+    }
+
+
+def wait_for(check, what):
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        found = check()
+        if found:
+            return found
+        time.sleep(0.05)
+    raise AssertionError(f"{what} did not happen")
+
+
+def run_out_the_start_countdown(client, now):
+    doc = client.post("/api/studio/countdown", json={"kind": "start", "starts_at": now.at + 600}).json()
+    now.at += 601
+    client.put("/api/studio/ticker", json={**doc["ticker"], "speed": 150})  # wakes the deadline loop
+    wait_for(lambda: client.get("/api/matches/current").status_code == 200, "the match start")
+
+
+def test_the_match_chosen_in_the_match_tool_is_kept_until_cleared(client):
+    doc = client.put("/api/studio/queued-match", json=FINAL).json()
+    assert doc["settings"]["queued_match"] == FINAL
+    simulated = {"source": "simulated", "speed": 30}
+    doc = client.put("/api/studio/queued-match", json=simulated).json()
+    assert doc["settings"]["queued_match"] == {**simulated, "ref": None, "title": None}
+    cleared = client.put(
+        "/api/studio/queued-match", content="null", headers={"content-type": "application/json"}
+    )
+    assert cleared.json()["settings"]["queued_match"] is None
+
+
+@pytest.mark.parametrize(
+    "body, name",
+    [
+        ({"source": "statsbomb", "ref": "8658", "speed": 10}, "ref"),
+        ({"source": "statsbomb", "speed": 10}, "ref"),
+        ({"source": "simulated", "ref": "1", "speed": 10}, "ref"),
+        ({"source": "api_football", "ref": "1/2", "speed": 1}, "ref"),
+        ({"source": "statsbomb", "ref": "43/3/8658", "speed": 0}, "speed"),
+        ({"source": "statsbomb", "ref": "43/3/8658", "speed": 601}, "speed"),
+        ({"source": "sportapi", "ref": "1", "speed": 1}, "source"),
+        ({"source": "statsbomb", "ref": "43/3/8658", "speed": 1, "seed": 4}, "seed"),
+    ],
+    ids=str,
+)
+def test_a_queued_match_that_could_not_be_started_is_refused(client, body, name):
+    response = client.put("/api/studio/queued-match", json=body)
+    assert (response.status_code, field(response)) == (422, name), response.text
+    assert client.get("/api/studio").json()["revision"] == 0
+
+
+def test_saving_the_settings_without_the_queued_match_keeps_it(client):
+    doc = client.put("/api/studio/queued-match", json=FINAL).json()
+    settings = {key: value for key, value in doc["settings"].items() if key != "queued_match"}
+    doc = client.put("/api/studio/settings", json={**settings, "language": "es"}).json()
+    assert doc["settings"]["queued_match"] == FINAL and doc["settings"]["language"] == "es"
+
+
+def test_when_the_start_countdown_runs_out_the_chosen_match_starts(tmp_path, now):
+    with TestClient(make_app(tmp_path, now, replays=statsbomb(tmp_path))) as client:
+        client.put("/api/studio/queued-match", json=FINAL)
+        run_out_the_start_countdown(client, now)
+        assert client.get("/api/teams").json()["home"]["name"] == "France"
+        doc = client.get("/api/studio").json()
+        assert doc["problem"] is None and doc["active_scene_id"] == scene(doc, "Live match")["id"]
+
+
+def test_a_chosen_match_that_cannot_start_gives_way_to_the_simulated_one(tmp_path, now):
+    def unreachable(url, headers):
+        raise urllib.error.URLError("no network")
+
+    with TestClient(make_app(tmp_path, now, replays=statsbomb(tmp_path, unreachable))) as client:
+        client.put("/api/studio/queued-match", json=FINAL)
+        run_out_the_start_countdown(client, now)
+        assert client.get("/api/matches/current").json() == {"match_id": "m-1"}
+        assert client.get("/api/teams").json()["home"]["name"] == HOME.name
+        problem = wait_for(lambda: client.get("/api/studio").json()["problem"], "the problem report")
+        assert "simulated match" in problem and "StatsBomb" in problem
+        assert client.get("/api/studio").json()["settings"]["queued_match"] == FINAL
 
 
 def _play_a_match(client):

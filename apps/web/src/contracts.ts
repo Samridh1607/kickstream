@@ -370,6 +370,17 @@ export interface StudioSettings {
   auto_banner: boolean;
   auto_start: boolean;
   auto_half_time_break: boolean;
+  queued_match?: QueuedMatch | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "QueuedMatch".
+ */
+export interface QueuedMatch {
+  source: "simulated" | "statsbomb" | "api_football" | "openligadb";
+  ref?: string | null;
+  speed: number;
+  title?: string | null;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
@@ -444,6 +455,7 @@ export interface Studio {
   ticker: Ticker;
   countdown?: Countdown | null;
   replay?: Replay | null;
+  problem?: string | null;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema

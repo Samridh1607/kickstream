@@ -7,8 +7,9 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 
 from pydantic import ValidationError
 
-from kickstream.contracts import KeyMoment, Studio, StudioSettings
+from kickstream.contracts import KeyMoment, QueuedMatch, Studio, StudioSettings
 from kickstream.ports.image_store import ImageStore, ImageStoreFull
+from kickstream.ports.match_source import SourceFailure
 from kickstream.ports.studio_store import StudioStore
 from kickstream.studio import rules
 from kickstream.studio.rules import StudioError
@@ -24,7 +25,7 @@ class StudioService:
         images: ImageStore,
         *,
         now: Callable[[], float] = time.time,
-        start_match: Callable[[], Awaitable[str]],
+        start_match: Callable[[QueuedMatch | None], Awaitable[str]],
         find_moment: Callable[[str, str], KeyMoment | None],
     ) -> None:
         self._store = store
@@ -137,10 +138,26 @@ class StudioService:
             self._commit(settled)
         for action in actions:
             if action == "start_match":
-                try:
-                    await self._start_match()
-                except Exception:  # noqa: BLE001 - the program has already cut to live; report and carry on
-                    log.exception("the match could not be started at the end of the countdown")
+                await self._start_chosen_match()
+
+    async def _start_chosen_match(self) -> None:
+        chosen = self._doc.settings.queued_match
+        problem = None
+        try:
+            try:
+                await self._start_match(chosen)
+            except SourceFailure as exc:
+                if chosen is None:
+                    raise
+                log.warning("the chosen match could not start; starting the simulated one (%s)", exc.message)
+                problem = (
+                    f"The chosen match could not start, so the simulated match is playing. {exc.message}"
+                )
+                await self._start_match(None)
+        except Exception:  # noqa: BLE001 - the program has already cut to live; report and carry on
+            log.exception("the match could not be started at the end of the countdown")
+            return
+        await self.apply(lambda doc: rules.set_problem(doc, problem))
 
     async def run(self) -> None:
         while True:

@@ -364,12 +364,39 @@ test("a match started from the Match tool clears an earlier refusal", async () =
   server.refuse = { status: 409, field: "scene", msg: "That scene is busy." };
   fireEvent.click(screen.getByRole("button", { name: "Switch to Break" }));
   expect(await region("Studio errors").findByText("That scene is busy.")).toBeTruthy();
+  server.refuse = null;
   openTool("Match");
   const tool = region("Match tool");
   fireEvent.click(await tool.findByRole("radio", { name: "Simulated match" }));
   fireEvent.click(tool.getByRole("button", { name: "Start match" }));
   await waitFor(() => expect(server.others.at(-1)).toEqual({ url: "/api/matches", method: "POST", body: { source: "simulated", speed: 30 } }));
   await waitFor(() => expect(region("Studio errors").queryByText("That scene is busy.")).toBeNull());
+  await waitFor(() => expect(last(server)).toEqual({
+    url: "/api/studio/queued-match", method: "PUT", body: { source: "simulated", ref: null, speed: 30, title: null },
+  }));
+});
+
+test("the Match tool shows the match the countdown will start, from the studio document", async () => {
+  const server = await opened(studio({ settings: { ...studio().settings, queued_match: { source: "statsbomb", ref: "43/3/8658", speed: 1, title: "France vs Croatia" } } }));
+  openTool("Match");
+  const next = within(await region("Match tool").findByRole("region", { name: "Next match" }));
+  expect(next.getByText("France vs Croatia")).toBeTruthy();
+  fireEvent.click(next.getByRole("button", { name: "Clear" }));
+  await waitFor(() => expect(last(server)).toEqual({ url: "/api/studio/queued-match", method: "PUT", body: null }));
+});
+
+test("a problem the studio met by itself is shown with the studio errors and can be dismissed", async () => {
+  const problem = "The chosen match could not start, so the simulated match is playing. StatsBomb could not be reached.";
+  await opened(studio({ problem }));
+  const errors = region("Studio errors");
+  expect(errors.getByText(problem)).toBeTruthy();
+  fireEvent.click(errors.getByRole("button", { name: "Dismiss" }));
+  expect(errors.queryByText(problem)).toBeNull();
+  act(() => stream("/api/studio/stream").emitRaw(JSON.stringify(studio({ revision: 5, problem }))));
+  expect(errors.queryByText(problem)).toBeNull();
+  const later = "The chosen match could not start, so the simulated match is playing. OpenLigaDB could not be reached.";
+  act(() => stream("/api/studio/stream").emitRaw(JSON.stringify(studio({ revision: 6, problem: later }))));
+  expect(errors.getByText(later)).toBeTruthy();
 });
 
 test("a document pushed by another control page replaces what is shown", async () => {

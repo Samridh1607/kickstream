@@ -5,7 +5,15 @@ from fastapi import APIRouter, HTTPException, Request, Response, WebSocket
 from pydantic import BaseModel, ConfigDict, Field
 from sse_starlette.sse import EventSourceResponse
 
-from kickstream.contracts import KeyMoment, MatchEvent, SceneElement, Studio, StudioSettings, Ticker
+from kickstream.contracts import (
+    KeyMoment,
+    MatchEvent,
+    QueuedMatch,
+    SceneElement,
+    Studio,
+    StudioSettings,
+    Ticker,
+)
 from kickstream.domain.sockets import pump
 from kickstream.ports.store import MatchStore
 from kickstream.studio import rules
@@ -151,6 +159,10 @@ def build_studio_router(
     @router.put("/api/studio/settings")
     async def put_settings(body: StudioSettings) -> Studio:
         return await service.apply(lambda doc: rules.set_settings(doc, body))
+
+    @router.put("/api/studio/queued-match")
+    async def put_queued_match(body: QueuedMatch | None = None) -> Studio:
+        return await service.apply(lambda doc: rules.set_queued_match(doc, body))
 
     @router.post("/api/studio/banner")
     async def post_banner(body: NewBanner) -> Studio:

@@ -4,6 +4,7 @@ Each rule takes a document and returns a new one; none mutates its argument. Tim
 in, so the rules can be tested without a clock. A broken limit raises `StudioError`.
 """
 
+import re
 import typing
 import uuid
 
@@ -11,6 +12,7 @@ from kickstream.contracts import (
     Banner,
     Countdown,
     KeyMoment,
+    QueuedMatch,
     Replay,
     Scene,
     SceneElement,
@@ -50,6 +52,8 @@ PITCH_CAMERAS = ("auto", "broadcast", "tactical", "attack_home", "attack_away")
 PITCH_VIEW = {"zoom": (1.0, 0.5, 4.0), "turn": (0.0, -75.0, 75.0), "tilt": (0.0, -76.0, 76.0)}
 PITCH_PAN = (0.0, -2000.0, 2000.0)
 ELEMENT_TYPES = frozenset(typing.get_args(SceneElement.model_fields["type"].annotation))
+_REPLAY_REF = re.compile(r"[0-9]+/[0-9]+/[0-9]+")
+_LIVE_REF = re.compile(r"[0-9]+")
 
 
 class StudioError(Refusal):
@@ -249,8 +253,35 @@ def delete_template(doc: Studio, template_id: str) -> Studio:
 # --- settings and ticker -----------------------------------------------------------------------
 
 
+def _check_queued(queued: QueuedMatch | None) -> None:
+    """The same fit between source and ref that starting a match asks for."""
+    if queued is None:
+        return
+    if queued.source == "simulated":
+        if queued.ref is not None:
+            raise StudioError(422, "ref", "A simulated match is not chosen by a ref.")
+        return
+    shape = _REPLAY_REF if queued.source == "statsbomb" else _LIVE_REF
+    if queued.ref is None or shape.fullmatch(queued.ref) is None:
+        raise StudioError(422, "ref", "Choose a match from that source first.")
+
+
 def set_settings(doc: Studio, settings: StudioSettings) -> Studio:
+    # Settings saved without a queued match (an older page, a script) leave the choice as it was.
+    if "queued_match" not in settings.model_fields_set:
+        settings = settings.model_copy(update={"queued_match": doc.settings.queued_match})
+    _check_queued(settings.queued_match)
     return _with(doc, settings=settings)
+
+
+def set_queued_match(doc: Studio, queued: QueuedMatch | None) -> Studio:
+    """The match the start countdown starts when it ends; None starts the simulated demo match."""
+    _check_queued(queued)
+    return _with(doc, settings=doc.settings.model_copy(update={"queued_match": queued}), problem=None)
+
+
+def set_problem(doc: Studio, problem: str | None) -> Studio:
+    return doc if doc.problem == problem else _with(doc, problem=problem)
 
 
 def set_ticker(doc: Studio, ticker: Ticker) -> Studio:

@@ -106,6 +106,36 @@ test("the simulated match starts at 30× unless another speed is chosen, and the
   expect(starts(server)[0].body).toEqual({ source: "simulated", speed: 30 });
 });
 
+test("each choice the streamer makes is reported once, and so is the match started, but not the default", async () => {
+  const server = serve({
+    "/api/sources/statsbomb/competitions": [WORLD_CUP],
+    "/api/sources/statsbomb/competitions/43/3/matches": [FINAL],
+  });
+  const onChoose = vi.fn();
+  const onStarted = vi.fn();
+  renderUi(<MatchPicker onStarted={onStarted} onChoose={onChoose} />);
+  fireEvent.click(await screen.findByRole("radio", { name: "StatsBomb replay" }));
+  const competition = await screen.findByRole("option", { name: "FIFA World Cup · 2018" });
+  fireEvent.change(screen.getByLabelText("Competition"), { target: { value: (competition as HTMLOptionElement).value } });
+  expect(onChoose).not.toHaveBeenCalled();
+
+  fireEvent.click(await screen.findByRole("button", { name: "France vs Croatia" }));
+  const final = { source: "statsbomb", ref: "43/3/8658", speed: 1, title: "France vs Croatia" };
+  await waitFor(() => expect(onChoose).toHaveBeenCalledWith(final));
+  fireEvent.change(screen.getByLabelText("Speed"), { target: { value: "10" } });
+  await waitFor(() => expect(onChoose).toHaveBeenLastCalledWith({ ...final, speed: 10 }));
+  expect(onChoose).toHaveBeenCalledTimes(2);
+
+  fireEvent.click(screen.getByRole("button", { name: "Start match" }));
+  await waitFor(() => expect(onStarted).toHaveBeenCalledWith("m-2"));
+  expect(onChoose).toHaveBeenCalledTimes(3);
+  expect(onChoose).toHaveBeenLastCalledWith({ ...final, speed: 10 });
+  expect(starts(server)).toHaveLength(1);
+
+  fireEvent.click(radio("Simulated match"));
+  await waitFor(() => expect(onChoose).toHaveBeenLastCalledWith({ source: "simulated", ref: null, speed: 30, title: null }));
+});
+
 test("an unavailable source is disabled and says how to make it available", async () => {
   const setup = "Add KICKSTREAM_API_FOOTBALL_KEY to the .env file and restart the pipeline.";
   serve({

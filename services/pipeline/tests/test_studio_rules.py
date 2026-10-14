@@ -1,6 +1,14 @@
 import pytest
 
-from kickstream.contracts import KeyMoment, SceneElement, StatFact, Studio, Ticker
+from kickstream.contracts import (
+    KeyMoment,
+    QueuedMatch,
+    SceneElement,
+    StatFact,
+    Studio,
+    StudioSettings,
+    Ticker,
+)
 from kickstream.studio import rules
 from kickstream.studio.rules import StudioError
 from kickstream.studio.templates import (
@@ -293,6 +301,63 @@ def test_settings_are_replaced_whole():
     doc = default_studio()
     settings = doc.settings.model_copy(update={"mode": "analyst", "language": "hi", "auto_banner": False})
     assert rules.set_settings(doc, settings).settings == settings
+
+
+# --- the match the countdown starts ------------------------------------------------------------
+
+FINAL = QueuedMatch(source="statsbomb", ref="43/3/8658", speed=10, title="France vs Croatia")
+
+
+def test_a_queued_match_is_kept_in_the_settings_and_can_be_cleared():
+    doc = rules.set_queued_match(default_studio(), FINAL)
+    assert doc.settings.queued_match == FINAL
+    assert rules.set_queued_match(doc, None).settings.queued_match is None
+
+
+@pytest.mark.parametrize(
+    "source, ref",
+    [
+        ("simulated", "1"),
+        ("statsbomb", None),
+        ("statsbomb", "8658"),
+        ("api_football", None),
+        ("api_football", "1/2"),
+        ("openligadb", "43/3/8658"),
+    ],
+)
+def test_a_queued_match_must_fit_its_source_as_a_started_one_does(source, ref):
+    with refused(422, "ref"):
+        rules.set_queued_match(default_studio(), QueuedMatch(source=source, ref=ref, speed=1))
+    settings = default_studio().settings.model_copy(
+        update={"queued_match": QueuedMatch(source=source, ref=ref, speed=1)}
+    )
+    with refused(422, "ref"):
+        rules.set_settings(default_studio(), settings)
+
+
+def test_choosing_again_clears_the_problem_with_the_last_choice():
+    doc = default_studio().model_copy(update={"problem": "StatsBomb could not be reached."})
+    assert rules.set_queued_match(doc, FINAL).problem is None
+    assert rules.set_queued_match(doc, None).problem is None
+
+
+def test_settings_that_do_not_mention_the_queued_match_keep_it():
+    doc = rules.set_queued_match(default_studio(), FINAL)
+    settings = StudioSettings(
+        mode="analyst", language="en", auto_banner=True, auto_start=True, auto_half_time_break=False
+    )
+    assert rules.set_settings(doc, settings).settings.queued_match == FINAL
+    cleared = StudioSettings.model_validate({**settings.model_dump(), "queued_match": None})
+    assert rules.set_settings(doc, cleared).settings.queued_match is None
+
+
+def test_a_problem_is_recorded_once_and_cleared():
+    doc = rules.set_problem(default_studio(), "StatsBomb could not be reached.")
+    assert doc.problem == "StatsBomb could not be reached."
+    assert rules.set_problem(doc, "StatsBomb could not be reached.") is doc
+    assert rules.set_problem(doc, None).problem is None
+    fresh = default_studio()
+    assert rules.set_problem(fresh, None) is fresh, "nothing to clear is no change"
 
 
 # --- banner ----------------------------------------------------------------------------------

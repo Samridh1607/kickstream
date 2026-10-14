@@ -1,4 +1,4 @@
-import type { KeyMoment, MatchEvent, Scene, Studio, StudioSettings, Ticker } from "../contracts";
+import type { KeyMoment, MatchEvent, QueuedMatch, Scene, Studio, StudioSettings, Ticker } from "../contracts";
 
 export const STUDIO_STREAM = "/api/studio/stream";
 
@@ -58,6 +58,8 @@ export const saveTemplate = (sceneId: string, name?: string) =>
   change("POST", "/templates", name ? { scene_id: sceneId, name } : { scene_id: sceneId });
 export const deleteTemplate = (templateId: string) => change("DELETE", `/templates/${id(templateId)}`);
 export const saveSettings = (settings: StudioSettings) => change("PUT", "/settings", settings);
+/** The match the start countdown starts when it ends; null leaves it to the simulated match. */
+export const queueMatch = (choice: QueuedMatch | null) => change("PUT", "/queued-match", choice);
 export const showBanner = (banner: { text: string; kind?: "custom" | "info" | "goal" | "card"; duration_s?: number; source_id?: string }) =>
   change("POST", "/banner", banner);
 export const clearBanner = () => change("DELETE", "/banner");

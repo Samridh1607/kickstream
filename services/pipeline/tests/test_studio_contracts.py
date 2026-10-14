@@ -63,6 +63,35 @@ def test_optional_parts_default_to_nothing_on_screen():
 
     doc = Studio.model_validate(studio())
     assert doc.banner is None and doc.countdown is None and doc.replay is None
+    assert doc.settings.queued_match is None and doc.problem is None
+
+
+def test_a_queued_match_round_trips_through_json():
+    from kickstream.contracts import Studio
+
+    queued = {"source": "statsbomb", "ref": "43/3/8658", "speed": 10.0, "title": "France vs Croatia"}
+    doc = Studio.model_validate(studio(settings={**studio()["settings"], "queued_match": queued}))
+    assert doc.settings.queued_match.model_dump() == queued
+    assert Studio.model_validate_json(doc.model_dump_json()) == doc
+
+
+@pytest.mark.parametrize(
+    "queued",
+    [
+        {"source": "sportapi", "ref": "1", "speed": 1},
+        {"source": "statsbomb", "ref": "a/b/c", "speed": 1},
+        {"source": "statsbomb", "ref": "43/3/8658", "speed": 0.5},
+        {"source": "statsbomb", "ref": "43/3/8658", "speed": 601},
+        {"source": "statsbomb", "ref": "43/3/8658", "speed": 1, "title": "x" * 121},
+        {"source": "statsbomb", "ref": "43/3/8658", "speed": 1, "seed": 3},
+    ],
+    ids=["unknown-source", "letters-in-ref", "too-slow", "too-fast", "long-title", "extra-field"],
+)
+def test_a_queued_match_outside_the_limits_is_rejected(queued):
+    from kickstream.contracts import Studio
+
+    with pytest.raises(ValidationError):
+        Studio.model_validate(studio(settings={**studio()["settings"], "queued_match": queued}))
 
 
 @pytest.mark.parametrize(

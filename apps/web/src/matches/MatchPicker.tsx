@@ -3,7 +3,7 @@ import {
 } from "@fluentui/react-components";
 import { ArrowClockwiseRegular } from "@fluentui/react-icons";
 import { useEffect, useId, useRef, useState } from "react";
-import type { Competition, Fixture, MatchListing, SourceInfo, Sources } from "../contracts";
+import type { Competition, Fixture, MatchListing, QueuedMatch, SourceInfo, Sources } from "../contracts";
 import { type Language, type StringKey, t } from "../i18n";
 import {
   fetchCompetitions, fetchFixtures, fetchReplayMatches, fetchSources, type LiveSourceId, localDay, type SourceId, SPEEDS, speedLabel,
@@ -63,10 +63,12 @@ interface MatchPickerProps {
   language?: Language;
   /** The sources as the caller already reads them; read once here when not given. */
   sources?: Sources | null;
+  /** Called with each complete choice the streamer makes, and with the match once it has started. */
+  onChoose?(choice: QueuedMatch): void;
 }
 
 /** Chooses a match from any source (simulated, a StatsBomb replay or a live fixture) and starts it. */
-export function MatchPicker({ onStarted, extraSpeed, language = "en", sources: given }: MatchPickerProps) {
+export function MatchPicker({ onStarted, extraSpeed, language = "en", sources: given, onChoose }: MatchPickerProps) {
   const styles = useStyles();
   const say = (key: StringKey) => t(language, key);
   const noteId = useId();
@@ -77,7 +79,12 @@ export function MatchPicker({ onStarted, extraSpeed, language = "en", sources: g
   const [chosenSpeed, setChosenSpeed] = useState({ simulated: 30, statsbomb: 1 });
   const paced = source === "simulated" ? "simulated" : "statsbomb";
   const speed = chosenSpeed[paced];
-  const setSpeed = (value: number) => setChosenSpeed((current) => ({ ...current, [paced]: value }));
+  // The picker's starting state is not a choice; only what the streamer picks is reported.
+  const chose = useRef(false);
+  const setSpeed = (value: number) => {
+    chose.current = true;
+    setChosenSpeed((current) => ({ ...current, [paced]: value }));
+  };
   const [competitions, setCompetitions] = useState<Competition[] | null>(null);
   const [competition, setCompetition] = useState("");
   const [replays, setReplays] = useState<MatchListing[] | null>(null);
@@ -119,6 +126,7 @@ export function MatchPicker({ onStarted, extraSpeed, language = "en", sources: g
     });
 
   const choose = (next: SourceId) => {
+    chose.current = true;
     setSource(next);
     if (next === "statsbomb" && competitions === null) void load("loadingCompetitions", fetchCompetitions, setCompetitions);
     if ((next === "api_football" || next === "openligadb") && fixtures?.source !== next) void loadFixtures(next);
@@ -140,13 +148,30 @@ export function MatchPicker({ onStarted, extraSpeed, language = "en", sources: g
       : source === "statsbomb"
         ? replay === null ? null : { source, ref: replay, speed }
         : fixture?.source === source ? { source, ref: fixture.ref, speed: 1 } : null;
+  const listed = request === null
+    ? undefined
+    : request.source === "statsbomb"
+      ? replays?.find((item) => item.ref === request.ref)
+      : fixtures?.source === request.source ? fixtures.list.find((item) => item.ref === request.ref) : undefined;
+  const choice: QueuedMatch | null = request && {
+    source: request.source, ref: request.ref ?? null, speed: request.speed, title: listed ? `${listed.home} vs ${listed.away}` : null,
+  };
+
+  const reportChoice = useRef(onChoose);
+  reportChoice.current = onChoose;
+  const choiceKey = choice && JSON.stringify(choice);
+  useEffect(() => {
+    if (chose.current && choiceKey !== null) reportChoice.current?.(JSON.parse(choiceKey) as QueuedMatch);
+  }, [choiceKey]);
 
   const start = async () => {
     if (request === null) return;
+    const started = choice;
     setStarting(true);
     setProblem(null);
     try {
       onStarted(await startMatchFrom(request));
+      if (started !== null) onChoose?.(started);
     } catch (caught) {
       fail(caught);
     } finally {
@@ -184,7 +209,10 @@ export function MatchPicker({ onStarted, extraSpeed, language = "en", sources: g
           {replays.map((item) => (
             <div role="listitem" key={item.ref}>
               <ToggleButton className={styles.item} checked={replay === item.ref} aria-label={`${item.home} vs ${item.away}`}
-                onClick={() => setReplay(item.ref)}>
+                onClick={() => {
+                  chose.current = true;
+                  setReplay(item.ref);
+                }}>
                 <span className={styles.itemText}>
                   <Text weight="semibold">{`${item.home} vs ${item.away}`}</Text>
                   <Caption1 className={styles.muted}>{[item.date, item.stage].filter(Boolean).join(" · ")}</Caption1>
@@ -222,7 +250,10 @@ export function MatchPicker({ onStarted, extraSpeed, language = "en", sources: g
               <div role="listitem" key={item.ref}>
                 <ToggleButton className={styles.item} checked={fixture?.source === live && fixture.ref === item.ref}
                   disabled={item.state === "postponed"} aria-label={`${item.home} vs ${item.away}`}
-                  onClick={() => setFixture({ source: live, ref: item.ref })}>
+                  onClick={() => {
+                    chose.current = true;
+                    setFixture({ source: live, ref: item.ref });
+                  }}>
                   <span className={styles.itemText}>
                     <Text weight="semibold">{`${item.home} vs ${item.away}`}</Text>
                     <Caption1 className={styles.muted}>{item.competition}</Caption1>

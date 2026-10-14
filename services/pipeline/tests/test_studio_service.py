@@ -6,9 +6,10 @@ import pytest
 from kickstream.adapters.dir_image_store import DirImageStore
 from kickstream.adapters.json_studio_store import JsonStudioStore
 from kickstream.adapters.memory_bus import InMemoryEventBus
-from kickstream.contracts import MatchStatus, Narrative, SceneElement
+from kickstream.contracts import MatchStatus, Narrative, QueuedMatch, SceneElement
 from kickstream.domain.teams import AWAY, HOME
 from kickstream.ports.bus import INSIGHTS, NARRATIVES, STATUS
+from kickstream.ports.match_source import SourceFailure, SourceUnavailable
 from kickstream.studio import rules
 from kickstream.studio.rules import StudioError
 from kickstream.studio.service import StudioService
@@ -17,6 +18,7 @@ from kickstream.studio.templates import BREAK, LIVE_MATCH
 from tests.factories import MATCH, moment
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+FINAL = QueuedMatch(source="statsbomb", ref="43/3/8658", speed=10, title="France vs Croatia")
 
 
 class FakeNow:
@@ -28,10 +30,12 @@ class FakeNow:
 
 
 class Harness:
-    def __init__(self, tmp_path, now=None, fail_start=False):
+    def __init__(self, tmp_path, now=None, fail_start=False, refuse=None):
         self.now = now or FakeNow()
         self.started = []
+        self.chosen = []
         self.fail_start = fail_start
+        self.refuse = refuse
         self.moments = {(MATCH, f"{MATCH}-k1"): moment(1)}
         self.service = StudioService(
             JsonStudioStore(tmp_path / "studio.json", sanitize=rules.sanitize_raw),
@@ -41,11 +45,19 @@ class Harness:
             find_moment=lambda m, k: self.moments.get((m, k)),
         )
 
-    async def _start(self):
+    async def _start(self, chosen):
         if self.fail_start:
             raise RuntimeError("simulator unavailable")
+        if chosen is not None and self.refuse is not None:
+            raise self.refuse
         self.started.append(self.now.at)
+        self.chosen.append(chosen)
         return "m-1"
+
+    async def countdown_ends(self):
+        await self.service.countdown(self.now.at + 60)
+        self.now.at += 60
+        await self.service.tick()
 
 
 def scene_id(doc, template):
@@ -141,15 +153,49 @@ async def test_the_end_of_the_start_countdown_starts_the_match_and_cuts_to_live(
     await harness.service.tick()
     doc = harness.service.doc
     assert harness.started == [1_600.0]
+    assert harness.chosen == [None], "with nothing chosen, the simulated demo match starts"
     assert doc.countdown is None and doc.active_scene_id == scene_id(doc, LIVE_MATCH)
 
 
 async def test_a_match_that_fails_to_start_does_not_undo_the_scene_change(tmp_path):
     harness = Harness(tmp_path, fail_start=True)
-    await harness.service.countdown(harness.now.at + 60)
-    harness.now.at += 60
-    await harness.service.tick()
+    await harness.countdown_ends()
     assert harness.service.doc.countdown is None
+
+
+async def test_the_end_of_the_countdown_starts_the_match_chosen_in_the_match_tool(tmp_path):
+    harness = Harness(tmp_path)
+    await harness.service.apply(lambda d: rules.set_queued_match(d, FINAL))
+    await harness.countdown_ends()
+    doc = harness.service.doc
+    assert harness.chosen == [FINAL]
+    assert doc.problem is None and doc.settings.queued_match == FINAL
+
+
+async def test_a_chosen_match_that_cannot_start_gives_way_to_the_simulated_one_and_says_why(tmp_path):
+    harness = Harness(tmp_path, refuse=SourceFailure("StatsBomb could not be reached. Check the connection."))
+    await harness.service.apply(lambda d: rules.set_queued_match(d, FINAL))
+    await harness.countdown_ends()
+    doc = harness.service.doc
+    assert harness.chosen == [None], "the simulated match plays instead"
+    assert "simulated match" in doc.problem and "StatsBomb could not be reached" in doc.problem
+    assert doc.settings.queued_match == FINAL, "the choice is kept for another go"
+
+    harness.refuse = None
+    await harness.countdown_ends()
+    assert harness.chosen == [None, FINAL]
+    assert harness.service.doc.problem is None, "a start that works clears the old problem"
+
+
+async def test_a_source_that_is_not_set_up_also_gives_way_to_the_simulated_match(tmp_path):
+    harness = Harness(
+        tmp_path, refuse=SourceUnavailable("Set KICKSTREAM_API_FOOTBALL_KEY to follow live matches.")
+    )
+    live = QueuedMatch(source="api_football", ref="1035", speed=1)
+    await harness.service.apply(lambda d: rules.set_queued_match(d, live))
+    await harness.countdown_ends()
+    assert harness.chosen == [None]
+    assert "KICKSTREAM_API_FOOTBALL_KEY" in harness.service.doc.problem
 
 
 async def test_deadlines_that_passed_while_the_server_was_down_are_settled_on_start(tmp_path):
