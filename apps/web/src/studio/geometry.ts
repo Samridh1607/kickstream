@@ -29,6 +29,33 @@ export function clampRect(rect: Rect): Rect {
   return { x: clamp(rect.x, 0, CANVAS.width - width), y: clamp(rect.y, 0, CANVAS.height - height), width, height };
 }
 
+const SNAP_THRESHOLD = 8;
+
+/** The smallest shift that puts one of `edges` on one of `guides`, or 0 when none is within reach. */
+function nearestShift(edges: number[], guides: number[], threshold: number): number {
+  let best: number | null = null;
+  for (const edge of edges) {
+    for (const guide of guides) {
+      const shift = guide - edge;
+      if (Math.abs(shift) <= threshold && (best === null || Math.abs(shift) < Math.abs(best))) best = shift;
+    }
+  }
+  return best ?? 0;
+}
+
+/** Pulls a rectangle onto nearby canvas edges, centre lines or other elements' edges. Its size is unchanged. */
+export function snapToGuides(rect: Rect, others: Rect[], threshold = SNAP_THRESHOLD): Rect {
+  const xGuides = [0, CANVAS.width / 2, CANVAS.width];
+  const yGuides = [0, CANVAS.height / 2, CANVAS.height];
+  for (const other of others) {
+    xGuides.push(other.x, other.x + other.width / 2, other.x + other.width);
+    yGuides.push(other.y, other.y + other.height / 2, other.y + other.height);
+  }
+  const dx = nearestShift([rect.x, rect.x + rect.width / 2, rect.x + rect.width], xGuides, threshold);
+  const dy = nearestShift([rect.y, rect.y + rect.height / 2, rect.y + rect.height], yGuides, threshold);
+  return clampRect({ ...rect, x: rect.x + dx, y: rect.y + dy });
+}
+
 export function moveBy(rect: Rect, dx: number, dy: number): Rect {
   return clampRect({ ...rect, x: rect.x + snap(dx), y: rect.y + snap(dy) });
 }

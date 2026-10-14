@@ -1,7 +1,10 @@
 import { element } from "../test/fixtures";
-import { clampRect, fitScale, lower, moveBy, nextLayer, raise, rectOf, resizeBy, sameRect, snap } from "./geometry";
+import {
+  CANVAS, clampRect, fitScale, lower, moveBy, nextLayer, raise, rectOf, resizeBy, sameRect, snap, snapToGuides, type Rect,
+} from "./geometry";
 
 const rect = { x: 100, y: 100, width: 400, height: 200 };
+const box = (x: number, y: number, width = 100, height = 80): Rect => ({ x, y, width, height });
 
 test("snap rounds to the 20 pixel grid", () => {
   expect([0, 9, 10, 29, 31, -9].map(snap)).toEqual([0, 0, 20, 20, 40, -0].map((v) => v + 0));
@@ -48,4 +51,37 @@ test("raise and lower swap an element with its neighbour in the stack", () => {
   expect(raise(stack, "missing")).toBe(stack);
   expect(nextLayer(stack)).toBe(6);
   expect(nextLayer([])).toBe(1);
+});
+
+test("a rect near the left edge snaps to 0", () => {
+  expect(snapToGuides(box(6, 100), []).x).toBe(0);
+});
+
+test("a rect near the canvas centre snaps its centre to the midline", () => {
+  const width = 200;
+  const moved = snapToGuides(box(CANVAS.width / 2 - width / 2 + 5, 40, width, 80), []);
+  expect(moved.x + moved.width / 2).toBe(CANVAS.width / 2);
+});
+
+test("a rect near another element's right edge snaps its left to that edge", () => {
+  const other = box(100, 100, 200, 100); // right edge at 300
+  const moved = snapToGuides(box(305, 100), [other]);
+  expect(moved.x).toBe(300);
+});
+
+test("when two guides compete, the closer one wins", () => {
+  const other = box(400, 400, 100, 100); // left 400, centre 450, right 500
+  // The moving left edge at 494 is 6 from 500 and 44 from 450 → snaps to 500.
+  expect(snapToGuides(box(494, 50, 60, 60), [other], 8).x).toBe(500);
+});
+
+test("an edge already on a guide stays put rather than jumping to a farther one", () => {
+  const other = box(400, 400, 100, 100); // left 400
+  // Left edge already at 400; the right edge (460) is 10 from nothing in reach.
+  expect(snapToGuides(box(400, 50, 60, 60), [other], 8).x).toBe(400);
+});
+
+test("snapping never leaves the canvas", () => {
+  const huge = { x: -50, y: -50, width: 100, height: 80 };
+  expect(snapToGuides(huge, [])).toEqual(clampRect({ ...huge, x: 0, y: 0 }));
 });
