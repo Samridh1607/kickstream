@@ -425,6 +425,28 @@ def test_the_match_is_answered_with_its_score_stats_and_scorers(played):
     assert f"Shots are {chart.series[0].values[1]:g}-{chart.series[1].values[1]:g}" in answer.answer
 
 
+def test_a_live_feed_match_is_answered_only_with_what_its_source_measured():
+    from kickstream.contracts import StatsSnapshot, TeamStats
+    from kickstream.copilot.answer import match_answer, pitch_answer, tactics_answer
+
+    view = status_view()
+    view.status = view.status.model_copy(update={"detail": "key_events", "score_home": 1})
+    zero = dict.fromkeys(
+        ("shots", "shots_on_target", "xg", "possession", "passes", "pass_accuracy", "fouls", "red_cards"), 0
+    )
+    home = TeamStats(goals=1, yellow_cards=0, **zero)
+    away = TeamStats(goals=0, yellow_cards=1, **zero)
+    view.stats = StatsSnapshot(
+        id="m-1-ls1", match_id="m-1", minute=10, home=home, away=away, momentum=0, provided=["goals"]
+    )
+    match = match_answer(view)
+    assert match.answer == "It is Northbridge FC 1-0 Harbour City in minute 10."
+    assert match.charts == [] and [row.label for row in match.cards[0].compare] == ["Goals"]
+    for answer in (tactics_answer(view), pitch_answer(view)):
+        assert answer.answer.startswith("This match comes from a live score feed")
+        assert answer.cards == [] and answer.charts == []
+
+
 def test_each_tagged_agent_answers_from_its_own_part_of_the_match(played):
     def put(agent: str, question: str = "What can you tell me?") -> CopilotAnswer:
         answer = ask(played, question, agent=agent)

@@ -286,20 +286,57 @@ def _state(view: MatchView) -> str:
 # --- the match ---------------------------------------------------------------------------------
 
 
-def _compare_rows(view: MatchView) -> list[CopilotCompare]:
+_STAT_LABELS = (
+    ("goals", "Goals"),
+    ("possession", "Possession %"),
+    ("shots", "Shots"),
+    ("shots_on_target", "Shots on target"),
+    ("xg", "Expected goals"),
+    ("pass_accuracy", "Pass accuracy %"),
+    ("fouls", "Fouls"),
+)
+_CHARTED_STATS = ("possession", "shots", "shots_on_target", "xg")
+
+
+def _measured(view: MatchView, names) -> list[tuple[str, float, float]]:
+    """(label, home, away) for each statistic the match's source measured."""
     stats = view.stats
     if stats is None:
         return []
-    rows = [
-        ("Goals", stats.home.goals, stats.away.goals),
-        ("Possession %", stats.home.possession, stats.away.possession),
-        ("Shots", stats.home.shots, stats.away.shots),
-        ("Shots on target", stats.home.shots_on_target, stats.away.shots_on_target),
-        ("Expected goals", stats.home.xg, stats.away.xg),
-        ("Pass accuracy %", stats.home.pass_accuracy, stats.away.pass_accuracy),
-        ("Fouls", stats.home.fouls, stats.away.fouls),
+    labels = dict(_STAT_LABELS)
+    return [
+        (labels[name], getattr(stats.home, name), getattr(stats.away, name))
+        for name in names
+        if stats.provided is None or name in stats.provided
     ]
+
+
+_LIVE_FEED = "This match comes from a live score feed, which sends key events but no ball positions,"
+
+
+def _key_events_only(view: MatchView) -> bool:
+    return view.status is not None and view.status.detail == "key_events"
+
+
+def _compare_rows(view: MatchView) -> list[CopilotCompare]:
+    rows = _measured(view, [name for name, _ in _STAT_LABELS])
     return [CopilotCompare(label=label, home=f"{home:g}", away=f"{away:g}") for label, home, away in rows]
+
+
+def _stats_sentence(view: MatchView) -> str:
+    phrase = {
+        "Shots": "shots are {home:g}-{away:g}",
+        "Possession %": "possession {home:g}%-{away:g}%",
+        "Expected goals": "expected goals {home:g}-{away:g}",
+    }
+    named = [
+        phrase[label].format(home=home, away=away)
+        for label, home, away in _measured(view, ("shots", "possession", "xg"))
+    ]
+    if not named:
+        return ""
+    listed = named[0] if len(named) == 1 else f"{', '.join(named[:-1])} and {named[-1]}"
+    return f" {listed[0].upper()}{listed[1:]}."
 
 
 def match_answer(view: MatchView) -> Draft:
@@ -308,11 +345,7 @@ def match_answer(view: MatchView) -> Draft:
     stats = view.stats
     facts = [f"Score: {line} ({_state(view)})"]
     if stats is not None:
-        answer += (
-            f" Shots are {stats.home.shots}-{stats.away.shots}, possession "
-            f"{stats.home.possession:g}%-{stats.away.possession:g}% and expected goals "
-            f"{stats.home.xg:g}-{stats.away.xg:g}."
-        )
+        answer += _stats_sentence(view)
         facts += [
             f"{row.label}: {row.home}-{row.away} ({view.name('home')} first)" for row in _compare_rows(view)
         ]
@@ -322,13 +355,7 @@ def match_answer(view: MatchView) -> Draft:
         answer += f" Goals: {scorers}."
         facts.append(f"Goals: {scorers}")
     charts = []
-    if stats is not None:
-        rows = [
-            ("Possession %", stats.home.possession, stats.away.possession),
-            ("Shots", stats.home.shots, stats.away.shots),
-            ("Shots on target", stats.home.shots_on_target, stats.away.shots_on_target),
-            ("Expected goals", stats.home.xg, stats.away.xg),
-        ]
+    if rows := _measured(view, _CHARTED_STATS):
         charts.append(_sides_chart(view, "The two sides", rows))
     charted = {label for chart in charts for label in chart.labels}
     card = CopilotCard(
@@ -413,6 +440,10 @@ def prediction_answer(view: MatchView) -> Draft:
 
 def tactics_answer(view: MatchView) -> Draft:
     tactics = view.tactics
+    if tactics is None and _key_events_only(view):
+        return Draft(
+            "tactics", f"{_LIVE_FEED} so the Tactical Analyst has no positions to read tactics from."
+        )
     if tactics is None:
         return Draft(
             "tactics", "The Tactical Analyst has not reported on this match yet. Ask again in a minute."
@@ -836,6 +867,8 @@ def _shares(plays: list[PlayEvent], attribute: str, places: tuple[tuple[str, str
 
 def pitch_answer(view: MatchView) -> Draft:
     """Where each side has had the ball, by third and by flank, as each side attacks."""
+    if _key_events_only(view):
+        return Draft("pitch", f"{_LIVE_FEED} so there is no picture of where the play has been.")
     by_side = {side: [play for play in view.plays if play.team == side] for side in SIDES}
     if not any(by_side.values()):
         return Draft("pitch", "No play has been recorded in this match yet.", facts=["No plays yet"])
