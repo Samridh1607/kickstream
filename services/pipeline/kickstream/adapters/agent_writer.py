@@ -62,12 +62,15 @@ def parse_json(text: str) -> dict:
 
 
 def _stats_line(ctx: MomentContext | RecapContext) -> str:
-    home, away = ctx.stats.home, ctx.stats.away
-    return (
-        f"shots {home.shots}-{away.shots}, shots on target {home.shots_on_target}-{away.shots_on_target}, "
-        f"possession {home.possession}%-{away.possession}%, expected goals {home.xg}-{away.xg} "
-        f"({ctx.home.name} first)"
-    )
+    home, away, provided = ctx.stats.home, ctx.stats.away, ctx.stats.provided
+    numbers = {
+        "shots": f"shots {home.shots}-{away.shots}",
+        "shots_on_target": f"shots on target {home.shots_on_target}-{away.shots_on_target}",
+        "possession": f"possession {home.possession}%-{away.possession}%",
+        "xg": f"expected goals {home.xg}-{away.xg}",
+    }
+    named = [text for name, text in numbers.items() if provided is None or name in provided]
+    return f"{', '.join(named)} ({ctx.home.name} first)" if named else ""
 
 
 def moment_prompt(ctx: MomentContext) -> str:
@@ -80,10 +83,11 @@ def moment_prompt(ctx: MomentContext) -> str:
         f"Team: {team}",
         f"Player: {ctx.player_name or 'not applicable'}",
         f"Score: {ctx.home.name} {moment.score_home}-{moment.score_away} {ctx.away.name}",
-        f"Numbers that triggered this moment: {fact_text(moment.facts, 'en')}",
     ]
-    if ctx.stats is not None:
-        lines.append(f"Match so far: {_stats_line(ctx)}")
+    if moment.facts:
+        lines.append(f"Numbers that triggered this moment: {fact_text(moment.facts, 'en')}")
+    if ctx.stats is not None and (numbers := _stats_line(ctx)):
+        lines.append(f"Match so far: {numbers}")
     return "\n".join(lines)
 
 
@@ -92,14 +96,14 @@ def recap_prompt(ctx: RecapContext) -> str:
     lines = [
         f"Recap for: {ctx.period.replace('_', ' ')}",
         f"Score: {ctx.home.name} {home.goals}-{away.goals} {ctx.away.name}",
-        f"Match numbers: {_stats_line(ctx)}",
-        "Key moments:",
     ]
+    if numbers := _stats_line(ctx):
+        lines.append(f"Match numbers: {numbers}")
+    lines.append("Key moments:")
     for moment in ctx.moments:
         team = (ctx.home if moment.team == "home" else ctx.away).name
-        lines.append(
-            f"- {moment.minute}' {moment.kind.replace('_', ' ')} for {team} ({fact_text(moment.facts, 'en')})"
-        )
+        facts = f" ({fact_text(moment.facts, 'en')})" if moment.facts else ""
+        lines.append(f"- {moment.minute}' {moment.kind.replace('_', ' ')} for {team}{facts}")
     return "\n".join(lines)
 
 

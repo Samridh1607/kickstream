@@ -1,8 +1,9 @@
 import json
+from dataclasses import replace
 
 import pytest
 
-from kickstream.adapters.agent_writer import AgentNarrativeWriter, parse_json
+from kickstream.adapters.agent_writer import AgentNarrativeWriter, moment_prompt, parse_json, recap_prompt
 from kickstream.adapters.scripted_writer import ScriptedNarrativeWriter
 from kickstream.domain.types import VARIANTS
 from kickstream.narration.service import NarrationService
@@ -111,6 +112,35 @@ async def test_recap_is_written_once_then_localized(llm):
     assert [call["role"] for call in llm.calls] == ["recap_writer", "localizer"]
     prompt = llm.calls[0]["user"]
     assert "full time" in prompt and "Northbridge FC 2-1 Harbour City" in prompt and "big chance" in prompt
+
+
+def test_the_agent_prompt_leaves_out_unmeasured_numbers():
+    ctx = moment_ctx()
+    shots_only = replace(ctx, stats=ctx.stats.model_copy(update={"provided": ["goals", "shots"]}))
+    prompt = moment_prompt(shots_only)
+    assert "Match so far: shots 0-0 (Northbridge FC first)" in prompt
+    assert "possession" not in prompt and "shots on target" not in prompt
+
+    recap = recap_ctx()
+    goals_only = recap_prompt(replace(recap, stats=recap.stats.model_copy(update={"provided": ["goals"]})))
+    assert "Match numbers" not in goals_only and "shots" not in goals_only
+    assert "Northbridge FC 2-1 Harbour City" in goals_only and "Key moments:" in goals_only
+    bare = moment_prompt(
+        replace(
+            ctx,
+            moment=ctx.moment.model_copy(update={"facts": []}),
+            stats=ctx.stats.model_copy(update={"provided": ["goals"]}),
+        )
+    )
+    assert "Match so far" not in bare and "Numbers that triggered" not in bare
+
+
+def test_the_agent_prompt_names_every_number_when_the_source_measured_everything():
+    prompt = recap_prompt(recap_ctx())
+    assert (
+        "Match numbers: shots 9-4, shots on target 0-0, possession 58.0%-42.0%, expected goals 1.7-0.6 "
+        "(Northbridge FC first)"
+    ) in prompt
 
 
 async def test_recap_writer_prose_raises_narration_error(llm):

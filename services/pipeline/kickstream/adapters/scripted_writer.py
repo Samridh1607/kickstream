@@ -1,5 +1,6 @@
 """Template-based narratives. Needs no network; used whenever the agent writer is unavailable."""
 
+from kickstream.contracts import KeyMoment
 from kickstream.domain.labels import fact_text
 from kickstream.domain.types import VARIANTS, Language, Mode, Variant
 from kickstream.ports.writer import MomentContext, RecapContext, WrittenRecap, WrittenText
@@ -55,6 +56,39 @@ _MOMENT: dict[Language, dict[Mode, dict[str, str]]] = {
     },
 }
 
+_MOMENT_PLAIN: dict[Language, dict[Mode, dict[str, str]]] = {
+    "en": {
+        "fan": {
+            "goal": "{team} score through {player} ({minute}'). Score: {score}.",
+            "red_card": "Red card! {team} are a player down after {player} is sent off in minute {minute}.",
+        },
+        "analyst": {
+            "goal": "{player} finds the net for {team} ({minute}'). Score: {score}.",
+            "red_card": "{player} is dismissed ({minute}'), leaving {team} short-handed.",
+        },
+    },
+    "es": {
+        "fan": {
+            "goal": "{team} marca por medio de {player} ({minute}'). Marcador: {score}.",
+            "red_card": "¡Tarjeta roja! {team} se queda con uno menos tras la expulsión de {player} en el minuto {minute}.",
+        },
+        "analyst": {
+            "goal": "{player} marca para {team} ({minute}'). Marcador: {score}.",
+            "red_card": "{player} es expulsado ({minute}') y {team} queda en inferioridad.",
+        },
+    },
+    "hi": {
+        "fan": {
+            "goal": "{team} ने {player} के ज़रिए गोल किया ({minute}')। स्कोर: {score}।",
+            "red_card": "रेड कार्ड! {minute}वें मिनट में {player} को बाहर भेजा गया, {team} अब एक खिलाड़ी कम है।",
+        },
+        "analyst": {
+            "goal": "{player} ने {team} के लिए गोल किया ({minute}')। स्कोर: {score}।",
+            "red_card": "{player} को बाहर भेजा गया ({minute}'), {team} एक खिलाड़ी कम है।",
+        },
+    },
+}
+
 _RECAP: dict[Language, dict[str, str]] = {
     "en": {
         "half_time": "Half-time",
@@ -64,6 +98,7 @@ _RECAP: dict[Language, dict[str, str]] = {
         "shots": "Shots {home_shots}-{away_shots}, possession {home_poss}%-{away_poss}%.",
         "xg": "Expected goals {home_xg}-{away_xg}.",
         "moments": "{count} key moments so far.",
+        "measured": "Detailed statistics are not available for this match.",
     },
     "es": {
         "half_time": "Descanso",
@@ -73,6 +108,7 @@ _RECAP: dict[Language, dict[str, str]] = {
         "shots": "Remates {home_shots}-{away_shots}, posesión {home_poss}%-{away_poss}%.",
         "xg": "Goles esperados {home_xg}-{away_xg}.",
         "moments": "{count} momentos clave hasta ahora.",
+        "measured": "No hay estadísticas detalladas de este partido.",
     },
     "hi": {
         "half_time": "हाफ टाइम",
@@ -82,12 +118,18 @@ _RECAP: dict[Language, dict[str, str]] = {
         "shots": "शॉट {home_shots}-{away_shots}, कब्ज़ा {home_poss}%-{away_poss}%।",
         "xg": "अपेक्षित गोल {home_xg}-{away_xg}।",
         "moments": "अब तक {count} अहम पल।",
+        "measured": "इस मैच के विस्तृत आँकड़े उपलब्ध नहीं हैं।",
     },
 }
 
 
 def _percent(value: float) -> str:
     return str(round(value))
+
+
+def _moment_template(language: Language, mode: Mode, moment: KeyMoment) -> str:
+    plain = None if moment.facts else _MOMENT_PLAIN[language][mode].get(moment.kind)
+    return plain or _MOMENT[language][mode][moment.kind]
 
 
 class ScriptedNarrativeWriter:
@@ -104,7 +146,7 @@ class ScriptedNarrativeWriter:
         )
         return {
             (mode, language): WrittenText(
-                _MOMENT[language][mode][moment.kind].format(
+                _moment_template(language, mode, moment).format(
                     **values, facts=fact_text(moment.facts, language)
                 ),
                 "scripted",
@@ -133,14 +175,20 @@ class ScriptedNarrativeWriter:
             away_xg=away.xg,
             count=len(ctx.moments),
         )
+        provided = ctx.stats.provided
+        measured = provided is None or {"shots", "xg"} <= set(provided)
         written = {}
         for mode, language in VARIANTS:
             strings = _RECAP[language]
             headline = strings["level" if leader is None else "lead"].format(**values)
-            shots, expected = strings["shots"].format(**values), strings["xg"].format(**values)
+            moments = strings["moments"].format(**values)
             title = f"{strings[ctx.period]}: {ctx.home.name} {score} {ctx.away.name}"
-            closing = strings["moments"].format(**values) if mode == "fan" else f"{shots} {expected}"
-            written[(mode, language)] = WrittenRecap(
-                title, (headline, shots, expected), f"{headline} {closing}", "scripted"
-            )
+            if measured:
+                shots, expected = strings["shots"].format(**values), strings["xg"].format(**values)
+                bullets = (headline, shots, expected)
+                closing = moments if mode == "fan" else f"{shots} {expected}"
+            else:
+                bullets = (headline, moments, strings["measured"])
+                closing = moments
+            written[(mode, language)] = WrittenRecap(title, bullets, f"{headline} {closing}", "scripted")
         return written

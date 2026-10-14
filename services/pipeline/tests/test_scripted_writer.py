@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from kickstream.adapters.scripted_writer import ScriptedNarrativeWriter
@@ -30,6 +32,20 @@ async def test_analyst_text_cites_the_localized_facts():
     assert "The goal reflects the balance of play: expected goals 0.42" in written[("analyst", "en")].text
     assert "goles esperados 0.42" in written[("analyst", "es")].text
     assert "अपेक्षित गोल 0.42" in written[("analyst", "hi")].text
+
+
+async def test_a_goal_without_facts_reads_without_a_facts_clause():
+    written = await ScriptedNarrativeWriter().write_moment(moment_ctx(facts=[]))
+    assert ": ." not in written[("fan", "en")].text and "Score:" in written[("fan", "en")].text
+
+
+@pytest.mark.parametrize("kind", ["goal", "red_card"])
+async def test_moments_without_facts_never_leave_an_empty_facts_clause(kind):
+    written = await ScriptedNarrativeWriter().write_moment(moment_ctx(kind=kind, facts=[]))
+    for item in written.values():
+        assert item.text.strip() and not item.text.rstrip("।.").endswith(":")
+        assert ": ." not in item.text and ": ।" not in item.text
+    assert written[("fan", "en")].text != written[("analyst", "en")].text
 
 
 async def test_moment_without_a_player_falls_back_to_the_team_name():
@@ -68,7 +84,32 @@ async def test_full_time_titles_and_level_scores():
 
     ctx = recap_ctx()
     level = ctx.stats.model_copy(update={"away": ctx.stats.away.model_copy(update={"goals": 2})})
-    from dataclasses import replace
-
     written = await ScriptedNarrativeWriter().write_recap(replace(ctx, stats=level))
     assert written[("fan", "en")].bullets[0] == "Northbridge FC and Harbour City are level at 2-2."
+
+
+@pytest.mark.parametrize("provided", [["goals"], ["goals", "shots", "possession"], ["goals", "xg"]])
+async def test_a_recap_never_quotes_shots_or_xg_the_source_did_not_give(provided):
+    ctx = recap_ctx()
+    ctx = replace(ctx, stats=ctx.stats.model_copy(update={"provided": provided}))
+    written = await ScriptedNarrativeWriter().write_recap(ctx)
+    for item in written.values():
+        assert len(item.bullets) == 3 and all(b.strip() for b in item.bullets)
+        for quoted in ("9-4", "58%", "1.7-0.6"):
+            assert quoted not in item.text and all(quoted not in b for b in item.bullets)
+    fan, analyst = written[("fan", "en")], written[("analyst", "en")]
+    assert fan.bullets == (
+        "Northbridge FC lead 2-1.",
+        "2 key moments so far.",
+        "Detailed statistics are not available for this match.",
+    )
+    assert analyst.text == "Northbridge FC lead 2-1. 2 key moments so far."
+
+
+async def test_a_recap_with_every_field_measured_still_quotes_the_numbers():
+    ctx = recap_ctx()
+    ctx = replace(
+        ctx, stats=ctx.stats.model_copy(update={"provided": ["goals", "shots", "possession", "xg"]})
+    )
+    english = (await ScriptedNarrativeWriter().write_recap(ctx))[("analyst", "en")]
+    assert "9-4" in english.bullets[1] and "1.7-0.6" in english.bullets[2]

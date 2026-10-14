@@ -64,6 +64,10 @@ def lower_third(overlay_id: str, narrative: Narrative, moment: KeyMoment, team_n
     )
 
 
+def stat_names(snapshot: StatsSnapshot) -> list[str]:
+    return [name for name in _STAT_ROWS if snapshot.provided is None or name in snapshot.provided]
+
+
 def stat_card(overlay_id: str, snapshot: StatsSnapshot, language: Language) -> Overlay:
     labels = FACT_LABELS[language]
     rows = [
@@ -72,7 +76,7 @@ def stat_card(overlay_id: str, snapshot: StatsSnapshot, language: Language) -> O
             home=getattr(snapshot.home, name),
             away=getattr(snapshot.away, name),
         )
-        for name in _STAT_ROWS
+        for name in stat_names(snapshot)
     ]
     return _overlay(
         overlay_id,

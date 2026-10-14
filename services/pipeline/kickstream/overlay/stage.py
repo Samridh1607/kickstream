@@ -10,7 +10,7 @@ from kickstream.contracts import (
     StatsSnapshot,
 )
 from kickstream.domain.types import LANGUAGES
-from kickstream.overlay.build import lower_third, pressure_map, recap_card, stat_card
+from kickstream.overlay.build import lower_third, pressure_map, recap_card, stat_card, stat_names
 from kickstream.ports.bus import INSIGHTS, NARRATIVES, OVERLAYS, STATUS, EventBus
 
 log = logging.getLogger(__name__)
@@ -24,6 +24,7 @@ class OverlayStage:
         self._count: dict[str, int] = {}
         self._moments: dict[str, KeyMoment] = {}
         self._team_names: dict[str, dict[str, str]] = {}
+        self._detail: dict[str, str | None] = {}
 
     def _next_id(self, match_id: str) -> str:
         self._count[match_id] = self._count.get(match_id, 0) + 1
@@ -32,13 +33,15 @@ class OverlayStage:
     def _build(self, match_id: str, payload) -> list[Overlay]:
         if isinstance(payload, MatchStatus):
             self._team_names[match_id] = {"home": payload.home.name, "away": payload.away.name}
+            self._detail[match_id] = payload.detail
         elif isinstance(payload, KeyMoment):
             self._moments[payload.id] = payload
         elif isinstance(payload, StatsSnapshot):
-            if payload.period_end or payload.minute % self._every == 0:
+            if stat_names(payload) and (payload.period_end or payload.minute % self._every == 0):
                 return [stat_card(self._next_id(match_id), payload, language) for language in LANGUAGES]
         elif isinstance(payload, PressureSnapshot):
-            return [pressure_map(self._next_id(match_id), payload)]
+            if self._detail.get(match_id) != "key_events":
+                return [pressure_map(self._next_id(match_id), payload)]
         elif isinstance(payload, Narrative) and payload.mode == "fan":
             moment = self._moments.get(payload.moment_id)
             if moment is None:

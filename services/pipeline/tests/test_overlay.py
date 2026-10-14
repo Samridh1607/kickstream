@@ -94,6 +94,11 @@ def test_stat_card_has_four_localized_rows():
     assert english.sources == [snapshot.id]
 
 
+def test_a_stat_card_shows_only_what_the_source_measured():
+    card = stat_card("o1", stats().model_copy(update={"provided": ["goals", "possession", "shots"]}), "en")
+    assert [row.label for row in card.data.stat_rows] == ["Possession %", "Shots"]
+
+
 def test_pressure_map_copies_the_grid_and_has_no_language():
     overlay = pressure_map("o1", heat())
     assert overlay.language is None
@@ -175,6 +180,32 @@ async def test_stage_emits_stat_cards_every_five_minutes_and_at_period_ends():
         ("stat_card", 47, "es"),
         ("stat_card", 47, "hi"),
     ]
+
+
+async def test_no_pressure_map_or_empty_stat_card_for_a_key_events_match():
+    async def publish(bus):
+        status = MatchStatus(
+            match_id=MATCH,
+            state="live",
+            minute=1,
+            score_home=0,
+            score_away=0,
+            speed=30,
+            home=HOME,
+            away=AWAY,
+            detail="key_events",
+        )
+        await bus.publish(STATUS, MATCH, status)
+        await bus.publish(INSIGHTS, MATCH, heat(3))
+        await bus.publish(INSIGHTS, MATCH, stats(minute=5).model_copy(update={"provided": ["goals"]}))
+        await bus.publish(
+            INSIGHTS, MATCH, stats(minute=10).model_copy(update={"provided": ["goals", "shots"]})
+        )
+
+    overlays = await collect(publish, 3)
+    assert [(o.kind, o.minute) for o in overlays] == [("stat_card", 10)] * 3
+    assert overlays[0].id == f"{MATCH}-o1"
+    assert [row.label for row in overlays[0].data.stat_rows] == ["Shots"]
 
 
 async def test_stage_emits_recap_cards_for_fan_recaps_only():
