@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openStudio } from "./broadcasts";
+import { editScene, openStudio, openTool } from "./broadcasts";
 
 // The test pipeline; see playwright.config.ts.
 const API = "http://127.0.0.1:8010";
@@ -67,19 +67,21 @@ test("a streamer adds widgets live and runs the fan zone", async ({ browser, req
   try {
     await openStudio(control, request, `Fan zone test ${Date.now()}`);
     await program.goto("/studio?output");
-    await control.getByRole("button", { name: "Switch to E2E fans" }).click();
-    await control.getByRole("button", { name: "Edit E2E fans" }).click();
+    await control.getByRole("region", { name: "Scenes" }).getByRole("button", { name: "Switch to E2E fans" }).click();
+    await expect(control.getByText("On air: E2E fans")).toBeVisible();
+    const layout = await editScene(control, "E2E fans");
     await expect(program.getByTestId("element-scoreboard")).toBeVisible();
 
     // One click puts a widget on the scene that is on air.
-    const widgets = control.getByRole("group", { name: "Widgets" });
+    const widgets = layout.getByRole("group", { name: "Widgets" });
     await widgets.getByRole("button", { name: "Add Prediction" }).click();
     await expect(program.getByTestId("element-prediction")).toBeVisible();
     await widgets.getByRole("button", { name: "Add Comments" }).click();
     await expect(program.getByTestId("program-comments")).toBeVisible();
     // Taking it off again removes it from the program.
-    await control.getByRole("tabpanel").getByRole("button", { name: "Remove prediction" }).click();
+    await layout.getByRole("button", { name: "Remove prediction" }).click();
     await expect(program.getByTestId("element-prediction")).toHaveCount(0);
+    await layout.getByRole("button", { name: "Close edit layout" }).click();
 
     // Comments arrive from a platform bridge and appear on the program as plain text.
     await request.post(`${API}/api/fans/ingest`, {
@@ -87,23 +89,23 @@ test("a streamer adds widgets live and runs the fan zone", async ({ browser, req
     });
     await expect(program.getByTestId("fan-comment").filter({ hasText: "<i>Hello</i> from Osaka" })).toBeVisible();
 
-    // The Fans tab: the summary, a poll that fans vote in by commenting, and quick actions.
-    await control.getByRole("tab", { name: "Fans" }).click();
-    await expect(control.getByTestId("fan-summary")).toContainText("The chat is");
-    const poll = control.getByRole("region", { name: "Poll" });
+    // The Comments tool: the summary, a poll that fans vote in by commenting, and quick actions.
+    const comments = await openTool(control, "Comments");
+    await expect(comments.getByTestId("fan-summary")).toContainText("The chat is");
+    const poll = comments.getByRole("region", { name: "Poll" });
     await poll.getByRole("button", { name: "Next goal" }).click();
     await poll.getByRole("button", { name: "Start poll" }).click();
     await request.post(`${API}/api/fans/ingest`, {
       data: { comments: [{ id: "e2e-v1", author: "Mei", text: "1" }, { id: "e2e-v2", author: "Rafa", text: "1" }, { id: "e2e-v3", author: "Kofi", text: "2" }] },
     });
-    await expect(control.getByTestId("fan-poll")).toContainText("2 · 67%");
-    await control.getByTestId("fan-poll").getByRole("switch", { name: "On screen" }).click();
+    await expect(comments.getByTestId("fan-poll")).toContainText("2 · 67%");
+    await comments.getByTestId("fan-poll").getByRole("switch", { name: "On screen" }).click();
     // The scene has no poll element, so the program gives the poll a box of its own.
     await expect(program.getByTestId("program-poll")).toContainText("Will there be another goal?");
     await expect(program.getByTestId("poll-option").first()).toContainText("67%");
 
     // A superchat typed in by the streamer is thanked on screen by name.
-    const chats = control.getByRole("region", { name: "Superchats" });
+    const chats = comments.getByRole("region", { name: "Superchats" });
     await chats.getByLabel("Supporter's name").fill("Asha Patel");
     await chats.getByLabel("Amount").fill("20");
     await chats.getByLabel("Their message").fill("Love the stream");
@@ -113,7 +115,7 @@ test("a streamer adds widgets live and runs the fan zone", async ({ browser, req
     await expect(program.getByTestId("program-spotlight")).toContainText("USD 20.00");
 
     // Quick actions: clear the screen, a custom message, then a winner.
-    const quick = control.getByRole("region", { name: "Quick actions" });
+    const quick = comments.getByRole("region", { name: "Quick actions" });
     await quick.getByRole("button", { name: "Clear screen" }).click();
     await expect(program.getByTestId("program-spotlight")).toHaveCount(0);
     await quick.getByLabel("Custom message").fill("Welcome to everyone watching!");

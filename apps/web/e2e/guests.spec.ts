@@ -9,19 +9,22 @@ const PUBLIC_HOST = "guests.example";
 
 test("the streamer invites guests by link, puts a speaker on stage, and revokes the invite", async ({ page, browser, request }) => {
   await openStudio(page, request, `Guests test ${Date.now()}`);
-  await page.getByRole("tab", { name: "People" }).click();
-  const people = page.getByRole("region", { name: "People" });
-  await people.getByLabel("Name (optional)").fill("Sam");
-  await people.getByRole("button", { name: "Invite", exact: true }).click();
-  const link = people.getByLabel("Invite link for Sam");
+  const backstage = page.getByRole("region", { name: "Backstage" });
+  // Backstage's invite tile opens the Guests tool, where the invites are made.
+  await backstage.getByRole("button", { name: "Invite a guest" }).click();
+  const guests = page.getByRole("region", { name: "Guests tool" });
+  await guests.getByLabel("Name (optional)").fill("Sam");
+  await guests.getByRole("button", { name: "Invite", exact: true }).click();
+  const link = guests.getByLabel("Invite link for Sam");
   await expect(link).toHaveValue(new RegExp(`^https://${PUBLIC_HOST}/guest/`), { timeout: 15_000 });
   // The link names the public address; the test opens the same path on the local one.
   const path = new URL(await link.inputValue()).pathname;
-  await people.getByLabel("Role").selectOption("member");
-  await people.getByLabel("Name (optional)").fill("Mia");
-  await people.getByRole("button", { name: "Invite", exact: true }).click();
-  await expect(people.getByLabel("Invite link for Mia")).toBeVisible({ timeout: 15_000 });
-  await expect(people.getByRole("button", { name: "Add Mia to stage" })).toHaveCount(0);
+  await guests.getByLabel("Role").selectOption("member");
+  await guests.getByLabel("Name (optional)").fill("Mia");
+  await guests.getByRole("button", { name: "Invite", exact: true }).click();
+  await expect(guests.getByLabel("Invite link for Mia")).toBeVisible({ timeout: 15_000 });
+  await expect(backstage.getByText("Mia", { exact: true })).toBeVisible();
+  await expect(backstage.getByRole("button", { name: "Add Mia to stage" })).toHaveCount(0);
 
   const guestContext = await browser.newContext({ permissions: ["camera", "microphone"] });
   try {
@@ -31,14 +34,15 @@ test("the streamer invites guests by link, puts a speaker on stage, and revokes 
     await expect(guest.getByLabel("Your name")).toHaveValue("Sam");
     await guest.getByRole("button", { name: "Join" }).click();
     await expect(guest.getByText("You're backstage")).toBeVisible();
-    await expect(people.getByText("Present")).toBeVisible();
+    await expect(backstage.getByText("Present")).toBeVisible();
 
-    await people.getByRole("button", { name: "Add Sam to stage" }).click();
+    await backstage.getByRole("button", { name: "Add Sam to stage" }).click();
     await expect(guest.getByText("You're on stage")).toBeVisible();
+    await expect(guests.getByText("On stage")).toBeVisible();
     // The program shows who is on stage: a picture-in-picture box, since the scene has no cameras.
-    await expect(page.getByRole("region", { name: "Program preview" }).getByTestId("camera-tile")).toHaveCount(1);
+    await expect(page.getByRole("region", { name: "Stage", exact: true }).getByTestId("camera-tile")).toHaveCount(1);
 
-    await people.getByRole("button", { name: "Revoke invite for Sam" }).click();
+    await guests.getByRole("button", { name: "Revoke invite for Sam" }).click();
     await expect(guest.getByText("This invite is no longer valid")).toBeVisible();
   } finally {
     await guestContext.close();

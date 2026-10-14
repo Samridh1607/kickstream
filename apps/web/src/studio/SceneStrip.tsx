@@ -34,13 +34,15 @@ const useStyles = makeStyles({
   },
   editing: { border: `${tokens.strokeWidthThick} solid ${tokens.colorBrandStroke1}`, backgroundColor: tokens.colorNeutralBackground1 },
   onAir: { border: `${tokens.strokeWidthThick} solid #D92D20`, backgroundColor: tokens.colorNeutralBackground1 },
-  thumb: {
-    position: "relative", display: "block", padding: 0, margin: 0, border: "none", borderRadius: tokens.borderRadiusMedium,
-    overflow: "hidden", cursor: "pointer", backgroundColor: "transparent", width: `${THUMB_WIDTH}px`,
-    ":focus-visible": { outline: `${tokens.strokeWidthThick} solid ${tokens.colorStrokeFocus2}` },
+  thumb: { position: "relative", borderRadius: tokens.borderRadiusMedium, overflow: "hidden", width: `${THUMB_WIDTH}px` },
+  // Laid over the picture rather than around it: a widget in the scene may draw buttons of its own,
+  // and a button must not hold another.
+  switch: {
+    position: "absolute", top: 0, right: 0, bottom: 0, left: 0, padding: 0, margin: 0, border: "none",
+    borderRadius: tokens.borderRadiusMedium, cursor: "pointer", backgroundColor: "transparent",
+    ":focus-visible": { outline: `${tokens.strokeWidthThick} solid ${tokens.colorStrokeFocus2}`, outlineOffset: `-${tokens.strokeWidthThick}` },
   },
   live: { cursor: "default" },
-  // The canvas is a picture here; the button around it takes every click.
   canvas: { pointerEvents: "none" },
   number: {
     position: "absolute", left: tokens.spacingHorizontalXS, top: tokens.spacingVerticalXS, minWidth: "18px", height: "18px",
@@ -88,15 +90,17 @@ export function SceneStrip(props: SceneStripProps) {
           const onAir = scene.id === studio.active_scene_id;
           return (
             <li key={scene.id} className={mergeClasses(styles.tile, scene.id === editingId && styles.editing, onAir && styles.onAir)}>
-              <button type="button" className={mergeClasses(styles.thumb, onAir && styles.live)} aria-label={`Switch to ${scene.name}`}
-                aria-pressed={onAir} onClick={() => !onAir && onActivate(scene.id)}>
-                <div className={styles.canvas}>
+              <div className={styles.thumb}>
+                <div className={styles.canvas} aria-hidden inert>
                   <SceneCanvas scene={scene} data={data} scale={THUMB_SCALE} />
                 </div>
-                {index < 9 && <span className={styles.number} data-testid="scene-number">{index + 1}</span>}
-                {onAir && <Badge className={styles.onAirBadge} size="small" color="danger">On air</Badge>}
-                <span className={styles.mode}><ModeBadge scene={scene} studio={studio} /></span>
-              </button>
+                <button type="button" className={mergeClasses(styles.switch, onAir && styles.live)} aria-label={`Switch to ${scene.name}`}
+                  aria-pressed={onAir} onClick={() => !onAir && onActivate(scene.id)}>
+                  {index < 9 && <span className={styles.number} data-testid="scene-number">{index + 1}</span>}
+                  {onAir && <Badge className={styles.onAirBadge} size="small" color="danger">On air</Badge>}
+                  <span className={styles.mode}><ModeBadge scene={scene} studio={studio} /></span>
+                </button>
+              </div>
               <div className={styles.row}>
                 <Text size={200} weight="semibold" className={styles.name} title={scene.name}>{scene.name}</Text>
                 <SceneMenu {...props} scene={scene} onAir={onAir} onRenaming={() => setRenaming(scene)} />

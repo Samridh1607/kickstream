@@ -1,7 +1,7 @@
 import { fireEvent, screen, within } from "@testing-library/react";
 import type { Studio } from "../contracts";
 import { EMPTY } from "../stream/store";
-import { scene, studio } from "../test/fixtures";
+import { element, moment, scene, studio } from "../test/fixtures";
 import { renderUi } from "../test/render";
 import type { ProgramData } from "./elements";
 import { SceneStrip } from "./SceneStrip";
@@ -132,8 +132,23 @@ test("the first nine scenes are numbered", () => {
   expect(strip().getAllByTestId("scene-number").map((badge) => badge.textContent)).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9"]);
 });
 
-test("each scene shows a live thumbnail inside its switch button", () => {
+test("each scene shows a live thumbnail under its switch button", () => {
   setup(studio(), "s2");
   expect(strip().getAllByTestId("scene-canvas")).toHaveLength(2);
-  expect(within(strip().getByRole("button", { name: "Switch to Break" })).getByTestId("element-countdown")).toBeTruthy();
+  const tile = strip().getByRole("button", { name: "Switch to Break" }).closest("li")!;
+  expect(within(tile).getByTestId("element-countdown")).toBeTruthy();
+});
+
+test("a thumbnail whose widgets have buttons of their own puts no button inside the switch button", () => {
+  const doc = studio({ scenes: [scene({ elements: [element({ type: "timeline", props: {} })] })], active_scene_id: "other" });
+  const data: ProgramData = { match: { ...EMPTY, moments: [{ ...moment(), highlighted: false }] }, studio: doc, now: 1000, language: "en" };
+  const onActivate = vi.fn();
+  renderUi(<SceneStrip studio={doc} data={data} editingId={null} onActivate={onActivate} onEdit={vi.fn()} onRename={vi.fn()} onMode={vi.fn()}
+    onCreate={vi.fn()} onDelete={vi.fn()} onSaveTemplate={vi.fn()} onDeleteTemplate={vi.fn()} />);
+  const tile = strip().getByRole("button", { name: "Switch to Live match" });
+  expect(tile.closest("li")!.querySelector("[data-testid='element-timeline'] button")).not.toBeNull();
+  expect(tile.querySelector("button")).toBeNull();
+  expect(tile.closest("button button")).toBeNull();
+  fireEvent.click(tile);
+  expect(onActivate).toHaveBeenCalledWith("s1");
 });
