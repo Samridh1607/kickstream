@@ -44,7 +44,8 @@ Two deliberate refinements of the spec:
 |---|---|
 | region `"Editor"` | region `"Edit layout"` (only while editing) |
 | region `"Program preview"` | region `"Stage"` (always the on-air scene in live mode) |
-| region `"Output"` | tool `"Stream"` panel; region `"Stream"` |
+| region `"Output"` | tool `"Stream"`; inside it OutputTab's own region `"Stream"` (the StreamTool adds no region of its own) |
+| (new) the open tool's panel | region `"{Tool} tool"`, e.g. `"Banners tool"`, `"Stream tool"`, so it never shares a name with a region inside it |
 | region `"People"` | region `"Backstage"` (tiles) + tool `"Guests"` (invites) |
 | tab `"Fans"` | tool `"Comments"` (still mounts `FanPanel`) |
 | tab `"Banner"` / `"Ticker"` | tool `"Banners"` (banner + ticker) |

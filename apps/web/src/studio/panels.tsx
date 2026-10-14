@@ -8,13 +8,15 @@ import {
   SlideLayoutRegular, SportSoccerRegular, TrophyRegular, VideoPersonRegular,
 } from "@fluentui/react-icons";
 import { type ChangeEvent, type ReactElement, useEffect, useState } from "react";
-import type { MatchStatus, Scene, SceneElement, Studio, StudioSettings, Ticker } from "../contracts";
-import { LANGUAGE_NAMES, LANGUAGES, type Language, type Mode, type StringKey, t } from "../i18n";
-import type { FeedMoment, FeedNarrative, MatchData } from "../stream/store";
-import { formatRemaining } from "./format";
+import type { MatchStatus, Scene, SceneElement, Studio } from "../contracts";
 import { lower, nextLayer, raise } from "./geometry";
 import { sceneMode } from "./mode";
 import type { WidgetType } from "./widgets";
+
+export { BannerPanel, TickerPanel } from "./tools/BannersTool";
+export { HighlightsPanel } from "./tools/ReplaysTool";
+export { CountdownPanel } from "./tools/TimerTool";
+export { SettingsPanel } from "./tools/SettingsTool";
 
 const BUILTIN = ["Starting soon", "Live match", "Analyst desk", "Break", "Full-time", "Interview", "Match intelligence", "Fan zone"];
 const TEMPLATE_ICONS: Record<string, ReactElement> = {
@@ -400,172 +402,6 @@ export function ElementPanel({ scene, selectedId, onSelect, onChange, onUpload, 
           </Field>
         </>
       )}
-    </div>
-  );
-}
-
-// --- banner ------------------------------------------------------------------------------------
-
-interface BannerPanelProps {
-  studio: Studio;
-  onShow(text: string): Promise<boolean>;
-  onClear(): void;
-  onAuto(enabled: boolean): void;
-}
-
-export function BannerPanel({ studio, onShow, onClear, onAuto }: BannerPanelProps) {
-  const styles = useStyles();
-  const [text, setText] = useState("");
-  const show = async () => {
-    if (await onShow(text)) setText("");
-  };
-  return (
-    <div className={styles.panel}>
-      <Field label="Banner text">
-        <Input value={text} maxLength={200} onChange={(_, data) => setText(data.value)} />
-      </Field>
-      <Button appearance="primary" disabled={text.trim() === ""} onClick={() => void show()}>Show banner</Button>
-      {studio.banner ? (
-        <div className={styles.item}>
-          <Text size={200}>On screen</Text>
-          <Text>{studio.banner.text}</Text>
-          <Button size="small" onClick={onClear}>Clear banner</Button>
-        </div>
-      ) : (
-        <Text size={200}>No banner on screen.</Text>
-      )}
-      {studio.banner_queue.length > 0 && <Text size={200}>{studio.banner_queue.length} waiting</Text>}
-      <Switch label="Automatic banners for goals and red cards" checked={studio.settings.auto_banner} onChange={(_, data) => onAuto(data.checked)} />
-    </div>
-  );
-}
-
-// --- ticker ------------------------------------------------------------------------------------
-
-export function TickerPanel({ ticker, onSave }: { ticker: Ticker; onSave(ticker: Ticker): void }) {
-  const styles = useStyles();
-  const [draft, setDraft] = useState(ticker);
-  const [lines, setLines] = useState(ticker.messages.join("\n"));
-  const saved = JSON.stringify(ticker);
-  useEffect(() => {
-    const current = JSON.parse(saved) as Ticker;
-    setDraft(current);
-    setLines(current.messages.join("\n"));
-  }, [saved]);
-  const messages = lines.split("\n").map((line) => line.trim()).filter(Boolean);
-  return (
-    <div className={styles.panel}>
-      <Switch label="Ticker on" checked={draft.enabled} onChange={(_, data) => setDraft({ ...draft, enabled: data.checked })} />
-      <Field label="Messages, one per line" hint="Up to 20 messages of 120 characters">
-        <Textarea rows={5} value={lines} onChange={(_, data) => setLines(data.value)} />
-      </Field>
-      <Field label="Speed" hint="40 (slow) to 400 (fast)">
-        <Input type="number" min={40} max={400} value={String(draft.speed)} onChange={(_, data) => setDraft({ ...draft, speed: Number(data.value) })} />
-      </Field>
-      <Switch label="Show the score" checked={draft.show_score} onChange={(_, data) => setDraft({ ...draft, show_score: data.checked })} />
-      <Switch label="Show match stats" checked={draft.show_stats} onChange={(_, data) => setDraft({ ...draft, show_stats: data.checked })} />
-      <Button appearance="primary" onClick={() => onSave({ ...draft, messages })}>Save ticker</Button>
-    </div>
-  );
-}
-
-// --- highlights --------------------------------------------------------------------------------
-
-interface HighlightsPanelProps {
-  match: MatchData;
-  replaying: boolean;
-  onReplay(moment: FeedMoment): void;
-  onStopReplay(): void;
-  onBanner(narrative: FeedNarrative): void;
-}
-
-export function HighlightsPanel({ match, replaying, onReplay, onStopReplay, onBanner }: HighlightsPanelProps) {
-  const styles = useStyles();
-  const newestFirst = [...match.moments].reverse();
-  return (
-    <div className={styles.panel}>
-      {replaying && <Button onClick={onStopReplay}>Stop replay</Button>}
-      {newestFirst.length === 0 && <Text size={200}>Key moments appear here as the match is played.</Text>}
-      <ul className={styles.list}>
-        {newestFirst.map((moment) => {
-          const label = `${moment.minute}' ${t("en", `kind_${moment.kind}` as StringKey)}`;
-          const narrative = match.narratives.find((line) => line.moment_id === moment.id);
-          return (
-            <li key={moment.id} className={styles.item}>
-              <Text weight="semibold">{label}</Text>
-              {narrative && <Text size={200}>{narrative.text}</Text>}
-              <div className={styles.row}>
-                <Button size="small" aria-label={`Replay ${label}`} onClick={() => onReplay(moment)}>Replay</Button>
-                {narrative && (
-                  <Button size="small" aria-label={`Show ${label} on banner`} onClick={() => onBanner(narrative)}>Show on banner</Button>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-// --- countdown ---------------------------------------------------------------------------------
-
-interface CountdownPanelProps {
-  studio: Studio;
-  /** The server's clock, Unix seconds. */
-  now: number;
-  onStart(startsAt: number): void;
-  onBreak(minutes: number): void;
-  onEnd(): void;
-}
-
-export function CountdownPanel({ studio, now, onStart, onBreak, onEnd }: CountdownPanelProps) {
-  const styles = useStyles();
-  const [startIn, setStartIn] = useState("10");
-  const [breakFor, setBreakFor] = useState("5");
-  const countdown = studio.countdown;
-  const onBreakNow = countdown?.kind === "break";
-  return (
-    <div className={styles.panel}>
-      {countdown && (
-        <div className={styles.item}>
-          <Text>{`${onBreakNow ? "Break" : "Kick-off"}: ${formatRemaining(countdown.ends_at - now)} left`}</Text>
-          <Button size="small" onClick={onEnd}>{onBreakNow ? "End break" : "End countdown"}</Button>
-        </div>
-      )}
-      <Field label="Start in (minutes)" hint="1 to 1440. The match starts and the program cuts to Live when it reaches zero.">
-        <Input type="number" min={1} max={1440} value={startIn} onChange={(_, data) => setStartIn(data.value)} />
-      </Field>
-      <Button onClick={() => onStart(now + Number(startIn) * 60)} disabled={!(Number(startIn) >= 1)}>Start countdown</Button>
-      <Field label="Break length (minutes)" hint="1 to 60. The program returns to the scene it left.">
-        <Input type="number" min={1} max={60} value={breakFor} onChange={(_, data) => setBreakFor(data.value)} />
-      </Field>
-      <Button onClick={() => onBreak(Number(breakFor))} disabled={!(Number(breakFor) >= 1)}>Take a break</Button>
-    </div>
-  );
-}
-
-// --- settings ----------------------------------------------------------------------------------
-
-export function SettingsPanel({ settings, onSave }: { settings: StudioSettings; onSave(settings: StudioSettings): void }) {
-  const styles = useStyles();
-  return (
-    <div className={styles.panel}>
-      <Field label="Default commentary" hint="Used by scenes that do not choose Fan or Analyst themselves.">
-        <Select value={settings.mode} onChange={(_, data) => onSave({ ...settings, mode: data.value as Mode })}>
-          <option value="fan">Fan</option>
-          <option value="analyst">Analyst</option>
-        </Select>
-      </Field>
-      <Field label="Program language">
-        <Select value={settings.language} onChange={(_, data) => onSave({ ...settings, language: data.value as Language })}>
-          {LANGUAGES.map((language) => (
-            <option key={language} value={language}>{LANGUAGE_NAMES[language]}</option>
-          ))}
-        </Select>
-      </Field>
-      <Switch label="Start the match when the start countdown ends" checked={settings.auto_start} onChange={(_, data) => onSave({ ...settings, auto_start: data.checked })} />
-      <Switch label="Take a break automatically at half-time" checked={settings.auto_half_time_break} onChange={(_, data) => onSave({ ...settings, auto_half_time_break: data.checked })} />
     </div>
   );
 }
