@@ -4,7 +4,7 @@ from kickstream.ports.clock import Clock
 
 
 class Simulator:
-    """Releases a generated match onto the bus in match-time order."""
+    """Releases a generated or replayed match onto the bus in match-time order."""
 
     def __init__(self, bus: EventBus, clock: Clock) -> None:
         self._bus = bus
@@ -12,7 +12,17 @@ class Simulator:
         self.status: MatchStatus | None = None
 
     async def play(
-        self, match_id: str, events: list[MatchEvent], home: TeamSheet, away: TeamSheet, speed: float
+        self,
+        match_id: str,
+        events: list[MatchEvent],
+        home: TeamSheet,
+        away: TeamSheet,
+        speed: float,
+        *,
+        source: str = "simulated",
+        detail: str = "full",
+        credit: str | None = None,
+        competition: str | None = None,
     ) -> None:
         score = {"home": 0, "away": 0}
 
@@ -26,6 +36,10 @@ class Simulator:
                 speed=speed,
                 home=home,
                 away=away,
+                source=source,
+                detail=detail,
+                credit=credit,
+                competition=competition,
             )
             await self._bus.publish(STATUS, match_id, self.status)
 
@@ -33,7 +47,7 @@ class Simulator:
         previous = 0.0
         for event in events:
             at = event.minute * 60 + event.second
-            await self._clock.sleep(at - previous)
+            await self._clock.sleep(max(0.0, at - previous))
             previous = at
             await self._bus.publish(EVENTS, match_id, event)
             if event.type == "goal":

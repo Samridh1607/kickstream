@@ -1,4 +1,5 @@
 from kickstream.adapters.memory_bus import InMemoryEventBus
+from kickstream.contracts import MatchEvent
 from kickstream.domain.teams import AWAY, HOME
 from kickstream.ports.bus import EVENTS, STATUS
 from kickstream.simulator.generate import generate
@@ -102,3 +103,56 @@ async def test_play_publishes_events_in_order_and_tracks_status():
         away_goals,
     )
     assert simulator.status == final
+
+
+async def test_a_simulated_status_names_its_source_and_has_no_credit():
+    bus = InMemoryEventBus()
+    statuses = bus.subscribe(STATUS, maxsize=5000)
+    await Simulator(bus, RecordingClock()).play(MATCH, _match()[:3], HOME, AWAY, speed=30)
+    first = statuses.queue.get_nowait().payload
+    assert (first.source, first.detail, first.credit, first.competition) == ("simulated", "full", None, None)
+
+
+def _replay_frame():
+    """A replay's bare frame, timed as StatsBomb times it: the second half restarts at 45:00."""
+    times = [("kickoff", 0, 0), ("half_time", 48, 26), ("kickoff", 45, 0), ("full_time", 94, 0)]
+    return [
+        MatchEvent(
+            id=f"{MATCH}-{seq}", match_id=MATCH, seq=seq, minute=minute, second=second, type=type_, x=50, y=50
+        )
+        for seq, (type_, minute, second) in enumerate(times, start=1)
+    ]
+
+
+async def test_a_replay_whose_clock_restarts_for_the_second_half_never_sleeps_backwards():
+    clock = RecordingClock()
+    await Simulator(InMemoryEventBus(), clock).play(MATCH, _replay_frame(), HOME, AWAY, speed=30)
+    assert clock.slept == 48 * 60 + 26 + 49 * 60
+
+
+async def test_a_replay_status_names_its_source_detail_and_credit():
+    events = _replay_frame()
+    bus = InMemoryEventBus()
+    statuses = bus.subscribe(STATUS, maxsize=5000)
+    simulator = Simulator(bus, RecordingClock())
+    await simulator.play(
+        MATCH,
+        events,
+        HOME,
+        AWAY,
+        speed=30,
+        source="statsbomb",
+        credit="Data: StatsBomb",
+        competition="FIFA World Cup 2018",
+    )
+    published = []
+    while not statuses.queue.empty():
+        published.append(statuses.queue.get_nowait().payload)
+    assert [s.state for s in published] == ["live", "half_time", "live", "finished"]
+    for status in published:
+        assert (status.source, status.detail, status.credit, status.competition) == (
+            "statsbomb",
+            "full",
+            "Data: StatsBomb",
+            "FIFA World Cup 2018",
+        )
