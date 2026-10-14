@@ -1,0 +1,19 @@
+# The image is built from the repository root; only the sources it copies are sent.
+**
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!apps/web/**
+!services/pipeline/pyproject.toml
+!services/pipeline/uv.lock
+!services/pipeline/kickstream/**
+!deploy/docker/chromium-capture.sh
+
+**/node_modules
+**/dist
+**/__pycache__
+**/.env
+**/.env.*
+**/tsconfig.tsbuildinfo
+apps/web/test-results
+apps/web/playwright-report

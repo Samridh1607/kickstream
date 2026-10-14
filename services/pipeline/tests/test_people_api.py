@@ -171,6 +171,34 @@ def test_on_a_public_host_only_the_guest_routes_answer(client):
             socket.receive_text()
 
 
+def test_behind_a_sign_in_proxy_a_signed_in_request_opens_the_studio(tmp_path, rooms):
+    settings = Settings(
+        None,
+        None,
+        None,
+        cache_dir=tmp_path / "cache",
+        data_dir=tmp_path / "data",
+        public_hosts=(PUBLIC,),
+        signed_in_header="x-ms-client-principal-id",
+    )
+    app = create_app(settings, clock_factory=lambda speed: InstantClock(), match_prefix="m", rooms=rooms)
+    proxied = {"host": PUBLIC, "x-forwarded-for": "203.0.113.9"}
+    with TestClient(app) as client:
+        b = new_broadcast(client)
+        secret = secret_of(invite(client, b))
+        blank = {**proxied, "x-ms-client-principal-id": ""}
+        signed_in = {**proxied, "x-ms-client-principal-id": "00000000-0000-0000-0000-000000000001"}
+        assert client.get("/api/broadcasts", headers=proxied).status_code == 404
+        assert client.get("/api/broadcasts", headers=blank).status_code == 404
+        assert client.get("/api/broadcasts", headers=signed_in).status_code == 200
+        assert client.get(f"/api/guest/{secret}", headers=proxied).status_code == 200
+
+
+def test_without_a_sign_in_proxy_the_header_opens_nothing(client):
+    headers = {"host": PUBLIC, "x-ms-client-principal-id": "00000000-0000-0000-0000-000000000001"}
+    assert client.get("/api/broadcasts", headers=headers).status_code == 404
+
+
 def test_a_co_host_opens_the_studio_on_the_public_host_until_their_invite_is_revoked(client):
     b = new_broadcast(client)
     cohost, speaker = invite(client, b, role="cohost"), invite(client, b)

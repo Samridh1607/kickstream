@@ -304,6 +304,30 @@ A co-host can do everything you can in the studio: go live, end or delete the br
 | `POST /api/guest/{secret}/join` | `{name}`: join the room |
 | `POST /api/guest/{secret}/seat/refresh` | A new token for a guest who has joined |
 
+## Deploy to Azure
+
+`deploy/` puts Kickstream on Azure Container Apps (Central India by default) with everything it needs: a registry, Azure Communication Services for cameras and voices, an Azure Files share for `/data`, and Microsoft Entra ID sign-in in front of the studio. You need the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) and [Terraform](https://developer.hashicorp.com/terraform/install) 1.9 or later, and an Azure account that may create app registrations; Docker is not needed, as the image is built in the registry.
+
+```powershell
+./deploy/deploy.ps1     # or ./deploy/deploy.sh; prints the address when done
+./deploy/destroy.ps1    # or ./deploy/destroy.sh; deletes everything, stored broadcasts included
+```
+
+Run `deploy` again to ship a new version. Only you (whoever deploys) can sign in to the studio. To let others in, co-hosts included, add their Entra object IDs to `studio_users` in `deploy/terraform/terraform.tfvars` (copy `terraform.tfvars.example`); the API-Football and model keys go there too. Guests need no account: their invite pages (`/guest/...`) stay open. The Communication Services connection string goes from Terraform straight into a Container Apps secret.
+
+Terraform's state, in `deploy/terraform`, holds every secret it created; it is ignored by git, so keep that folder on the machine you deploy from. The app runs as one replica, since matches and the studio live in its memory. If the registry refuses to build (`TasksOperationsNotAllowed`, on some free subscriptions), run `deploy.ps1 -LocalBuild` (or `deploy.sh --local-build`) with Docker installed.
+
+| Path | Contents |
+|---|---|
+| `deploy/docker/Dockerfile` | One image: the pipeline serving the API and the built web app, with Chromium and ffmpeg for going live |
+| `deploy/terraform/` | Resource group, registry, storage, Communication Services, the Container App and its Entra sign-in |
+| `deploy/deploy.*`, `deploy/destroy.*` | Create or update everything; delete everything |
+
+| Variable | Use |
+|---|---|
+| `KICKSTREAM_WEB_DIR` | The built web app (`apps/web/dist`); the pipeline serves it, so no dev server is needed |
+| `KICKSTREAM_SIGNED_IN_HEADER` | The header a sign-in proxy in front names the signed-in user in; requests with it reach the studio. Set it only behind such a proxy: through a plain tunnel anyone can send the header |
+
 ## Layout
 
 | Path | Contents |

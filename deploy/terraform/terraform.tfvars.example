@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars (git-ignored) and fill in what you need; every line is optional.
+
+# name     = "kickstream"
+# location = "centralindia"
+
+# Entra object IDs of other people who may open the studio (co-hosts sign in too):
+#   az ad user show --id someone@example.com --query id -o tsv
+# studio_users = ["00000000-0000-0000-0000-000000000000"]
+
+# api_football_key = ""
+# llm_base_url     = "https://<resource>.openai.azure.com/openai/v1/"
+# llm_model        = "gpt-4.1-mini"
+# llm_api_key      = ""

@@ -84,6 +84,7 @@ from kickstream.studio.api import build_studio_router, find_moment
 from kickstream.studio.rules import sanitize_raw
 from kickstream.studio.service import StudioService
 from kickstream.studio.stage import StudioStage
+from kickstream.web_files import build_web_router
 
 STUDIO_MATCH_SPEED = 30.0  # playback speed of a match the studio starts at the end of a countdown
 OPENLIGADB_LEAGUES = ("pl", "la1", "ucl")
@@ -193,12 +194,27 @@ class PublicHostGate:
     Guests reach Kickstream through a tunnel to the web server, and the studio has no sign-in. A
     request is public when it names a public host or came through any proxy: a tunnel that rewrites
     Host to the local address must not open the studio.
+
+    Deployed, a sign-in proxy stands in front and names the signed-in user in `signed_in_header`;
+    it lets only the people it allows through, and strips that header from everyone else's
+    requests. When the pipeline serves the web app itself, the app's pages and files are open too:
+    they hold no data, and the guest page is one of them.
     """
 
-    def __init__(self, app, *, public_hosts: Collection[str], is_cohost: Callable[[str], bool]) -> None:
+    def __init__(
+        self,
+        app,
+        *,
+        public_hosts: Collection[str],
+        is_cohost: Callable[[str], bool],
+        signed_in_header: str | None = None,
+        serves_pages: bool = False,
+    ) -> None:
         self._app = app
         self._public_hosts = frozenset(public_hosts)
         self._is_cohost = is_cohost
+        self._signed_in_header = signed_in_header.lower().encode("latin-1") if signed_in_header else None
+        self._serves_pages = serves_pages
 
     async def __call__(self, scope, receive, send) -> None:
         if scope["type"] in ("http", "websocket") and self._public_hosts:
@@ -220,6 +236,10 @@ class PublicHostGate:
 
     def _allowed(self, path: str, headers: dict[bytes, bytes]) -> bool:
         if path.startswith("/api/guest/"):
+            return True
+        if self._serves_pages and path != "/api" and not path.startswith("/api/"):
+            return True
+        if self._signed_in_header is not None and headers.get(self._signed_in_header, b"").strip():
             return True
         secret = cookie_parser(headers.get(b"cookie", b"").decode("latin-1")).get(COHOST_COOKIE)
         return secret is not None and self._is_cohost(secret)
@@ -297,6 +317,10 @@ class Settings:
     openligadb_url: str = OPENLIGADB
     openligadb_leagues: tuple[str, ...] = OPENLIGADB_LEAGUES
     live_poll_s: float | None = None  # tests only: poll every N seconds instead of the source's schedule
+    # The built web app, served by the pipeline where no dev server runs beside it. See web_files.py.
+    web_dir: Path | None = None
+    # The header a sign-in proxy in front names the signed-in user in. See PublicHostGate.
+    signed_in_header: str | None = None
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ) -> "Settings":
@@ -324,6 +348,8 @@ class Settings:
             openligadb_url=env.get("KICKSTREAM_OPENLIGADB_URL") or OPENLIGADB,
             openligadb_leagues=_names(env.get("KICKSTREAM_OPENLIGADB_LEAGUES", "")) or OPENLIGADB_LEAGUES,
             live_poll_s=_seconds(env.get("KICKSTREAM_LIVE_POLL_S")),
+            web_dir=Path(env["KICKSTREAM_WEB_DIR"]) if env.get("KICKSTREAM_WEB_DIR") else None,
+            signed_in_header=(env.get("KICKSTREAM_SIGNED_IN_HEADER") or "").strip().lower() or None,
         )
 
     @property
@@ -598,12 +624,18 @@ def create_app(
         yield
         await pipeline.stop()
 
-    app = FastAPI(title="Kickstream", lifespan=lifespan)
+    # Serving the web app means a deployment; the API's own docs pages stay a local tool.
+    docs = {} if settings.web_dir is None else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    app = FastAPI(title="Kickstream", lifespan=lifespan, **docs)
     app.state.pipeline = pipeline
     app.add_middleware(SameOriginWrites)
     app.add_middleware(BodyLimit)
     app.add_middleware(
-        PublicHostGate, public_hosts=settings.public_hosts, is_cohost=pipeline.people.is_cohost
+        PublicHostGate,
+        public_hosts=settings.public_hosts,
+        is_cohost=pipeline.people.is_cohost,
+        signed_in_header=settings.signed_in_header,
+        serves_pages=settings.web_dir is not None,
     )
 
     @app.exception_handler(Refusal)
@@ -648,4 +680,6 @@ def create_app(
             model=pipeline.explainer.has_model,
         )
     )
+    if settings.web_dir is not None:
+        app.include_router(build_web_router(settings.web_dir))  # last: it answers every other path
     return app

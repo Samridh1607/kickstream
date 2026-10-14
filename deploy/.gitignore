@@ -1,0 +1,8 @@
+# Terraform's state holds every secret it created; it stays on this machine.
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/*.tfvars
+!terraform/*.tfvars.example
+terraform/*.tfplan
+terraform/crash.log
