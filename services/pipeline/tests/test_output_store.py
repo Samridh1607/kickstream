@@ -56,6 +56,31 @@ def test_a_loose_leftover_temporary_file_does_not_make_the_record_loose(tmp_path
     assert JsonRecordStore(path, private=True).load() == {"keys": {"d1": "sk-live"}}
 
 
+def test_a_save_waits_out_another_program_briefly_holding_the_file(tmp_path, monkeypatch):
+    # On Windows, a virus scanner or indexer that has the record open makes the replace fail for a moment.
+    path = tmp_path / "budget.json"
+    real_replace = os.replace
+    refusals = [PermissionError(13, "Access is denied")] * 2
+
+    def held(source, target):
+        if refusals:
+            raise refusals.pop()
+        real_replace(source, target)
+
+    monkeypatch.setattr(os, "replace", held)
+    JsonRecordStore(path).save({"used": 3})
+    assert JsonRecordStore(path).load() == {"used": 3}
+
+
+def test_a_save_still_fails_when_the_file_stays_held(tmp_path, monkeypatch):
+    def held(source, target):
+        raise PermissionError(13, "Access is denied")
+
+    monkeypatch.setattr(os, "replace", held)
+    with pytest.raises(PermissionError):
+        JsonRecordStore(tmp_path / "budget.json").save({"used": 3})
+
+
 def test_a_private_record_that_is_not_json_is_set_aside(tmp_path):
     path = tmp_path / "keys.json"
     path.write_text("{oops", encoding="utf-8")

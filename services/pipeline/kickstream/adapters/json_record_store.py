@@ -2,9 +2,25 @@ import contextlib
 import json
 import logging
 import os
+import time
 from pathlib import Path
 
 log = logging.getLogger(__name__)
+REPLACE_ATTEMPTS = 5
+REPLACE_PAUSE_S = 0.05
+
+
+def _replace(source: Path, target: Path) -> None:
+    """os.replace, waiting out the moments when another program has the target open. On Windows a virus
+    scanner or an indexer reading a file just written makes the replace fail with "Access is denied"."""
+    for attempt in range(1, REPLACE_ATTEMPTS + 1):
+        try:
+            os.replace(source, target)
+            return
+        except PermissionError:
+            if attempt == REPLACE_ATTEMPTS:
+                raise
+            time.sleep(REPLACE_PAUSE_S * attempt)
 
 
 def _write_owner_only(path: Path, text: str) -> None:
@@ -43,7 +59,7 @@ class JsonRecordStore:
             _write_owner_only(temporary, text)
         else:
             temporary.write_text(text, encoding="utf-8")
-        temporary.replace(self._path)
+        _replace(temporary, self._path)
 
     def set_aside(self) -> None:
         if self._path.exists():
