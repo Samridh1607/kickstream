@@ -35,7 +35,7 @@ test("Home leads to a broadcast, and the broadcast to its studio and scenes", as
   await expect(page.getByRole("region", { name: "Stage", exact: true }).getByTestId("scene-canvas")).toBeVisible();
   await expect(page.getByRole("region", { name: "Backstage" })).toBeVisible();
   const tools = page.getByRole("navigation", { name: "Tools" });
-  for (const name of ["Banners", "Comments", "Guests", "Replays", "Timer", "Stream", "Settings"]) {
+  for (const name of ["Match", "Banners", "Comments", "Guests", "Replays", "Timer", "Stream", "Settings"]) {
     await expect(tools.getByRole("button", { name, exact: true })).toBeVisible();
   }
   await tools.getByRole("button", { name: "Stream", exact: true }).click();

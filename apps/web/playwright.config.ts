@@ -7,6 +7,8 @@ const NO_MODEL = { KICKSTREAM_LLM_BASE_URL: "", KICKSTREAM_LLM_MODEL: "", KICKST
 // never touch the scenes or match of a developer who has Kickstream running.
 export const API = "http://127.0.0.1:8010";
 export const WEB = "http://127.0.0.1:5183";
+/** The local stand-in for StatsBomb, API-Football and OpenLigaDB; see e2e/fake-sources.mjs. */
+export const FAKE_SOURCES = "http://127.0.0.1:8020";
 /** The tunnel the tests pretend guests come through. */
 export const PUBLIC_HOST = "guests.example";
 // A fresh data directory for every run, so one run's scenes and broadcasts never meet the next.
@@ -18,13 +20,19 @@ const TEST_SERVER = {
   ...NO_MODEL, KICKSTREAM_DATA_DIR: DATA_DIR, KICKSTREAM_PROGRAM_URL: `${WEB}/studio?output`,
   KICKSTREAM_ROOMS: "fake", KICKSTREAM_PUBLIC_HOSTS: PUBLIC_HOST,
 };
+// Every match source answers from the stand-in, so no test reaches the internet or needs a real key.
+const SOURCES = {
+  KICKSTREAM_STATSBOMB_URL: `${FAKE_SOURCES}/statsbomb/`, KICKSTREAM_API_FOOTBALL_URL: `${FAKE_SOURCES}/api-football`,
+  KICKSTREAM_API_FOOTBALL_KEY: "e2e-fake-key", KICKSTREAM_OPENLIGADB_URL: `${FAKE_SOURCES}/openligadb`,
+  KICKSTREAM_OPENLIGADB_LEAGUES: "bl1", KICKSTREAM_LIVE_POLL_S: "1",
+};
 
-export function webServers(env: Record<string, string> = {}): PlaywrightTestConfig["webServer"] {
+export function webServers(env: Record<string, string> = {}, { fakeSources = true } = {}): PlaywrightTestConfig["webServer"] {
   return [
     {
       command: "uv run --project ../../services/pipeline uvicorn kickstream.app:create_app --factory --port 8010",
       url: `${API}/api/teams`,
-      env: { ...TEST_SERVER, ...env },
+      env: { ...TEST_SERVER, ...(fakeSources ? SOURCES : {}), ...env },
       reuseExistingServer: false,
       timeout: 120_000,
     },
@@ -34,6 +42,7 @@ export function webServers(env: Record<string, string> = {}): PlaywrightTestConf
       env: { KICKSTREAM_API: API, KICKSTREAM_PUBLIC_HOSTS: PUBLIC_HOST },
       reuseExistingServer: false,
     },
+    ...(fakeSources ? [{ command: "node e2e/fake-sources.mjs", url: `${FAKE_SOURCES}/health`, reuseExistingServer: false }] : []),
   ];
 }
 

@@ -31,7 +31,7 @@ test("in a narrower window the tool rail shows only icons, and each tool keeps i
   await page.setViewportSize({ width: 1200, height: 800 });
   await openStudio(page, request, `Narrow layout ${Date.now()}`);
   const rail = page.getByRole("navigation", { name: "Tools" });
-  for (const name of ["Banners", "Comments", "Guests", "Replays", "Timer", "Stream", "Settings"]) {
+  for (const name of ["Match", "Banners", "Comments", "Guests", "Replays", "Timer", "Stream", "Settings"]) {
     const tool = rail.getByRole("button", { name, exact: true });
     await expect(tool).toBeVisible();
     await expect(tool.getByText(name, { exact: true })).toBeHidden();

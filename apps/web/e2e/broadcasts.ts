@@ -16,6 +16,14 @@ export async function openStudio(page: Page, request: APIRequestContext, title: 
   return id;
 }
 
+/** Opens a broadcast's studio with a query such as `?speed=600`, which the plain `/studio` redirect drops. */
+export async function openStudioAt(page: Page, request: APIRequestContext, title: string, search: string): Promise<string> {
+  const id = await openStudio(page, request, title);
+  await page.goto(`/broadcasts/${id}/studio${search}`);
+  await expect(page.getByRole("region", { name: "Studio broadcast" }).getByRole("link", { name: title, exact: true })).toBeVisible({ timeout: 15_000 });
+  return id;
+}
+
 /** Opens one of the studio's tools from the rail, leaving it open if it already is, and returns its panel. */
 export async function openTool(page: Page, name: string): Promise<Locator> {
   const button = page.getByRole("navigation", { name: "Tools" }).getByRole("button", { name, exact: true });
