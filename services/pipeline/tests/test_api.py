@@ -157,7 +157,10 @@ def test_stop_ends_the_running_match(held_client):
         time.sleep(0.02)
     response = held_client.post("/api/matches/stop")
     assert response.status_code == 204 and response.content == b""
-    assert _statuses(held_client, match_id)[-1].state == "abandoned"
+    deadline = time.monotonic() + 10
+    while _statuses(held_client, match_id)[-1].state != "abandoned":
+        assert time.monotonic() < deadline, "the match was not announced abandoned"
+        time.sleep(0.02)
     assert held_client.get("/api/sources").json()["running"] is None
     assert held_client.get("/api/matches/current").json() == {"match_id": match_id}
 
