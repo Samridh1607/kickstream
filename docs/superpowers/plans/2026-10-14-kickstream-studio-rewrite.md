@@ -156,9 +156,15 @@ test("a rect near another element's right edge snaps its left to that edge", () 
 });
 
 test("when two guides compete, the closer one wins", () => {
-  const other = box(0, 0, 10, 10); // right = 10
-  // 7 from 0, 3 from 10 → snaps to 10
-  expect(snapToGuides(box(7, 50), [other], 8).x).toBe(10);
+  const other = box(400, 400, 100, 100); // left 400, centre 450, right 500
+  // The moving left edge at 494 is 6 from 500 and 44 from 450 → snaps to 500.
+  expect(snapToGuides(box(494, 50, 60, 60), [other], 8).x).toBe(500);
+});
+
+test("an edge already on a guide stays put rather than jumping to a farther one", () => {
+  const other = box(400, 400, 100, 100); // left 400
+  // Left edge already at 400; the right edge (460) is 10 from nothing in reach.
+  expect(snapToGuides(box(400, 50, 60, 60), [other], 8).x).toBe(400);
 });
 
 test("snapping never leaves the canvas", () => {
@@ -176,55 +182,35 @@ pnpm exec vitest run src/studio/geometry.test.ts
 - [ ] **Step 3: Implement `snapToGuides` in `geometry.ts`**
 
 ```ts
-const DEFAULT_THRESHOLD = 8;
+const SNAP_THRESHOLD = 8;
 
-function closestDelta(value: number, guides: number[], threshold: number): number {
+/** The smallest shift that puts one of `edges` on one of `guides`, or 0 when none is within reach. */
+function nearestShift(edges: number[], guides: number[], threshold: number): number {
   let best: number | null = null;
-  for (const guide of guides) {
-    const delta = guide - value;
-    if (Math.abs(delta) <= threshold && (best === null || Math.abs(delta) < Math.abs(best))) best = delta;
+  for (const edge of edges) {
+    for (const guide of guides) {
+      const shift = guide - edge;
+      if (Math.abs(shift) <= threshold && (best === null || Math.abs(shift) < Math.abs(best))) best = shift;
+    }
   }
   return best ?? 0;
 }
 
-/** Pull a rectangle onto nearby canvas edges, centre lines or sibling edges. Size is unchanged. */
-export function snapToGuides(rect: Rect, others: Rect[], threshold = DEFAULT_THRESHOLD): Rect {
+/** Pulls a rectangle onto nearby canvas edges, centre lines or other elements' edges. Its size is unchanged. */
+export function snapToGuides(rect: Rect, others: Rect[], threshold = SNAP_THRESHOLD): Rect {
   const xGuides = [0, CANVAS.width / 2, CANVAS.width];
   const yGuides = [0, CANVAS.height / 2, CANVAS.height];
   for (const other of others) {
     xGuides.push(other.x, other.x + other.width / 2, other.x + other.width);
     yGuides.push(other.y, other.y + other.height / 2, other.y + other.height);
   }
-  const left = rect.x;
-  const right = rect.x + rect.width;
-  const cx = rect.x + rect.width / 2;
-  const top = rect.y;
-  const bottom = rect.y + rect.height;
-  const cy = rect.y + rect.height / 2;
-  // Prefer the edge whose guide is closest overall on that axis.
-  const dxCandidates = [
-    closestDelta(left, xGuides, threshold),
-    closestDelta(right, xGuides, threshold),
-    closestDelta(cx, xGuides, threshold),
-  ];
-  const dyCandidates = [
-    closestDelta(top, yGuides, threshold),
-    closestDelta(bottom, yGuides, threshold),
-    closestDelta(cy, yGuides, threshold),
-  ];
-  const dx = dxCandidates.reduce((best, d) => (Math.abs(d) < Math.abs(best) || (best === 0 && d !== 0) ? d : best), 0);
-  // Fix reduce: pick non-zero closest
-  const pick = (deltas: number[]) =>
-    deltas.reduce<number | null>((best, d) => {
-      if (d === 0) return best;
-      if (best === null || Math.abs(d) < Math.abs(best)) return d;
-      return best;
-    }, null) ?? 0;
-  return clampRect({ ...rect, x: rect.x + pick(dxCandidates), y: rect.y + pick(dyCandidates) });
+  const dx = nearestShift([rect.x, rect.x + rect.width / 2, rect.x + rect.width], xGuides, threshold);
+  const dy = nearestShift([rect.y, rect.y + rect.height / 2, rect.y + rect.height], yGuides, threshold);
+  return clampRect({ ...rect, x: rect.x + dx, y: rect.y + dy });
 }
 ```
 
-(Implement cleanly; the sketch above notes the pick logic — use `pick` for both axes, drop the broken `dx` reduce.)
+An edge already on a guide gives a shift of 0, which beats every other candidate, so it stays put.
 
 - [ ] **Step 4: Run the tests — expect pass**
 
@@ -309,6 +295,7 @@ git commit -m "Share host and guest call mute lifecycle in useHostCall"
 - Shows: Trail/breadcrumb when `broadcast` is set (reuse `Trail` from shell), broadcast title, state badge (`Ready` / `LIVE` + `HH:MM:SS` from `broadcast.started_at` / `now`, `Ended`), recording badge when `broadcast.record`, connection badge, destination lights from `output.destinations` that are enabled (name + status text, same idea as today's `LiveStatus`), button `"Edit layout"` / `"Exit layout"` (`aria-pressed={editing}`), primary `"Go live"` or `"End broadcast"`.
 - Shortcuts button may be a disabled placeholder with title `"Coming in a later phase"` (phase 5).
 - Do not mount a second `StudioBroadcastBar`; TopBar replaces it.
+- The part of the top bar that names the broadcast keeps `aria-label="Studio broadcast"` and a link to `/broadcasts/{id}` whose text is the broadcast title: `e2e/broadcasts.ts` (`openStudio`) waits for exactly that. It also keeps today's "This broadcast no longer exists" warning and the `liveElsewhere` / `refusal` messages from `StudioBroadcastBar`.
 
 - [ ] **Step 1: Failing tests for LIVE timer, Go live / End, Edit layout toggle**
 
