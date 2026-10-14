@@ -20,6 +20,8 @@ class Player(BaseModel):
     name: str
     number: int
     position: Literal['GK', 'DF', 'MF', 'FW']
+    starting: bool | None = False
+    grid: constr(max_length=5) | None = None
 
 
 class TeamSheet(BaseModel):
@@ -31,6 +33,7 @@ class TeamSheet(BaseModel):
     short_name: str
     color: str
     players: list[Player]
+    formation: constr(max_length=12) | None = None
 
 
 class MatchStatus(BaseModel):
@@ -38,13 +41,17 @@ class MatchStatus(BaseModel):
         extra='forbid',
     )
     match_id: str
-    state: Literal['live', 'half_time', 'finished', 'abandoned']
+    state: Literal['pre_match', 'live', 'half_time', 'finished', 'abandoned']
     minute: int
     score_home: int
     score_away: int
     speed: float
     home: TeamSheet
     away: TeamSheet
+    source: Literal['simulated', 'statsbomb', 'api_football', 'openligadb'] | None = 'simulated'
+    detail: Literal['full', 'key_events'] | None = 'full'
+    credit: str | None = None
+    competition: str | None = None
 
 
 class MatchEvent(BaseModel):
@@ -64,6 +71,8 @@ class MatchEvent(BaseModel):
     outcome: Literal['goal', 'saved', 'off_target', 'blocked'] | None = None
     completed: bool | None = None
     player_in_id: str | None = None
+    xg: float | None = None
+    located: bool | None = True
 
 
 class TeamStats(BaseModel):
@@ -93,6 +102,9 @@ class StatsSnapshot(BaseModel):
     away: TeamStats
     momentum: float
     period_end: Literal['half_time', 'full_time'] | None = None
+    provided: list[Literal['goals', 'possession', 'shots', 'shots_on_target', 'passes', 'pass_accuracy', 'fouls', 'yellow_cards', 'red_cards', 'xg']] | None = (
+        None
+    )
 
 
 class PressureSnapshot(BaseModel):
@@ -593,6 +605,8 @@ class PlayEvent(BaseModel):
     outcome: Literal['goal', 'saved', 'off_target', 'blocked'] | None = None
     completed: bool | None = None
     player_in_id: str | None = None
+    xg: float | None = None
+    located: bool | None = True
 
 
 class TeamTactics(BaseModel):
@@ -764,7 +778,7 @@ class PlayerReport(BaseModel):
     minute: int
     cols: int
     rows: int
-    players: list[PlayerMetrics] = Field(..., max_length=40)
+    players: list[PlayerMetrics] = Field(..., max_length=60)
 
 
 class Highlight(BaseModel):
@@ -1087,3 +1101,76 @@ class CopilotInfo(BaseModel):
     model: bool
     search: str
     matches_remembered: int
+
+
+class SourceInfo(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: Literal['simulated', 'statsbomb', 'api_football', 'openligadb']
+    name: str
+    kind: Literal['simulated', 'replay', 'live']
+    detail: Literal['full', 'key_events']
+    available: bool
+    credit: str | None = None
+    setup: str | None = None
+    budget_used: int | None = None
+    budget_limit: int | None = None
+
+
+class RunningMatch(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    match_id: str
+    source: Literal['simulated', 'statsbomb', 'api_football', 'openligadb']
+    ref: str | None = None
+    title: str | None = None
+    problem: str | None = None
+
+
+class Sources(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    sources: list[SourceInfo]
+    running: RunningMatch | None = None
+
+
+class Competition(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    competition_id: int
+    season_id: int
+    competition_name: str
+    season_name: str
+    country_name: str
+
+
+class MatchListing(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    ref: str
+    date: str
+    home: str
+    away: str
+    kick_off: str | None = None
+    stage: str | None = None
+
+
+class Fixture(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    ref: str
+    source: Literal['api_football', 'openligadb']
+    competition: str
+    home: str
+    away: str
+    kickoff_at: float
+    state: Literal['pre_match', 'live', 'half_time', 'finished', 'postponed']
+    minute: int | None = None
+    score_home: int | None = None
+    score_away: int | None = None

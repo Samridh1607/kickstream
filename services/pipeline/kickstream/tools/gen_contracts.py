@@ -15,31 +15,35 @@ TARGET = PIPELINE_ROOT / "kickstream" / "contracts.py"
 
 
 def render(out: Path) -> None:
-    subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "datamodel_code_generator",
-            "--input",
-            str(SCHEMA),
-            "--input-file-type",
-            "jsonschema",
-            "--output",
-            str(out),
-            "--output-model-type",
-            "pydantic_v2.BaseModel",
-            "--target-python-version",
-            "3.13",
-            "--use-standard-collections",
-            "--use-union-operator",
-            "--enum-field-as-literal",
-            "all",
-            "--disable-timestamp",
-            "--formatters",
-            "builtin",
-        ],
-        check=True,
-    )
+    # The formatter takes its line length from the pyproject.toml nearest the output file.
+    with tempfile.TemporaryDirectory(dir=PIPELINE_ROOT) as tmp:
+        staged = Path(tmp) / "contracts.py"
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "datamodel_code_generator",
+                "--input",
+                str(SCHEMA),
+                "--input-file-type",
+                "jsonschema",
+                "--output",
+                str(staged),
+                "--output-model-type",
+                "pydantic_v2.BaseModel",
+                "--target-python-version",
+                "3.13",
+                "--use-standard-collections",
+                "--use-union-operator",
+                "--enum-field-as-literal",
+                "all",
+                "--disable-timestamp",
+                "--formatters",
+                "builtin",
+            ],
+            check=True,
+        )
+        out.write_bytes(staged.read_bytes())
 
 
 def _normalized(path: Path) -> str:

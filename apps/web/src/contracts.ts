@@ -12,6 +12,8 @@ export interface Player {
   name: string;
   number: number;
   position: "GK" | "DF" | "MF" | "FW";
+  starting?: boolean;
+  grid?: string | null;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
@@ -23,6 +25,7 @@ export interface TeamSheet {
   short_name: string;
   color: string;
   players: Player[];
+  formation?: string | null;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
@@ -30,13 +33,17 @@ export interface TeamSheet {
  */
 export interface MatchStatus {
   match_id: string;
-  state: "live" | "half_time" | "finished" | "abandoned";
+  state: "pre_match" | "live" | "half_time" | "finished" | "abandoned";
   minute: number;
   score_home: number;
   score_away: number;
   speed: number;
   home: TeamSheet;
   away: TeamSheet;
+  source?: "simulated" | "statsbomb" | "api_football" | "openligadb";
+  detail?: "full" | "key_events";
+  credit?: string | null;
+  competition?: string | null;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
@@ -68,6 +75,8 @@ export interface MatchEvent {
   outcome?: "goal" | "saved" | "off_target" | "blocked" | null;
   completed?: boolean | null;
   player_in_id?: string | null;
+  xg?: number | null;
+  located?: boolean;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
@@ -97,6 +106,20 @@ export interface StatsSnapshot {
   away: TeamStats;
   momentum: number;
   period_end?: "half_time" | "full_time" | null;
+  provided?:
+    | (
+        | "goals"
+        | "possession"
+        | "shots"
+        | "shots_on_target"
+        | "passes"
+        | "pass_accuracy"
+        | "fouls"
+        | "yellow_cards"
+        | "red_cards"
+        | "xg"
+      )[]
+    | null;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
@@ -713,6 +736,8 @@ export interface PlayEvent {
   outcome?: "goal" | "saved" | "off_target" | "blocked" | null;
   completed?: boolean | null;
   player_in_id?: string | null;
+  xg?: number | null;
+  located?: boolean;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
@@ -914,7 +939,7 @@ export interface PlayerReport {
   cols: number;
   rows: number;
   /**
-   * @maxItems 40
+   * @maxItems 60
    */
   players: PlayerMetrics[];
 }
@@ -1355,4 +1380,77 @@ export interface CopilotInfo {
   model: boolean;
   search: string;
   matches_remembered: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "SourceInfo".
+ */
+export interface SourceInfo {
+  id: "simulated" | "statsbomb" | "api_football" | "openligadb";
+  name: string;
+  kind: "simulated" | "replay" | "live";
+  detail: "full" | "key_events";
+  available: boolean;
+  credit?: string | null;
+  setup?: string | null;
+  budget_used?: number | null;
+  budget_limit?: number | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "RunningMatch".
+ */
+export interface RunningMatch {
+  match_id: string;
+  source: "simulated" | "statsbomb" | "api_football" | "openligadb";
+  ref?: string | null;
+  title?: string | null;
+  problem?: string | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Sources".
+ */
+export interface Sources {
+  sources: SourceInfo[];
+  running?: RunningMatch | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Competition".
+ */
+export interface Competition {
+  competition_id: number;
+  season_id: number;
+  competition_name: string;
+  season_name: string;
+  country_name: string;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "MatchListing".
+ */
+export interface MatchListing {
+  ref: string;
+  date: string;
+  home: string;
+  away: string;
+  kick_off?: string | null;
+  stage?: string | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "Fixture".
+ */
+export interface Fixture {
+  ref: string;
+  source: "api_football" | "openligadb";
+  competition: string;
+  home: string;
+  away: string;
+  kickoff_at: number;
+  state: "pre_match" | "live" | "half_time" | "finished" | "postponed";
+  minute?: number | null;
+  score_home?: number | null;
+  score_away?: number | null;
 }

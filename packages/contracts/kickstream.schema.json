@@ -9,7 +9,9 @@
         "id": { "type": "string" },
         "name": { "type": "string" },
         "number": { "type": "integer" },
-        "position": { "enum": ["GK", "DF", "MF", "FW"] }
+        "position": { "enum": ["GK", "DF", "MF", "FW"] },
+        "starting": { "type": "boolean", "default": false },
+        "grid": { "type": ["string", "null"], "maxLength": 5, "default": null }
       }
     },
     "TeamSheet": {
@@ -20,7 +22,8 @@
         "name": { "type": "string" },
         "short_name": { "type": "string" },
         "color": { "type": "string" },
-        "players": { "type": "array", "items": { "$ref": "#/$defs/Player" } }
+        "players": { "type": "array", "items": { "$ref": "#/$defs/Player" } },
+        "formation": { "type": ["string", "null"], "maxLength": 12, "default": null }
       }
     },
     "MatchStatus": {
@@ -28,13 +31,17 @@
       "required": ["match_id", "state", "minute", "score_home", "score_away", "speed", "home", "away"],
       "properties": {
         "match_id": { "type": "string" },
-        "state": { "enum": ["live", "half_time", "finished", "abandoned"] },
+        "state": { "enum": ["pre_match", "live", "half_time", "finished", "abandoned"] },
         "minute": { "type": "integer" },
         "score_home": { "type": "integer" },
         "score_away": { "type": "integer" },
         "speed": { "type": "number" },
         "home": { "$ref": "#/$defs/TeamSheet" },
-        "away": { "$ref": "#/$defs/TeamSheet" }
+        "away": { "$ref": "#/$defs/TeamSheet" },
+        "source": { "enum": ["simulated", "statsbomb", "api_football", "openligadb"], "default": "simulated" },
+        "detail": { "enum": ["full", "key_events"], "default": "full" },
+        "credit": { "type": ["string", "null"], "default": null },
+        "competition": { "type": ["string", "null"], "default": null }
       }
     },
     "MatchEvent": {
@@ -53,7 +60,9 @@
         "y": { "type": "number" },
         "outcome": { "enum": ["goal", "saved", "off_target", "blocked", null], "default": null },
         "completed": { "type": ["boolean", "null"], "default": null },
-        "player_in_id": { "type": ["string", "null"], "default": null }
+        "player_in_id": { "type": ["string", "null"], "default": null },
+        "xg": { "type": ["number", "null"], "default": null },
+        "located": { "type": "boolean", "default": true }
       }
     },
     "TeamStats": {
@@ -82,7 +91,14 @@
         "home": { "$ref": "#/$defs/TeamStats" },
         "away": { "$ref": "#/$defs/TeamStats" },
         "momentum": { "type": "number" },
-        "period_end": { "enum": ["half_time", "full_time", null], "default": null }
+        "period_end": { "enum": ["half_time", "full_time", null], "default": null },
+        "provided": {
+          "anyOf": [
+            { "type": "array", "items": { "enum": ["goals", "possession", "shots", "shots_on_target", "passes", "pass_accuracy", "fouls", "yellow_cards", "red_cards", "xg"] } },
+            { "type": "null" }
+          ],
+          "default": null
+        }
       }
     },
     "PressureSnapshot": {
@@ -592,7 +608,9 @@
         "danger": { "type": "number", "minimum": 0, "maximum": 1 },
         "outcome": { "enum": ["goal", "saved", "off_target", "blocked", null], "default": null },
         "completed": { "type": ["boolean", "null"], "default": null },
-        "player_in_id": { "type": ["string", "null"], "default": null }
+        "player_in_id": { "type": ["string", "null"], "default": null },
+        "xg": { "type": ["number", "null"], "default": null },
+        "located": { "type": "boolean", "default": true }
       }
     },
     "TeamTactics": {
@@ -758,7 +776,7 @@
         "minute": { "type": "integer" },
         "cols": { "type": "integer" },
         "rows": { "type": "integer" },
-        "players": { "type": "array", "items": { "$ref": "#/$defs/PlayerMetrics" }, "maxItems": 40 }
+        "players": { "type": "array", "items": { "$ref": "#/$defs/PlayerMetrics" }, "maxItems": 60 }
       }
     },
     "Highlight": {
@@ -1056,6 +1074,79 @@
         "model": { "type": "boolean" },
         "search": { "type": "string" },
         "matches_remembered": { "type": "integer" }
+      }
+    },
+    "SourceInfo": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "kind", "detail", "available"],
+      "properties": {
+        "id": { "enum": ["simulated", "statsbomb", "api_football", "openligadb"] },
+        "name": { "type": "string" },
+        "kind": { "enum": ["simulated", "replay", "live"] },
+        "detail": { "enum": ["full", "key_events"] },
+        "available": { "type": "boolean" },
+        "credit": { "type": ["string", "null"], "default": null },
+        "setup": { "type": ["string", "null"], "default": null },
+        "budget_used": { "type": ["integer", "null"], "default": null },
+        "budget_limit": { "type": ["integer", "null"], "default": null }
+      }
+    },
+    "RunningMatch": {
+      "type": "object", "additionalProperties": false,
+      "required": ["match_id", "source"],
+      "properties": {
+        "match_id": { "type": "string" },
+        "source": { "enum": ["simulated", "statsbomb", "api_football", "openligadb"] },
+        "ref": { "type": ["string", "null"], "default": null },
+        "title": { "type": ["string", "null"], "default": null },
+        "problem": { "type": ["string", "null"], "default": null }
+      }
+    },
+    "Sources": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sources"],
+      "properties": {
+        "sources": { "type": "array", "items": { "$ref": "#/$defs/SourceInfo" } },
+        "running": { "anyOf": [{ "$ref": "#/$defs/RunningMatch" }, { "type": "null" }], "default": null }
+      }
+    },
+    "Competition": {
+      "type": "object", "additionalProperties": false,
+      "required": ["competition_id", "season_id", "competition_name", "season_name", "country_name"],
+      "properties": {
+        "competition_id": { "type": "integer" },
+        "season_id": { "type": "integer" },
+        "competition_name": { "type": "string" },
+        "season_name": { "type": "string" },
+        "country_name": { "type": "string" }
+      }
+    },
+    "MatchListing": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ref", "date", "home", "away"],
+      "properties": {
+        "ref": { "type": "string" },
+        "date": { "type": "string" },
+        "home": { "type": "string" },
+        "away": { "type": "string" },
+        "kick_off": { "type": ["string", "null"], "default": null },
+        "stage": { "type": ["string", "null"], "default": null }
+      }
+    },
+    "Fixture": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ref", "source", "competition", "home", "away", "kickoff_at", "state"],
+      "properties": {
+        "ref": { "type": "string" },
+        "source": { "enum": ["api_football", "openligadb"] },
+        "competition": { "type": "string" },
+        "home": { "type": "string" },
+        "away": { "type": "string" },
+        "kickoff_at": { "type": "number" },
+        "state": { "enum": ["pre_match", "live", "half_time", "finished", "postponed"] },
+        "minute": { "type": ["integer", "null"], "default": null },
+        "score_home": { "type": ["integer", "null"], "default": null },
+        "score_away": { "type": ["integer", "null"], "default": null }
       }
     }
   }
