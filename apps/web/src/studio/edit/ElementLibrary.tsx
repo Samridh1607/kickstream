@@ -49,8 +49,18 @@ const useStyles = makeStyles({
   tileIcon: { fontSize: "24px", color: tokens.colorBrandForeground1, display: "inline-flex" },
 });
 
-function newElementId(): string {
+export function newElementId(): string {
   return Math.random().toString(16).slice(2, 10);
+}
+
+/** A widget as one click adds it: at its own size, in the middle of the canvas, moved along by `step` so several in a row do not hide one another. */
+export function widgetElement(widget: (typeof WIDGETS)[number], elements: SceneElement[], step = 0, props: Record<string, unknown> = widget.props): SceneElement {
+  return {
+    id: newElementId(), type: widget.type, width: widget.width, height: widget.height, layer: nextLayer(elements), visible: true,
+    x: Math.min(CANVAS.width - widget.width, Math.round((CANVAS.width - widget.width) / 2 / 20) * 20 + step),
+    y: Math.min(CANVAS.height - widget.height, Math.round((CANVAS.height - widget.height) / 2 / 20) * 20 + step),
+    props,
+  };
 }
 
 interface ElementLibraryProps {
@@ -71,14 +81,7 @@ export function ElementLibrary({ scene, onSelect, onChange }: ElementLibraryProp
     onSelect(added.id);
   };
   const addWidget = (widget: (typeof WIDGETS)[number]) => {
-    // Each new widget lands a little further along, so several added in a row do not hide one another.
-    const step = (scene.elements.length % 6) * 40;
-    const added: SceneElement = {
-      id: newElementId(), type: widget.type, width: widget.width, height: widget.height, layer: nextLayer(scene.elements), visible: true,
-      x: Math.min(CANVAS.width - widget.width, Math.round((CANVAS.width - widget.width) / 2 / 20) * 20 + step),
-      y: Math.min(CANVAS.height - widget.height, Math.round((CANVAS.height - widget.height) / 2 / 20) * 20 + step),
-      props: widget.props,
-    };
+    const added = widgetElement(widget, scene.elements, (scene.elements.length % 6) * 40);
     onChange([...scene.elements, added]);
     onSelect(added.id);
   };

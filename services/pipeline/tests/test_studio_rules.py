@@ -13,6 +13,8 @@ from kickstream.studio.templates import (
     INTERVIEW,
     LIVE_MATCH,
     MATCH_INTELLIGENCE,
+    PITCH_3D,
+    PITCH_VIEW,
     STARTING_SOON,
     builtin_templates,
     default_studio,
@@ -60,7 +62,7 @@ def moment(n=1, kind="goal"):
 # --- templates -------------------------------------------------------------------------------
 
 
-def test_there_are_eight_built_in_templates_that_fit_the_canvas():
+def test_there_are_nine_built_in_templates_that_fit_the_canvas():
     templates = builtin_templates()
     assert [t.name for t in templates] == [
         STARTING_SOON,
@@ -71,6 +73,7 @@ def test_there_are_eight_built_in_templates_that_fit_the_canvas():
         INTERVIEW,
         MATCH_INTELLIGENCE,
         FAN_ZONE,
+        PITCH_3D,
     ]
     for template in templates:
         assert template.template == template.name and template.elements
@@ -115,6 +118,7 @@ def test_the_live_match_is_the_fan_scene_and_the_analyst_desk_the_analyst_scene(
         INTERVIEW: None,
         MATCH_INTELLIGENCE: "analyst",
         FAN_ZONE: "fan",
+        PITCH_3D: None,
     }
 
 
@@ -589,7 +593,28 @@ def test_the_interview_template_puts_the_cameras_first_and_new_studios_start_wit
         ("graph", {"metric": "win_probability"}, {"metric": "win_probability"}),
         ("graph", {"metric": 7}, {"metric": "momentum"}),
         ("prediction", {"view": "next_goal"}, {"view": "next_goal"}),
-        ("pitch3d", {"camera": "drone"}, {"camera": "auto"}),
+        ("pitch3d", {"camera": "drone"}, PITCH_VIEW),
+        (
+            "pitch3d",
+            {
+                "camera": "attack_home",
+                "zoom": 3.456,
+                "turn": -12,
+                "tilt": 8.5,
+                "pan_x": 40,
+                "follow_ball": True,
+            },
+            {
+                **PITCH_VIEW,
+                **{"camera": "attack_home", "zoom": 3.46, "turn": -12.0, "tilt": 8.5, "pan_x": 40.0},
+                "follow_ball": True,
+            },
+        ),
+        (
+            "pitch3d",
+            {"zoom": 99, "turn": -400, "tilt": "steep", "pan_y": 1e9, "follow_ball": "yes", "spin": 1},
+            {**PITCH_VIEW, "zoom": 4.0, "turn": -75.0, "pan_y": 2000.0},
+        ),
         ("player", {"player_id": "nbr-9"}, {"player_id": "nbr-9"}),
         ("player", {"player_id": ""}, {"player_id": None}),
         ("player", {"player_id": 9}, {"player_id": None}),
@@ -607,6 +632,20 @@ def test_a_widget_keeps_only_its_own_properties_within_their_ranges(type_, given
         SceneElement(id="w", type=type_, x=0, y=0, width=400, height=200, layer=1, visible=True, props=given)
     )
     assert made.props == kept
+
+
+def test_the_3d_pitch_template_fills_the_frame_with_the_pitch_under_the_scoreboard():
+    pitch = next(t for t in builtin_templates() if t.name == PITCH_3D)
+    assert [(e.type, e.x, e.y, e.width, e.height) for e in pitch.elements][0] == (
+        "pitch3d",
+        0,
+        0,
+        CANVAS_W,
+        CANVAS_H,
+    )
+    assert [e.type for e in pitch.elements] == ["pitch3d", "scoreboard"]
+    assert PITCH_3D not in {scene.name for scene in default_studio().scenes}
+    assert rules.create_scene(default_studio(), "builtin", PITCH_3D).scenes[-1].template == PITCH_3D
 
 
 def test_the_extra_templates_are_offered_but_a_new_studio_does_not_start_with_them():

@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { type Camera, Pitch3D } from "../agents/Pitch3D";
+import { type Camera, LEVEL, Pitch3D, type View } from "../agents/Pitch3D";
 import { CompareBars, Counted, Donut, HeatGrid, type Line, LineGraph, NEUTRAL, ShareBar, type Sides, Swatch } from "../charts/charts";
 import type { FanComment, FanPoll, FanZone, MatchStatus, PlayerMetrics, SceneElement, Spotlight, SuperChat } from "../contracts";
 import { type Language, type StringKey, t } from "../i18n";
@@ -240,12 +240,22 @@ function InsightView({ match, language }: { match: MatchData; language: Language
 
 // --- 3D pitch and player -------------------------------------------------------------------------
 
-function Pitch3DView({ match, camera, language, followId }: { match: MatchData; camera: string; language: Language; followId: string | null }) {
-  const held = camera === "broadcast" || camera === "tactical" ? (camera as Camera) : undefined;
+const CAMERAS: readonly string[] = ["broadcast", "tactical", "attack_home", "attack_away"] satisfies Camera[];
+
+/** The view a 3D pitch element holds, from its saved settings. */
+export function heldView(props: Record<string, unknown>): View {
+  const num = (value: unknown, fallback: number) => (typeof value === "number" && Number.isFinite(value) ? value : fallback);
+  return { zoom: num(props.zoom, LEVEL.zoom), turn: num(props.turn, LEVEL.turn), tilt: num(props.tilt, LEVEL.tilt), panX: num(props.pan_x, LEVEL.panX), panY: num(props.pan_y, LEVEL.panY) };
+}
+
+function Pitch3DView({ match, props, language }: { match: MatchData; props: Record<string, unknown>; language: Language }) {
+  const camera = typeof props.camera === "string" && CAMERAS.includes(props.camera) ? (props.camera as Camera) : undefined;
+  const followId = typeof props.player_id === "string" ? props.player_id : null;
   return (
     <Panel testId="program-pitch3d" style={{ padding: 12, gap: 4, background: "linear-gradient(180deg, #0B1220 0%, #16233B 100%)" }}>
       <div style={{ flex: 1, minHeight: 0 }}>
-        <Pitch3D scene={match.pitch} colors={colorsOf(match.status)} camera={held} followId={followId} label={t(language, "pitch3d")} emptyText={t(language, "pitch3dEmpty")} />
+        <Pitch3D scene={match.pitch} colors={colorsOf(match.status)} camera={camera} followId={followId} view={heldView(props)} followBall={props.follow_ball === true}
+          label={t(language, "pitch3d")} emptyText={t(language, "pitch3dEmpty")} />
       </div>
       {match.pitch && <span style={{ fontSize: 16, ...MUTED, textAlign: "right", paddingRight: 8 }}>{t(language, "estimated")}</span>}
     </Panel>
@@ -440,10 +450,8 @@ export function WidgetView({ element, data }: { element: SceneElement & { type: 
       return <PredictionView match={match} view={text(props.view, "outcome")} language={language} />;
     case "insight":
       return <InsightView match={match} language={language} />;
-    case "pitch3d": {
-      const followed = typeof props.player_id === "string" ? props.player_id : null;
-      return <Pitch3DView match={match} camera={text(props.camera, "auto")} language={language} followId={followed} />;
-    }
+    case "pitch3d":
+      return <Pitch3DView match={match} props={props} language={language} />;
     case "player":
       return <PlayerView match={match} playerId={typeof props.player_id === "string" ? props.player_id : null} language={language} />;
     case "comments":

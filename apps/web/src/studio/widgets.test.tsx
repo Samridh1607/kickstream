@@ -108,6 +108,28 @@ test("the 3D pitch draws the scene, follows its camera, and says positions are e
   expect(screen.getByTestId("pitch3d").getAttribute("data-camera")).toBe("tactical");
 });
 
+test("the 3D pitch holds the view saved with the element, with no controls on the program", () => {
+  const camera = () => screen.getByTestId("pitch-camera").style.transform;
+  const scale = () => Number(/scale\(([\d.]+)\)/.exec(camera())![1]);
+  const { unmount: fitted } = show("pitch3d", { camera: "broadcast", zoom: "a lot", turn: null });
+  expect(screen.getByTestId("pitch-stage").style.transform).toBe("rotateX(56deg) rotateZ(0deg)");
+  const level = scale();
+  fitted();
+
+  const { unmount: held } = show("pitch3d", { camera: "broadcast", zoom: 2, turn: 20, tilt: -8, pan_x: 0, pan_y: 0, player_id: "nbr-9" });
+  expect(screen.getByTestId("pitch-stage").style.transform).toBe("rotateX(48deg) rotateZ(20deg)");
+  expect(scale()).toBeGreaterThan(level * 1.5);
+  expect(screen.getAllByTestId("pitch-player")[0].getAttribute("data-followed")).toBe("true");
+  expect(screen.queryByRole("button")).toBeNull();
+  expect(screen.queryByRole("slider")).toBeNull();
+  const still = camera();
+  held();
+
+  show("pitch3d", { camera: "broadcast", zoom: 2, turn: 20, tilt: -8, follow_ball: true });
+  expect(scale()).toBeGreaterThan(level * 1.5);
+  expect(camera()).not.toBe(still);
+});
+
 test("the player card follows the chosen player, or else the best rated", () => {
   expect(trackedPlayer(live, null)?.name).toBe("Luca Marrowby");
   expect(trackedPlayer(live, "nobody")?.name).toBe("Luca Marrowby");

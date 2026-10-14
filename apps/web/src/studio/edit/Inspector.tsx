@@ -1,6 +1,8 @@
-import { Field, Input, makeStyles, Select, Switch, Text, Textarea, tokens } from "@fluentui/react-components";
+import { Field, Input, makeStyles, Select, Slider, Switch, Text, Textarea, tokens } from "@fluentui/react-components";
 import { type ChangeEvent, type KeyboardEvent, useEffect, useState } from "react";
+import { ZOOM_RANGE } from "../../agents/Pitch3D";
 import type { MatchStatus, Scene, SceneElement } from "../../contracts";
+import { heldView } from "../widgets";
 
 const NAME_MAX = 60;
 
@@ -14,6 +16,21 @@ function TextField({ label, value, onCommit }: { label: string; value: string; o
   return (
     <Field label={label}>
       <Textarea value={draft} maxLength={200} onChange={(_, data) => setDraft(data.value)} onBlur={() => draft !== value && onCommit(draft)} />
+    </Field>
+  );
+}
+
+/** A slider that saves once it is let go of, not at every step on the way. */
+function ViewSlider({ label, value, min, max, step, format, onCommit }: {
+  label: string; value: number; min: number; max: number; step: number; format(value: number): string; onCommit(value: number): void;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const commit = () => draft !== value && onCommit(draft);
+  return (
+    <Field label={label} hint={format(draft)}>
+      <Slider min={min} max={max} step={step} value={draft} onChange={(_, data) => setDraft(data.value)}
+        input={{ "aria-valuetext": format(draft), onPointerUp: commit, onKeyUp: commit, onBlur: commit }} />
     </Field>
   );
 }
@@ -132,13 +149,24 @@ export function Inspector({ scene, selectedId, onChange, onUpload, status = null
         </Field>
       )}
       {selected.type === "pitch3d" && (
-        <Field label="Camera">
-          <Select value={String(selected.props.camera ?? "auto")} onChange={(_, data) => setProp(selected, "camera", data.value)}>
-            <option value="auto">Follow the play</option>
-            <option value="broadcast">Broadcast view</option>
-            <option value="tactical">Tactical view</option>
-          </Select>
-        </Field>
+        <>
+          <Field label="Camera">
+            <Select value={String(selected.props.camera ?? "auto")} onChange={(_, data) => setProp(selected, "camera", data.value)}>
+              <option value="auto">Follow the play</option>
+              <option value="broadcast">Broadcast view</option>
+              <option value="tactical">Tactical view</option>
+              <option value="attack_home">Behind the home attack</option>
+              <option value="attack_away">Behind the away attack</option>
+            </Select>
+          </Field>
+          <ViewSlider label="Zoom" value={Math.round(heldView(selected.props).zoom * 100)} min={ZOOM_RANGE[0] * 100} max={ZOOM_RANGE[1] * 100} step={5}
+            format={(value) => `${value}%`} onCommit={(value) => setProp(selected, "zoom", value / 100)} />
+          <ViewSlider label="Rotate" value={Math.round(heldView(selected.props).turn)} min={-75} max={75} step={1}
+            format={(value) => `${value}°`} onCommit={(value) => setProp(selected, "turn", value)} />
+          <ViewSlider label="Tilt" value={Math.round(heldView(selected.props).tilt)} min={-50} max={50} step={1}
+            format={(value) => `${value}°`} onCommit={(value) => setProp(selected, "tilt", value)} />
+          <Switch label="Follow the ball" checked={selected.props.follow_ball === true} onChange={(_, data) => setProp(selected, "follow_ball", data.checked)} />
+        </>
       )}
       {selected.type === "player" && (
         <Field label="Player" hint={players.length === 0 ? "Start a match to choose a player." : undefined}>

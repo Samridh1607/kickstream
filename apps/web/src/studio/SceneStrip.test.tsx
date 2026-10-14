@@ -116,6 +116,13 @@ test("adding a scene from a built-in template", () => {
   expect(screen.queryByText("Add a scene")).toBeNull();
 });
 
+test("the 3D pitch template is offered with the built-in ones", () => {
+  const calls = setup();
+  fireEvent.click(strip().getByRole("button", { name: "Add scene" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add scene from 3D pitch" }));
+  expect(calls.onCreate).toHaveBeenCalledWith("builtin", "3D pitch");
+});
+
 test("a saved template can be added and deleted", () => {
   const saved = scene({ id: "t1", name: "Derby desk", template: null });
   const calls = setup(studio({ templates: [saved] }));

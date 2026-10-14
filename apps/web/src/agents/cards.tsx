@@ -1,16 +1,22 @@
-import { Badge, makeStyles, mergeClasses, Select, Text, tokens } from "@fluentui/react-components";
 import {
-  BrainCircuitRegular, CubeRegular, DataTrendingRegular, FlashRegular, LightbulbRegular, PersonRunningRegular, ScanRegular,
+  Badge, Button, makeStyles, Menu, MenuButton, MenuDivider, MenuItem, MenuList, MenuPopover, MenuTrigger, MessageBar, MessageBarActions, MessageBarBody,
+  mergeClasses, Select, Text, tokens,
+} from "@fluentui/react-components";
+import {
+  AddRegular, BrainCircuitRegular, CubeAddRegular, CubeRegular, DataTrendingRegular, DismissRegular, FlashRegular, LightbulbRegular, OpenRegular,
+  PersonRunningRegular, ScanRegular,
 } from "@fluentui/react-icons";
-import { type ReactElement, type ReactNode, useState } from "react";
+import { type ReactElement, type ReactNode, type RefObject, useCallback, useMemo, useRef, useState } from "react";
 import { CompareBars, Counted, HeatGrid, LineGraph, NEUTRAL, ShareBar, type Sides, Swatch } from "../charts/charts";
-import type { AgentRun, MatchStatus, PlayEvent, TeamTactics } from "../contracts";
+import type { AgentRun, MatchStatus, PlayEvent, Studio, TeamTactics } from "../contracts";
 import { type Language, type StringKey, t } from "../i18n";
 import { MotionStyles, rise, SETTLE, slide } from "../motion/motion";
 import type { MatchData } from "../stream/store";
+import { getStudio } from "../studio/api";
+import { addPitch, createPitchScene, hasRoom, PITCH_TEMPLATE, pitchProps } from "../studio/pitchScene";
 import { trackedPlayer } from "../studio/widgets";
 import type { AgentId } from "./api";
-import { type Camera, Pitch3D } from "./Pitch3D";
+import { type Camera, LEVEL, Pitch3D, type View } from "./Pitch3D";
 
 export const AGENT_ICONS: Record<AgentId, ReactElement> = {
   event_interpreter: <ScanRegular />,
@@ -108,22 +114,86 @@ interface CardProps {
 
 // --- Visualization Agent ---------------------------------------------------------------------------
 
+type Added = { intent: "success"; scene: string } | { intent: "error"; message: string };
+
+/** Puts the 3D pitch, as the viewer has it framed, into one of the studio's scenes or a new one. */
+function AddToScene({ camera, view, onAdded }: { camera: "auto" | Camera; view: RefObject<View>; onAdded(result: Added): void }) {
+  const [studio, setStudio] = useState<Studio | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const load = () => {
+    setFailed(false);
+    getStudio().then(setStudio).catch(() => setFailed(true));
+  };
+  const add = async (name: string, request: () => Promise<Studio>) => {
+    setBusy(true);
+    try {
+      setStudio(await request());
+      onAdded({ intent: "success", scene: name });
+    } catch (caught) {
+      onAdded({ intent: "error", message: caught instanceof Error ? caught.message : "The 3D pitch could not be added." });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const props = () => pitchProps(camera, view.current);
+  return (
+    <Menu onOpenChange={(_, data) => data.open && load()}>
+      <MenuTrigger disableButtonEnhancement>
+        <MenuButton size="small" icon={<CubeAddRegular />} disabled={busy}>Add to scene</MenuButton>
+      </MenuTrigger>
+      <MenuPopover>
+        <MenuList>
+          {!studio && !failed && <MenuItem disabled>Loading scenes…</MenuItem>}
+          {failed && <MenuItem disabled>The studio's scenes could not be loaded</MenuItem>}
+          {studio?.scenes.map((scene) => (
+            <MenuItem key={scene.id} disabled={!hasRoom(scene)} onClick={() => void add(scene.name, () => addPitch(scene, props()))}>
+              Add to {scene.name}
+            </MenuItem>
+          ))}
+          <MenuDivider />
+          <MenuItem icon={<AddRegular />} onClick={() => void add(PITCH_TEMPLATE, () => createPitchScene(props()))}>New scene with 3D pitch</MenuItem>
+        </MenuList>
+      </MenuPopover>
+    </Menu>
+  );
+}
+
 export function PitchCard({ match, language, followId, tall = false }: CardProps & { followId: string | null; tall?: boolean }) {
   const styles = useStyles();
   const [camera, setCamera] = useState<"auto" | Camera>("auto");
+  const [added, setAdded] = useState<Added | null>(null);
+  const view = useRef<View>(LEVEL);
+  const onView = useCallback((next: View) => {
+    view.current = next;
+  }, []);
+  const home = match.status?.home.color;
+  const away = match.status?.away.color;
+  const colors = useMemo(() => (home && away ? { home, away } : DEFAULT_COLORS), [home, away]);
   return (
     <Card agent="visualization" title={t(language, "pitch3d")} testId="card-pitch"
       extra={
-        <Select size="small" aria-label="Camera" value={camera} onChange={(_, data) => setCamera(data.value as "auto" | Camera)}>
-          <option value="auto">Follow the play</option>
-          <option value="broadcast">Broadcast view</option>
-          <option value="tactical">Tactical view</option>
-          <option value="attack_home">Behind the home attack</option>
-          <option value="attack_away">Behind the away attack</option>
-        </Select>
+        <>
+          <AddToScene camera={camera} view={view} onAdded={setAdded} />
+          <Select size="small" aria-label="Camera" value={camera} onChange={(_, data) => setCamera(data.value as "auto" | Camera)}>
+            <option value="auto">Follow the play</option>
+            <option value="broadcast">Broadcast view</option>
+            <option value="tactical">Tactical view</option>
+            <option value="attack_home">Behind the home attack</option>
+            <option value="attack_away">Behind the away attack</option>
+          </Select>
+        </>
       }>
+      {added && (
+        <MessageBar intent={added.intent}>
+          <MessageBarBody>{added.intent === "success" ? `Added to ${added.scene}` : added.message}</MessageBarBody>
+          <MessageBarActions containerAction={<Button appearance="transparent" size="small" aria-label="Dismiss" icon={<DismissRegular />} onClick={() => setAdded(null)} />}>
+            {added.intent === "success" && <Button as="a" href="/studio" size="small" icon={<OpenRegular />}>Open studio</Button>}
+          </MessageBarActions>
+        </MessageBar>
+      )}
       <div className={mergeClasses(styles.pitch, tall && styles.tall)}>
-        <Pitch3D scene={match.pitch} colors={colorsOf(match.status)} camera={camera === "auto" ? undefined : camera} followId={followId} controls
+        <Pitch3D scene={match.pitch} colors={colors} camera={camera === "auto" ? undefined : camera} followId={followId} controls onViewChange={onView}
           label={t(language, "pitch3d")} emptyText={t(language, "pitch3dEmpty")} />
       </div>
       {match.pitch && (

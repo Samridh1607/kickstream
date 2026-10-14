@@ -154,6 +154,37 @@ test("a selected widget's settings change what it shows", () => {
   expect(lastElements(calls).find((item) => item.id === "p")!.props).toEqual({ player_id: "hbc-9" });
 });
 
+test("a selected 3D pitch holds the camera, zoom, turn and tilt it is given, and can follow the ball", () => {
+  const doc = studio();
+  doc.scenes[0].elements.push({ id: "p3", type: "pitch3d", x: 0, y: 0, width: 900, height: 560, layer: 8, visible: true, props: { camera: "auto" } });
+  const calls = setup(doc);
+  const props = () => lastElements(calls).find((item) => item.id === "p3")!.props;
+  fireEvent.click(layout().getByRole("button", { name: "Select pitch3d" }));
+  const camera = layout().getByLabelText("Camera") as HTMLSelectElement;
+  expect([...camera.options].map((option) => option.value)).toEqual(["auto", "broadcast", "tactical", "attack_home", "attack_away"]);
+  fireEvent.change(camera, { target: { value: "attack_away" } });
+  expect(props()).toEqual({ camera: "attack_away" });
+
+  const zoom = layout().getByRole("slider", { name: "Zoom" }) as HTMLInputElement;
+  expect([zoom.min, zoom.max, zoom.value]).toEqual(["50", "400", "100"]);
+  fireEvent.change(zoom, { target: { value: "250" } });
+  expect(zoom.getAttribute("aria-valuetext")).toBe("250%");
+  expect(calls.onChange).toHaveBeenCalledTimes(1);
+  fireEvent.pointerUp(zoom);
+  expect(props()).toEqual({ camera: "attack_away", zoom: 2.5 });
+
+  const rotate = layout().getByRole("slider", { name: "Rotate" });
+  fireEvent.change(rotate, { target: { value: "-30" } });
+  fireEvent.keyUp(rotate, { key: "ArrowLeft" });
+  const tilt = layout().getByRole("slider", { name: "Tilt" });
+  fireEvent.change(tilt, { target: { value: "12" } });
+  fireEvent.blur(tilt);
+  expect(props()).toEqual({ camera: "attack_away", zoom: 2.5, turn: -30, tilt: 12 });
+
+  fireEvent.click(layout().getByRole("switch", { name: "Follow the ball" }));
+  expect(props()).toEqual({ camera: "attack_away", zoom: 2.5, turn: -30, tilt: 12, follow_ball: true });
+});
+
 test("an element dragged to within a few pixels of the canvas edge snaps onto it", () => {
   const doc = studio();
   doc.scenes[0].elements.push(text({ x: 25, y: 300 }));

@@ -13,8 +13,9 @@ FULL_TIME = "Full-time"
 INTERVIEW = "Interview"
 MATCH_INTELLIGENCE = "Match intelligence"
 FAN_ZONE = "Fan zone"
+PITCH_3D = "3D pitch"
 # Offered for new scenes, but not in the studio a new installation starts with.
-EXTRAS = frozenset({INTERVIEW, MATCH_INTELLIGENCE, FAN_ZONE})
+EXTRAS = frozenset({INTERVIEW, MATCH_INTELLIGENCE, FAN_ZONE, PITCH_3D})
 
 # Whose commentary each built-in scene carries; the others follow the studio's mode.
 TEMPLATE_MODES = {LIVE_MATCH: "fan", ANALYST_DESK: "analyst", MATCH_INTELLIGENCE: "analyst", FAN_ZONE: "fan"}
@@ -32,6 +33,17 @@ def _el(layer: int, type_: str, x: int, y: int, width: int, height: int, **props
         visible=True,
         props=props,
     )
+
+
+PITCH_VIEW = {
+    "camera": "auto",
+    "zoom": 1.0,
+    "turn": 0.0,
+    "tilt": 0.0,
+    "pan_x": 0.0,
+    "pan_y": 0.0,
+    "follow_ball": False,
+}
 
 
 def _title(layer: int, text: str, y: int, size: int) -> SceneElement:
@@ -79,7 +91,7 @@ def builtin_templates() -> list[Scene]:
         ],
         MATCH_INTELLIGENCE: [
             _el(1, "scorecard", 40, 40, 900, 200),
-            _el(2, "pitch3d", 40, 260, 900, 560, camera="auto"),
+            _el(2, "pitch3d", 40, 260, 900, 560, **PITCH_VIEW),
             _el(3, "graph", 40, 840, 900, 200, metric="momentum"),
             _el(4, "prediction", 980, 40, 900, 260, view="outcome"),
             _el(5, "insight", 980, 320, 900, 300),
@@ -93,6 +105,10 @@ def builtin_templates() -> list[Scene]:
             _el(4, "poll", 980, 530, 900, 350),
             _el(5, "superchat", 40, 820, 900, 240, lines=2),
             _el(6, "spotlight", 980, 900, 900, 160),
+        ],
+        PITCH_3D: [
+            _el(1, "pitch3d", 0, 0, CANVAS_W, CANVAS_H, **PITCH_VIEW),
+            _el(2, "scoreboard", 410, 32, 1100, 120),
         ],
     }
     return [

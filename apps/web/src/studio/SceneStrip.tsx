@@ -9,9 +9,10 @@ import type { Scene, Studio } from "../contracts";
 import type { ProgramData } from "./elements";
 import { CANVAS } from "./geometry";
 import { ModeBadge, sceneIcon } from "./panels";
+import { PITCH_TEMPLATE } from "./pitchScene";
 import { SceneCanvas } from "./SceneCanvas";
 
-export const BUILTIN_TEMPLATES = ["Starting soon", "Live match", "Analyst desk", "Break", "Full-time", "Interview", "Match intelligence", "Fan zone"];
+export const BUILTIN_TEMPLATES = ["Starting soon", "Live match", "Analyst desk", "Break", "Full-time", "Interview", "Match intelligence", "Fan zone", PITCH_TEMPLATE];
 
 const THUMB_WIDTH = 168;
 const THUMB_SCALE = THUMB_WIDTH / CANVAS.width;

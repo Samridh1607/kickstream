@@ -44,7 +44,11 @@ HALF_TIME_BREAK_MINUTES = 2
 CHART_METRICS = ("overview", "possession", "shots", "xg", "tactics")
 GRAPH_METRICS = ("momentum", "xg", "win_probability")
 PREDICTION_VIEWS = ("outcome", "next_goal", "next_action")
-PITCH_CAMERAS = ("auto", "broadcast", "tactical")
+PITCH_CAMERAS = ("auto", "broadcast", "tactical", "attack_home", "attack_away")
+# The view held on a 3D pitch, as the web pitch bounds it: zoom as a factor, turn and tilt in degrees,
+# pan in pixels of the pitch's own frame.
+PITCH_VIEW = {"zoom": (1.0, 0.5, 4.0), "turn": (0.0, -75.0, 75.0), "tilt": (0.0, -76.0, 76.0)}
+PITCH_PAN = (0.0, -2000.0, 2000.0)
 ELEMENT_TYPES = frozenset(typing.get_args(SceneElement.model_fields["type"].annotation))
 
 
@@ -70,6 +74,13 @@ def _clamp(value: int, low: int, high: int) -> int:
 def _int_prop(props: dict, key: str, default: int, low: int, high: int) -> int:
     value = props.get(key, default)
     return _clamp(value, low, high) if isinstance(value, int) and not isinstance(value, bool) else default
+
+
+def _number_prop(props: dict, key: str, default: float, low: float, high: float) -> float:
+    value = props.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, int | float) or value != value:
+        return default
+    return round(max(low, min(high, float(value))), 2)
 
 
 def _choice_prop(props: dict, key: str, default: str, choices: tuple[str, ...]) -> str:
@@ -108,7 +119,14 @@ def _normalize_props(type_: str, props: dict) -> dict:
     if type_ == "prediction":
         return {"view": _choice_prop(props, "view", "outcome", PREDICTION_VIEWS)}
     if type_ == "pitch3d":
-        return {"camera": _choice_prop(props, "camera", "auto", PITCH_CAMERAS)}
+        view = {key: _number_prop(props, key, *bounds) for key, bounds in PITCH_VIEW.items()}
+        return {
+            "camera": _choice_prop(props, "camera", "auto", PITCH_CAMERAS),
+            **view,
+            "pan_x": _number_prop(props, "pan_x", *PITCH_PAN),
+            "pan_y": _number_prop(props, "pan_y", *PITCH_PAN),
+            "follow_ball": props.get("follow_ball") is True,
+        }
     if type_ == "player":
         player_id = props.get("player_id")
         return {"player_id": player_id[:64] if isinstance(player_id, str) and player_id else None}

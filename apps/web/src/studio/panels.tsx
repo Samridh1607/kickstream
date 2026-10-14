@@ -1,6 +1,6 @@
 import { Badge } from "@fluentui/react-components";
 import {
-  BrainCircuitRegular, ClockRegular, DataTrendingRegular, HourglassRegular, PeopleCommunityRegular, PeopleRegular, SlideLayoutRegular,
+  BrainCircuitRegular, ClockRegular, CubeRegular, DataTrendingRegular, HourglassRegular, PeopleCommunityRegular, PeopleRegular, SlideLayoutRegular,
   SportSoccerRegular, TrophyRegular, VideoPersonRegular,
 } from "@fluentui/react-icons";
 import type { ReactElement } from "react";
@@ -10,7 +10,7 @@ import { sceneMode } from "./mode";
 const TEMPLATE_ICONS: Record<string, ReactElement> = {
   "Starting soon": <ClockRegular />, "Live match": <SportSoccerRegular />, "Analyst desk": <DataTrendingRegular />,
   Break: <HourglassRegular />, "Full-time": <TrophyRegular />, Interview: <VideoPersonRegular />,
-  "Match intelligence": <BrainCircuitRegular />, "Fan zone": <PeopleCommunityRegular />,
+  "Match intelligence": <BrainCircuitRegular />, "Fan zone": <PeopleCommunityRegular />, "3D pitch": <CubeRegular />,
 };
 
 export const sceneIcon = (scene: Scene) => TEMPLATE_ICONS[scene.template ?? ""] ?? <SlideLayoutRegular />;
