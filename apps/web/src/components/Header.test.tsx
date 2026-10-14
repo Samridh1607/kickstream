@@ -7,7 +7,7 @@ import { Header } from "./Header";
 const profile: ViewerProfile = { mode: "analyst", language: "en", club: null, player: null };
 
 function setup(over: Partial<Parameters<typeof Header>[0]> = {}) {
-  const handlers = { onLanguageChange: vi.fn(), onOpenPreferences: vi.fn(), onStart: vi.fn() };
+  const handlers = { onLanguageChange: vi.fn(), onOpenPreferences: vi.fn(), onStart: vi.fn(), onChoose: vi.fn() };
   renderUi(<Header status={status({ minute: 37, score_home: 2, score_away: 1 })} connection="live" profile={profile} {...handlers} {...over} />);
   return handlers;
 }
@@ -27,6 +27,30 @@ test("with no match it invites the viewer to start one", () => {
   expect(screen.getByText("No match is running. Start one to begin.")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Start match" }));
   expect(handlers.onStart).toHaveBeenCalledOnce();
+});
+
+test("Choose match sits beside the quick start and opens the match picker", () => {
+  const handlers = setup();
+  fireEvent.click(screen.getByRole("button", { name: "Choose match" }));
+  expect(handlers.onChoose).toHaveBeenCalledOnce();
+  expect(handlers.onStart).not.toHaveBeenCalled();
+});
+
+test("the header names the competition and credits the data", () => {
+  setup({ status: status({ competition: "FIFA World Cup 2018", credit: "Data: StatsBomb" }) });
+  expect(screen.getByText("FIFA World Cup 2018")).toBeTruthy();
+  expect(screen.getByText("Data: StatsBomb")).toBeTruthy();
+});
+
+test("the simulated match has no competition or credit line", () => {
+  setup();
+  expect(screen.queryByTestId("match-source")).toBeNull();
+});
+
+test("before kick-off the minute says so", () => {
+  setup({ status: status({ state: "pre_match", minute: 0 }) });
+  expect(screen.getByText("Before kick-off")).toBeTruthy();
+  expect(screen.queryByText("0'")).toBeNull();
 });
 
 test("there is no viewing mode choice", () => {
@@ -52,5 +76,6 @@ test("interface text follows the viewer's language", () => {
   setup({ profile: { ...profile, language: "es" } });
   expect(screen.getByRole("button", { name: "Reiniciar partido" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Preferencias" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Elegir partido" })).toBeTruthy();
   expect(screen.getByText("En directo")).toBeTruthy();
 });

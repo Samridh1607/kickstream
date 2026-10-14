@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { App } from "../App";
-import type { AgentCatalog } from "../contracts";
+import type { AgentCatalog, MatchStatus } from "../contracts";
 import { EMPTY, type MatchData, useMatch } from "../stream/store";
 import {
   agentCatalog, agentRun, AWAY, envelope, explanation, FakeEventSource, FakeEventSourceCtor, highlight, HOME, pitchScene, play, playerReport,
@@ -76,14 +76,14 @@ beforeEach(() => {
   useMatch.setState({ data: useMatch.getInitialState().data, connection: "idle", selectedId: null });
 });
 
-async function opened() {
+async function opened(over: Partial<MatchStatus> = {}) {
   renderUi(<App eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} />);
   await waitFor(() => expect(FakeEventSource.last?.url).toBe("/api/matches/m-1/stream?mode=analyst&lang=en"), { timeout: 10_000 });
   const source = FakeEventSource.last;
   act(() => {
     source.open();
     [
-      envelope(1, "match_status", status({ minute: 12 })),
+      envelope(1, "match_status", status({ minute: 12, ...over })),
       envelope(2, "play", play()),
       envelope(3, "tactics", tactics()),
       envelope(4, "prediction", prediction()),
@@ -113,6 +113,33 @@ test("the page opens on the overview: the flow, and what each agent has found", 
   expect(screen.getByTestId("pitch3d").getAttribute("data-camera")).toBe("attack_home");
   expect(screen.getByText("They are not letting Harbour City settle.")).toBeTruthy();
   expect(screen.getAllByTestId("agent-run")).toHaveLength(1);
+});
+
+test("agent cards that need positions say so on a key-events match", async () => {
+  serve();
+  await opened({ detail: "key_events", source: "openligadb" });
+  const card = (testId: string) => within(screen.getByTestId(testId));
+  expect(card("card-pitch").getByTestId("live-data-only").textContent).toBe("Not available with live data");
+  expect(screen.queryByTestId("pitch3d")).toBeNull();
+  expect(card("card-pitch").queryByRole("button", { name: "Add to scene" })).toBeNull();
+  expect(card("card-tactics").getByTestId("live-data-only")).toBeTruthy();
+  expect(screen.queryByTestId("tactics-summary")).toBeNull();
+  expect(card("card-prediction").getByTestId("share-home").textContent).toContain("50%");
+  expect(card("card-prediction").queryByTestId("live-data-only")).toBeNull();
+
+  fireEvent.click(rail().getByRole("button", { name: "Prediction Agent" }));
+  expect(card("card-prediction").getByText("Chance to score in the next 10 minutes")).toBeTruthy();
+  expect(card("card-prediction").queryByRole("img", { name: "Danger by zone of the pitch" })).toBeNull();
+  expect(card("card-prediction").getByTestId("live-data-only")).toBeTruthy();
+});
+
+test("on a fully detailed match the same cards draw positions", async () => {
+  serve();
+  await opened({ detail: "full", source: "statsbomb" });
+  expect(screen.queryByTestId("live-data-only")).toBeNull();
+  expect(screen.getByTestId("pitch3d")).toBeTruthy();
+  fireEvent.click(rail().getByRole("button", { name: "Prediction Agent" }));
+  expect(within(screen.getByTestId("card-prediction")).getByRole("img", { name: "Danger by zone of the pitch" })).toBeTruthy();
 });
 
 test("highlights are listed best first and can be narrowed to the hidden events", async () => {

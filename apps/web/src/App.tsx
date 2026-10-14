@@ -1,4 +1,6 @@
-import { makeStyles, MessageBar, MessageBarBody, Switch, tokens } from "@fluentui/react-components";
+import {
+  Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, makeStyles, MessageBar, MessageBarBody, Switch, Text, tokens,
+} from "@fluentui/react-components";
 import { useEffect, useState } from "react";
 import { AgentDetail, AgentOverview, AgentRail, isAgentView, type StudioView } from "./agents/AgentStudio";
 import { type AgentId, fetchAgents, setAgentEnabled } from "./agents/api";
@@ -14,6 +16,8 @@ import { StatsPanel } from "./components/StatsPanel";
 import { Timeline } from "./components/Timeline";
 import type { AgentCatalog, Recap, ViewerProfile } from "./contracts";
 import { t } from "./i18n";
+import { isKeyEvents } from "./matches/liveData";
+import { MatchPicker } from "./matches/MatchPicker";
 import { loadProfile, saveProfile } from "./prefs";
 import { useMatch } from "./stream/store";
 import { useCurrentMatch } from "./stream/useCurrentMatch";
@@ -57,6 +61,7 @@ export function App({ eventSource, retryMs = 2000, pollMs = 3000, initialView = 
   const [showPressure, setShowPressure] = useState(true);
   const [openRecap, setOpenRecap] = useState<Recap | null>(null);
   const [startFailed, setStartFailed] = useState(false);
+  const [choosing, setChoosing] = useState(false);
 
   const data = useMatch((state) => state.data);
   const connection = useMatch((state) => state.connection);
@@ -105,7 +110,14 @@ export function App({ eventSource, retryMs = 2000, pollMs = 3000, initialView = 
     }
   };
 
+  const chosen = (id: string) => {
+    setStartFailed(false);
+    setMatchId(id);
+    setChoosing(false);
+  };
+
   const hasMatch = matchId !== null && connection !== "idle";
+  const playing: Teams | null = data.status ? { home: data.status.home, away: data.status.away } : teams;
   const shownAgent = isAgentView(view) ? catalog?.agents.find((agent) => agent.id === view) : undefined;
   const selectedNarrative = data.narratives.find((narrative) => narrative.moment_id === selectedId);
   const selectedMoment = data.moments.find((moment) => moment.id === selectedId);
@@ -120,6 +132,7 @@ export function App({ eventSource, retryMs = 2000, pollMs = 3000, initialView = 
         onLanguageChange={(next) => updateProfile({ ...profile, language: next })}
         onOpenPreferences={() => setPreferencesOpen(true)}
         onStart={start}
+        onChoose={() => setChoosing(true)}
       />
       {startFailed && (
         <MessageBar intent="error">
@@ -140,9 +153,15 @@ export function App({ eventSource, retryMs = 2000, pollMs = 3000, initialView = 
           <main className={styles.match}>
             <div className={styles.column}>
               <div className={styles.panel}>
-                <Switch checked={showPressure} label={t(language, "pressureMap")}
-                  onChange={(_, state) => setShowPressure(state.checked)} />
-                <Pitch events={data.events} pressure={data.pressure} status={data.status} showPressure={showPressure} language={language} />
+                {isKeyEvents(data.status) ? (
+                  <Text data-testid="live-data-only">{t(language, "liveDataOnly")}</Text>
+                ) : (
+                  <>
+                    <Switch checked={showPressure} label={t(language, "pressureMap")}
+                      onChange={(_, state) => setShowPressure(state.checked)} />
+                    <Pitch events={data.events} pressure={data.pressure} status={data.status} showPressure={showPressure} language={language} />
+                  </>
+                )}
               </div>
               <div className={styles.panel}>
                 <Timeline moments={data.moments} recaps={data.recaps} selectedId={selectedId} language={language}
@@ -168,8 +187,21 @@ export function App({ eventSource, retryMs = 2000, pollMs = 3000, initialView = 
           </main>
         )}
       </div>
-      <PreferencesDrawer open={preferencesOpen} profile={profile} teams={teams} onChange={updateProfile}
+      <PreferencesDrawer open={preferencesOpen} profile={profile} teams={playing} onChange={updateProfile}
         onClose={() => setPreferencesOpen(false)} />
+      <Dialog open={choosing} onOpenChange={(_, state) => setChoosing(state.open)}>
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>{t(language, "chooseMatchTitle")}</DialogTitle>
+            <DialogContent>
+              <MatchPicker language={language} extraSpeed={speedFromLocation(window.location.search)} onStarted={chosen} />
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setChoosing(false)}>{t(language, "close")}</Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
       <RecapDialog recap={openRecap} language={language} onClose={() => setOpenRecap(null)} />
     </div>
   );

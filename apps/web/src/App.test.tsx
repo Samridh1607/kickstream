@@ -1,10 +1,28 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { App } from "./App";
+import type { Sources, TeamSheet } from "./contracts";
 import { useMatch } from "./stream/store";
 import {
   AWAY, envelope, FakeEventSource, FakeEventSourceCtor, HOME, moment, narrative, recap, status,
 } from "./test/fixtures";
 import { renderUi } from "./test/render";
+
+const SOURCES: Sources = {
+  sources: [
+    { id: "simulated", name: "Simulated match", kind: "simulated", detail: "full", available: true },
+    { id: "statsbomb", name: "StatsBomb", kind: "replay", detail: "full", available: true, credit: "Data: StatsBomb" },
+  ],
+  running: null,
+};
+
+const FRANCE: TeamSheet = {
+  id: "sb-771", name: "France", short_name: "FRA", color: "#1D4ED8",
+  players: [{ id: "sb-3099", name: "Antoine Griezmann", number: 7, position: "FW" }],
+};
+const CROATIA: TeamSheet = {
+  id: "sb-785", name: "Croatia", short_name: "CRO", color: "#DC2626",
+  players: [{ id: "sb-5463", name: "Luka Modrić", number: 10, position: "MF" }],
+};
 
 /** Answers the dashboard's HTTP calls. `current` is a queue; its last entry repeats. */
 function serve({ current, started = "m-9", failStart = false, currentFailures = 0 }: { current: (string | null)[]; started?: string; failStart?: boolean; currentFailures?: number }) {
@@ -16,6 +34,7 @@ function serve({ current, started = "m-9", failStart = false, currentFailures = 
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, method: init?.method ?? "GET", body: init?.body ? JSON.parse(init.body as string) : undefined });
     if (url === "/api/teams") return reply(200, { home: HOME, away: AWAY });
+    if (url === "/api/sources") return reply(200, SOURCES);
     if (url === "/api/matches/current") {
       if (failures > 0) {
         failures -= 1;
@@ -67,6 +86,59 @@ test("with no match running, starting one connects to it", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Start match" }));
   await waitFor(() => expect(lastUrl()).toBe("/api/matches/m-5/stream?mode=analyst&lang=en"));
   expect(calls.find((call) => call.method === "POST")).toEqual({ url: "/api/matches", method: "POST", body: { speed: 30 } });
+});
+
+/** Opens the match picker. Under jsdom, Fluent's focus trap marks an open dialog aria-hidden after 250 ms, so its contents are queried with `hidden`. */
+async function picker(button: string, title: string) {
+  fireEvent.click(await screen.findByRole("button", { name: button }));
+  return within(await screen.findByRole("dialog", { name: title, hidden: true }));
+}
+
+test("Choose match opens the picker and following the new match closes it", async () => {
+  const calls = serve({ current: [null], started: "m-5" });
+  renderUi(<App eventSource={FakeEventSourceCtor} initialView="match" />);
+  await screen.findByText("No match is running. Start one to begin.");
+  const dialog = await picker("Choose match", "Choose a match");
+  expect(await dialog.findByRole("radio", { name: "StatsBomb replay", hidden: true })).toBeTruthy();
+  const start = dialog.getByRole("button", { name: "Start match", hidden: true });
+  await waitFor(() => expect(start.getAttribute("disabled")).toBeNull());
+  fireEvent.click(start);
+  await waitFor(() => expect(lastUrl()).toBe("/api/matches/m-5/stream?mode=analyst&lang=en"));
+  await waitFor(() => expect(screen.queryByRole("dialog", { hidden: true })).toBeNull());
+  expect(calls.find((call) => call.method === "POST")).toEqual({ url: "/api/matches", method: "POST", body: { source: "simulated", speed: 30 } });
+});
+
+test("the match picker speaks the page's language and can be closed without starting", async () => {
+  localStorage.setItem("kickstream.profile", JSON.stringify({ mode: "analyst", language: "es", club: null, player: null }));
+  const calls = serve({ current: [null] });
+  renderUi(<App eventSource={FakeEventSourceCtor} initialView="match" />);
+  const dialog = await picker("Elegir partido", "Elige un partido");
+  expect(await dialog.findByRole("radio", { name: "Repetición de StatsBomb", hidden: true })).toBeTruthy();
+  fireEvent.click(dialog.getByRole("button", { name: "Cerrar", hidden: true }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { hidden: true })).toBeNull());
+  expect(calls.some((call) => call.method === "POST")).toBe(false);
+});
+
+test("favourites are offered from the playing match's teams", async () => {
+  serve({ current: ["m-1"] });
+  const source = await joined();
+  act(() => source.emit(envelope(4, "match_status", status({ home: FRANCE, away: CROATIA, competition: "FIFA World Cup 2018", credit: "Data: StatsBomb" }))));
+  expect(screen.getByText("Data: StatsBomb")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Preferences" }));
+  const options = (label: string) => Array.from((screen.getByLabelText(label) as HTMLSelectElement).options).map((option) => option.textContent);
+  await screen.findByLabelText("Favorite club");
+  expect(options("Favorite club")).toEqual(["None", "France", "Croatia"]);
+  expect(options("Favorite player")).toEqual(["None", "Antoine Griezmann", "Luka Modrić"]);
+});
+
+test("the pitch panel says live data has no positions", async () => {
+  serve({ current: ["m-1"] });
+  const source = await joined();
+  expect(screen.getByRole("switch", { name: "Pressure map" })).toBeTruthy();
+  act(() => source.emit(envelope(4, "match_status", status({ score_home: 1, detail: "key_events", source: "openligadb" }))));
+  expect(screen.getByText("Not available with live data")).toBeTruthy();
+  expect(screen.queryByRole("switch", { name: "Pressure map" })).toBeNull();
+  expect(screen.queryByRole("img", { name: "Pitch" })).toBeNull();
 });
 
 test("a failed start tells the viewer", async () => {

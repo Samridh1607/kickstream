@@ -10,7 +10,9 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground1,
     borderBottom: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
   },
-  scoreboard: { display: "flex", alignItems: "center", justifyContent: "center", gap: tokens.spacingHorizontalM, flexGrow: 1 },
+  summary: { display: "flex", flexDirection: "column", alignItems: "center", gap: tokens.spacingVerticalXXS, flexGrow: 1 },
+  scoreboard: { display: "flex", alignItems: "center", justifyContent: "center", gap: tokens.spacingHorizontalM },
+  source: { display: "flex", gap: tokens.spacingHorizontalS, color: tokens.colorNeutralForeground3 },
   controls: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS },
 });
 
@@ -29,31 +31,41 @@ interface HeaderProps {
   onLanguageChange(language: Language): void;
   onOpenPreferences(): void;
   onStart(): void;
+  onChoose(): void;
 }
 
-export function Header({ status, connection, profile, onLanguageChange, onOpenPreferences, onStart }: HeaderProps) {
+export function Header({ status, connection, profile, onLanguageChange, onOpenPreferences, onStart, onChoose }: HeaderProps) {
   const styles = useStyles();
   const language = profile.language;
   const state = CONNECTION[connection];
+  const credited = status && (status.competition || status.credit);
   return (
     <header className={styles.root}>
       <Text as="h1" size={500} weight="semibold">
         {t(language, "matchData")}
       </Text>
-      <div className={styles.scoreboard}>
-        {status ? (
-          <>
-            <Text weight="semibold">{status.home.name}</Text>
-            <Text size={700} weight="bold" data-testid="score">
-              {status.score_home} - {status.score_away}
-            </Text>
-            <Text weight="semibold">{status.away.name}</Text>
-            <Badge appearance="outline">{status.minute}'</Badge>
-          </>
-        ) : (
-          <Text>{t(language, "noMatch")}</Text>
+      <div className={styles.summary}>
+        <div className={styles.scoreboard}>
+          {status ? (
+            <>
+              <Text weight="semibold">{status.home.name}</Text>
+              <Text size={700} weight="bold" data-testid="score">
+                {status.score_home} - {status.score_away}
+              </Text>
+              <Text weight="semibold">{status.away.name}</Text>
+              <Badge appearance="outline">{status.state === "pre_match" ? t(language, "preMatch") : `${status.minute}'`}</Badge>
+            </>
+          ) : (
+            <Text>{t(language, "noMatch")}</Text>
+          )}
+          <Badge color={state.color}>{t(language, state.label)}</Badge>
+        </div>
+        {credited && (
+          <div className={styles.source} data-testid="match-source">
+            {status.competition && <Text size={200}>{status.competition}</Text>}
+            {status.credit && <Text size={200}>{status.credit}</Text>}
+          </div>
         )}
-        <Badge color={state.color}>{t(language, state.label)}</Badge>
       </div>
       <div className={styles.controls}>
         <Select
@@ -68,6 +80,7 @@ export function Header({ status, connection, profile, onLanguageChange, onOpenPr
           ))}
         </Select>
         <Button onClick={onOpenPreferences}>{t(language, "preferences")}</Button>
+        <Button onClick={onChoose}>{t(language, "chooseMatch")}</Button>
         <Button appearance="primary" onClick={onStart}>
           {t(language, status ? "restart" : "start")}
         </Button>

@@ -10,6 +10,7 @@ import { type ReactElement, type ReactNode, type RefObject, useCallback, useMemo
 import { CompareBars, Counted, HeatGrid, LineGraph, NEUTRAL, ShareBar, type Sides, Swatch } from "../charts/charts";
 import type { AgentRun, MatchStatus, PlayEvent, Studio, TeamTactics } from "../contracts";
 import { type Language, type StringKey, t } from "../i18n";
+import { isKeyEvents } from "../matches/liveData";
 import { MotionStyles, rise, SETTLE, slide } from "../motion/motion";
 import type { MatchData } from "../stream/store";
 import { getStudio } from "../studio/api";
@@ -107,6 +108,11 @@ function Waiting({ children }: { children: ReactNode }) {
   return <Text size={200} className={styles.muted}>{children}</Text>;
 }
 
+function LiveDataOnly({ language }: { language: Language }) {
+  const styles = useStyles();
+  return <Text size={200} className={styles.muted} data-testid="live-data-only">{t(language, "liveDataOnly")}</Text>;
+}
+
 interface CardProps {
   match: MatchData;
   language: Language;
@@ -170,6 +176,13 @@ export function PitchCard({ match, language, followId, tall = false }: CardProps
   const home = match.status?.home.color;
   const away = match.status?.away.color;
   const colors = useMemo(() => (home && away ? { home, away } : DEFAULT_COLORS), [home, away]);
+  if (isKeyEvents(match.status)) {
+    return (
+      <Card agent="visualization" title={t(language, "pitch3d")} testId="card-pitch">
+        <LiveDataOnly language={language} />
+      </Card>
+    );
+  }
   return (
     <Card agent="visualization" title={t(language, "pitch3d")} testId="card-pitch"
       extra={
@@ -265,9 +278,11 @@ export function PredictionCard({ match, language, detailed = false }: CardProps 
                   ]} />
               </div>
               <Text size={200} weight="semibold">Where the danger has been coming from</Text>
-              <div style={{ maxWidth: 360 }}>
-                <HeatGrid cols={prediction.cols} rows={prediction.rows} values={prediction.danger} color={tokens.colorPaletteMarigoldBackground3} label="Danger by zone of the pitch" />
-              </div>
+              {isKeyEvents(match.status) ? <LiveDataOnly language={language} /> : (
+                <div style={{ maxWidth: 360 }}>
+                  <HeatGrid cols={prediction.cols} rows={prediction.rows} values={prediction.danger} color={tokens.colorPaletteMarigoldBackground3} label="Danger by zone of the pitch" />
+                </div>
+              )}
             </>
           )}
         </>
@@ -292,6 +307,13 @@ export function TacticsCard({ match, language }: CardProps) {
       ))}
     </div>
   );
+  if (isKeyEvents(match.status)) {
+    return (
+      <Card agent="tactical_analyst" title={t(language, "tactics")} testId="card-tactics">
+        <LiveDataOnly language={language} />
+      </Card>
+    );
+  }
   return (
     <Card agent="tactical_analyst" title={t(language, "tactics")} testId="card-tactics"
       extra={tactics && <Badge appearance="tint" color={tactics.rhythm === "frantic" || tactics.rhythm === "fast" ? "danger" : "informative"}>Rhythm: {tactics.rhythm}</Badge>}>
