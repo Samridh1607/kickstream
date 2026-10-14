@@ -84,6 +84,7 @@ class PredictionAgent:
         self._danger = {side: [0.0] * (COLS * ROWS) for side in SIDES}
         self._seen = {zone: [0.0, 0.0, 0.0] for zone in PRIOR}
         self._last: PlayEvent | None = None  # the latest touch by the side in possession
+        self._located = False
 
     def handle(self, play: PlayEvent) -> list[Prediction]:
         self._take(play)
@@ -97,6 +98,7 @@ class PredictionAgent:
         for side in SIDES:
             self._danger[side] = fade(self._danger[side], at - self._clock)
         self._clock = at
+        self._located = self._located or bool(play.located)
         side = play.team
         if side is None:
             return
@@ -106,8 +108,12 @@ class PredictionAgent:
             return
         if play.type == "goal":
             self._goals[side] += 1
-        elif play.type == "shot":
+        elif play.type == "shot" and play.xg is not None:
+            self._xg[side] += play.xg
+        elif play.type == "shot" and play.located:
             self._xg[side] += xg(attacking_x(side, play.x), play.y)
+        if not play.located:
+            return
         self._danger[side][zone_index(play.x, play.y)] += play.danger
         if self._last is not None:
             followed = (
@@ -122,12 +128,13 @@ class PredictionAgent:
 
     def _rate(self, side: Side, minute: int) -> float:
         """Goals a minute this side is expected to score from here."""
-        base = BASE_GOALS / MATCH_MINUTES
-        trust = min(1.0, minute / TRUST_BY)
-        seen = self._xg[side] / max(1, minute)
-        rate = (1 - trust) * base + trust * (0.5 * base + 0.5 * seen)
-        swing = self._momentum() if side == "home" else -self._momentum()
-        rate *= 1 + MOMENTUM_WEIGHT * swing
+        base = rate = BASE_GOALS / MATCH_MINUTES
+        if self._located:
+            trust = min(1.0, minute / TRUST_BY)
+            seen = self._xg[side] / max(1, minute)
+            rate = (1 - trust) * base + trust * (0.5 * base + 0.5 * seen)
+            swing = self._momentum() if side == "home" else -self._momentum()
+            rate *= 1 + MOMENTUM_WEIGHT * swing
         rate *= RED_CARD_FACTOR ** self._reds[side]
         rate /= RED_CARD_FACTOR ** self._reds[other(side)]
         return max(rate, 0.0005)

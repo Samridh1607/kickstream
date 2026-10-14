@@ -79,6 +79,8 @@ class VisualizationAgent:
         self._sequence = 0
 
     def handle(self, play: PlayEvent) -> list[PitchScene]:
+        if not play.located:
+            return []
         at = clock(play.minute, play.second)
         for side in SIDES:
             self._danger[side] = fade(self._danger[side], at - self._clock)

@@ -120,7 +120,7 @@ class HighlightsAgent:
             if self._move and self._move[-1].sequence != play.sequence:
                 found += self._long_move()
                 self._move = []
-                if play.phase == "transition" and attacking_x(side, play.x) >= HIGH_WIN:
+                if play.located and play.phase == "transition" and attacking_x(side, play.x) >= HIGH_WIN:
                     found += self._turnover(play, side)
             self._move.append(play)
         elif play.type == "save" and side is not None and previous is not None and previous.type == "shot":
@@ -180,8 +180,12 @@ class HighlightsAgent:
         ]
 
     def _save(self, play: PlayEvent, shot: PlayEvent, side: Side) -> list[Highlight]:
-        shooting = other(side)
-        chance = xg(attacking_x(shooting, shot.x), shot.y)
+        if shot.xg is not None:
+            chance = shot.xg
+        elif shot.located:
+            chance = xg(attacking_x(other(side), shot.x), shot.y)
+        else:
+            return []
         if not SAVE_XG[0] <= chance < SAVE_XG[1]:
             return []
         return [

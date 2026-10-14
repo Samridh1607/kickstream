@@ -69,7 +69,7 @@ class EventInterpreter:
             if side != self._side:
                 self._start(side, won_in_play=self._side is not None)
             self._length += 1
-            danger = danger_of(side, event.x, event.y)
+            danger = danger_of(side, event.x, event.y) if event.located else 0.0
             phase = self._phase(event, side)
         elif event.type in ("substitution", "half_time", "full_time"):
             phase = "restart"
@@ -88,8 +88,8 @@ class EventInterpreter:
                 player_id=event.player_id,
                 x=event.x,
                 y=event.y,
-                zone=zone_of(side, event.x),
-                lane=lane_of(side, event.y),
+                zone=zone_of(side, event.x) if event.located else "middle_third",
+                lane=lane_of(side, event.y) if event.located else "centre",
                 phase=phase,
                 sequence=self._sequence,
                 sequence_length=self._length,
@@ -97,6 +97,8 @@ class EventInterpreter:
                 outcome=event.outcome,
                 completed=event.completed,
                 player_in_id=event.player_in_id,
+                xg=event.xg,
+                located=event.located,
             )
         ]
 
@@ -109,6 +111,8 @@ class EventInterpreter:
     def _phase(self, event: MatchEvent, side: Side) -> str:
         if event.type == "corner":
             return "set_piece"
+        if not event.located:
+            return "progression"
         along = attacking_x(side, event.x)
         if self._won_in_play and self._length <= TRANSITION_PLAYS and along >= TRANSITION_FROM:
             return "transition"

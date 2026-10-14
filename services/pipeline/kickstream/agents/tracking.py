@@ -87,13 +87,17 @@ class PlayerTracker:
         line = self._lines.setdefault(play.player_id, _Line())
         if play.type in ("pass", "corner", "shot"):
             line.touches += 1
-            line.heat[zone_index(play.x, play.y)] += 1
+            if play.located:
+                line.heat[zone_index(play.x, play.y)] += 1
         if play.type == "pass":
             line.passes += 1
             line.completed += 1 if play.completed else 0
         elif play.type == "shot":
             line.shots += 1
-            line.xg += xg(attacking_x(play.team, play.x), play.y)
+            if play.xg is not None:
+                line.xg += play.xg
+            elif play.located:
+                line.xg += xg(attacking_x(play.team, play.x), play.y)
             line.on_target += 1 if play.outcome in ("goal", "saved") else 0
         elif play.type == "goal":
             line.goals += 1

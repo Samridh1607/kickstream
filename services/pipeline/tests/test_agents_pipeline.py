@@ -5,11 +5,27 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kickstream.adapters.clocks import InstantClock
+from kickstream.adapters.memory_bus import InMemoryEventBus
+from kickstream.adapters.scripted_explainer import ScriptedExplainer
+from kickstream.agents.explain import ExplainService
+from kickstream.agents.registry import AgentSwitches
+from kickstream.agents.stage import AgentsStage
 from kickstream.app import Settings, build_pipeline, create_app
-from kickstream.contracts import AgentCatalog, MatchIntelligence, ViewerProfile
+from kickstream.contracts import (
+    AgentCatalog,
+    AgentRun,
+    MatchIntelligence,
+    MatchStatus,
+    Player,
+    PlayerReport,
+    ViewerProfile,
+)
 from kickstream.domain.demo import DEMO_SEED
+from kickstream.domain.teams import AWAY, HOME
 from kickstream.gateway.personalize import to_envelope
 from kickstream.gateway.stream import LATEST_ONLY, stream_items
+from kickstream.ports.bus import AGENTS
+from tests.factories import MATCH, event, moment
 
 AGENT_TYPES = {
     "play",
@@ -129,6 +145,62 @@ async def test_a_page_arriving_late_is_replayed_only_the_newest_scene_and_player
     assert {e.id for e in replayed if e.type in LATEST_ONLY} == set(newest.values())
     assert by_type["play"] == sum(item.type == "play" for item in log)
     assert [e.id for e in replayed] == sorted(e.id for e in replayed)
+
+
+def _status(detail="full", home=HOME) -> MatchStatus:
+    return MatchStatus(
+        match_id=MATCH,
+        state="live",
+        minute=0,
+        score_home=0,
+        score_away=0,
+        speed=1,
+        home=home,
+        away=AWAY,
+        detail=detail,
+    )
+
+
+def _drained(subscription) -> list:
+    out = []
+    while not subscription.queue.empty():
+        out.append(subscription.queue.get_nowait().payload)
+    return out
+
+
+async def test_position_only_agents_sit_out_a_key_events_match():
+    bus = InMemoryEventBus()
+    agents = bus.subscribe(AGENTS)
+    stage = AgentsStage(bus, AgentSwitches(), ExplainService(ScriptedExplainer()))
+    await stage.take(MATCH, _status("key_events"))
+    await stage.take(MATCH, event(1, "kickoff", located=False))
+    await stage.take(MATCH, event(2, "goal", "home", minute=12, player_id="nbr-9", located=False))
+    await stage.take(MATCH, moment(1, "goal", minute=12, player_id="nbr-9", facts=[]))
+    await stage.take(MATCH, event(3, "yellow_card", "away", minute=13, located=False))
+    out = _drained(agents)
+    assert {type(item).__name__ for item in out} >= {"PlayEvent", "Prediction", "PlayerReport", "Highlight"}
+    assert not {"TacticalInsight", "PitchScene"} & {type(item).__name__ for item in out}
+    assert {run.agent for run in out if isinstance(run, AgentRun)} == {
+        "event_interpreter",
+        "prediction",
+        "player_tracking",
+        "highlights",
+    }
+
+
+async def test_the_agents_learn_players_who_appear_in_later_statuses():
+    bus = InMemoryEventBus()
+    agents = bus.subscribe(AGENTS)
+    stage = AgentsStage(bus, AgentSwitches(), ExplainService(ScriptedExplainer()))
+    await stage.take(MATCH, _status("key_events"))
+    scorer = Player(id="ol-1", name="New Scorer", number=0, position="FW")
+    await stage.take(
+        MATCH, _status("key_events", HOME.model_copy(update={"players": [*HOME.players, scorer]}))
+    )
+    await stage.take(MATCH, event(1, "goal", "home", minute=12, player_id="ol-1", located=False))
+    [report] = [item for item in _drained(agents) if isinstance(item, PlayerReport)]
+    newcomer = next(line for line in report.players if line.player_id == "ol-1")
+    assert (newcomer.name, newcomer.goals, newcomer.on_pitch) == ("New Scorer", 1, False)
 
 
 @pytest.fixture

@@ -6,12 +6,19 @@ from kickstream.domain.types import SIDES, Side
 STARTERS = 11
 
 
+def _starters(sheet: TeamSheet) -> list[str]:
+    marked = [player.id for player in sheet.players if player.starting]
+    return marked or [player.id for player in sheet.players[:STARTERS]]
+
+
 class Squad:
     def __init__(self, home: TeamSheet, away: TeamSheet) -> None:
+        self.refresh(home, away)
+        self.on_pitch: dict[Side, list[str]] = {side: _starters(self.sheets[side]) for side in SIDES}
+
+    def refresh(self, home: TeamSheet, away: TeamSheet) -> None:
+        """Takes in the latest sheets, so players a source names later are known. Who is on the pitch stays."""
         self.sheets: dict[Side, TeamSheet] = {"home": home, "away": away}
-        self.on_pitch: dict[Side, list[str]] = {
-            side: [player.id for player in self.sheets[side].players[:STARTERS]] for side in SIDES
-        }
         self._players: dict[str, tuple[Side, Player]] = {
             player.id: (side, player) for side in SIDES for player in self.sheets[side].players
         }

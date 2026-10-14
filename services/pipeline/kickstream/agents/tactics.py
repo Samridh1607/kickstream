@@ -81,7 +81,7 @@ class TacticalAnalyst:
         return [insight] if insight else []
 
     def _take(self, play: PlayEvent) -> None:
-        if play.type not in POSSESSION or play.team is None:
+        if play.type not in POSSESSION or play.team is None or not play.located:
             return
         self._plays.append(play)
         if self._open is None or self._open[0] != play.sequence:

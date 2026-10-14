@@ -5,9 +5,10 @@ import pytest
 from kickstream.adapters.memory_bus import InMemoryEventBus
 from kickstream.analytics.stage import AnalyticsStage
 from kickstream.analytics.state import AnalyticsConfig, MatchState, apply, attack_pressure, momentum
-from kickstream.contracts import KeyMoment, PressureSnapshot, StatsSnapshot
+from kickstream.contracts import KeyMoment, MatchStatus, PressureSnapshot, StatsSnapshot
 from kickstream.domain.pitch import xg, zone_index
-from kickstream.ports.bus import EVENTS, INSIGHTS
+from kickstream.domain.teams import AWAY, HOME
+from kickstream.ports.bus import EVENTS, INSIGHTS, STATUS
 from tests.factories import MATCH, event
 
 CFG = AnalyticsConfig()
@@ -146,6 +147,32 @@ def test_snapshots_are_emitted_once_per_minute_and_at_period_ends():
     assert len(heat) == 4 and len(heat[0].home) == heat[0].cols * heat[0].rows == 24
 
 
+def test_a_shot_counts_the_sources_own_xg_when_it_has_one():
+    state, _ = run([event(1, "shot", "home", x=60, outcome="saved", xg=0.42)])
+    assert state.tally["home"].xg == pytest.approx(0.42)
+
+
+def test_unlocated_events_add_no_pressure_and_shots_without_xg_add_none():
+    state, out = run([event(1, "shot", "home", x=90, outcome="off_target", located=False)])
+    assert attack_pressure(state, "home") == 0 and state.tally["home"].xg == 0
+    assert moments(out, "big_chance") == []
+
+
+def test_a_goal_in_a_key_events_match_has_no_invented_facts():
+    _, out = run([event(1, "goal", "home", located=False)])
+    assert moments(out, "goal")[0].facts == []
+
+
+def test_a_red_card_in_a_key_events_match_counts_only_the_players_left():
+    [card] = moments(run([event(1, "red_card", "away", minute=30, located=False)])[1])
+    assert [(f.label, f.value) for f in card.facts] == [("players_on_pitch", 10)]
+
+
+def test_without_snapshots_only_key_moments_come_out():
+    out = apply(MatchState(MATCH), event(1, "goal", "home", minute=3, located=False), CFG, snapshots=False)
+    assert [type(o).__name__ for o in out] == ["KeyMoment"]
+
+
 def test_key_moments_precede_the_snapshot_for_the_same_event():
     out = apply(MatchState(MATCH), event(1, "goal", "home", minute=3), CFG)
     assert [type(o).__name__ for o in out] == ["KeyMoment", "StatsSnapshot", "PressureSnapshot"]
@@ -169,3 +196,32 @@ async def test_stage_publishes_insights_per_match():
         ("m-2", "PressureSnapshot"),
     ]
     assert received[3].payload.home.goals == 0
+
+
+async def test_the_stage_leaves_stats_to_the_source_for_key_events_matches():
+    bus = InMemoryEventBus()
+    insights = bus.subscribe(INSIGHTS)
+    task = asyncio.create_task(AnalyticsStage(bus).run())
+    status = MatchStatus(
+        match_id=MATCH,
+        state="live",
+        minute=12,
+        score_home=0,
+        score_away=0,
+        speed=1,
+        home=HOME,
+        away=AWAY,
+        detail="key_events",
+    )
+    await bus.publish(STATUS, MATCH, status)
+    await bus.publish(EVENTS, MATCH, event(1, "goal", "home", minute=12, located=False))
+    await bus.publish(
+        EVENTS, "m-2", event(1, "kickoff", "home").model_copy(update={"match_id": "m-2", "id": "m-2-e1"})
+    )
+    received = [await asyncio.wait_for(anext(aiter(insights)), 1) for _ in range(3)]
+    task.cancel()
+    assert [(m.match_id, type(m.payload).__name__) for m in received] == [
+        (MATCH, "KeyMoment"),
+        ("m-2", "StatsSnapshot"),
+        ("m-2", "PressureSnapshot"),
+    ]

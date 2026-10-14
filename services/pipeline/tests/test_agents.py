@@ -10,7 +10,7 @@ from kickstream.agents.squad import Squad
 from kickstream.agents.tactics import TacticalAnalyst, rhythm_of
 from kickstream.agents.tracking import PlayerTracker
 from kickstream.agents.visualize import VisualizationAgent
-from kickstream.contracts import Highlight, PlayEvent, Prediction, TacticalInsight, TeamTactics
+from kickstream.contracts import Highlight, Player, PlayEvent, Prediction, TacticalInsight, TeamTactics
 from kickstream.domain.teams import AWAY, HOME
 from kickstream.ports.explainer import ExplainError, WrittenExplanation
 from tests.factories import MATCH, event, moment
@@ -43,6 +43,10 @@ def play(seq, type_="pass", team="home", minute=0, second=0, x=50.0, y=50.0, **e
         danger=0.0,
     )
     return PlayEvent(**{**fields, **extra})
+
+
+def play_of(item) -> PlayEvent:
+    return EventInterpreter().handle(item)[0]
 
 
 # --- Event Interpreter ---------------------------------------------------------------------------
@@ -102,6 +106,12 @@ def test_the_first_touches_after_winning_the_ball_upfield_are_a_transition():
     ]
 
 
+def test_the_interpreter_passes_xg_and_location_on():
+    play = EventInterpreter().handle(event(1, "shot", "home", xg=0.3, located=False))[0]
+    assert (play.xg, play.located, play.danger) == (0.3, False, 0.0)
+    assert (play.zone, play.lane) == ("middle_third", "centre")
+
+
 # --- Tactical Analyst ----------------------------------------------------------------------------
 
 
@@ -152,6 +162,14 @@ def test_winning_the_ball_high_again_and_again_is_a_high_press():
     assert "high_press" in insight.home.patterns and "high_press" not in insight.away.patterns
 
 
+def test_the_analyst_reads_nothing_into_unlocated_plays():
+    analyst = TacticalAnalyst(NAMES)
+    for seq in range(1, 20):
+        analyst.handle(play(seq, minute=0, second=seq, y=10, located=False))
+    [insight] = analyst.handle(play(20, team="away", minute=1, located=False))
+    assert (insight.home.tempo, insight.home.lanes, insight.home.patterns) == (0.0, [0.333] * 3, [])
+
+
 def test_rhythm_follows_how_many_passes_are_being_played():
     assert [rhythm_of(rate) for rate in (3, 6, 7, 9)] == ["slow", "steady", "fast", "frantic"]
 
@@ -198,6 +216,30 @@ def test_a_red_card_costs_the_side_that_got_it():
     assert home_win(True) < home_win(False)
 
 
+def test_prediction_uses_the_sources_own_xg():
+    def home_win(chance: float) -> float:
+        agent = PredictionAgent()
+        agent.handle(play(1, "shot", minute=30, x=60, xg=chance, outcome="saved"))
+        return agent.handle(play(2, minute=60))[0].win_home
+
+    assert home_win(0.9) > home_win(0.01)
+
+
+def test_prediction_without_located_play_uses_the_base_rate_only():
+    def forecast(*plays: PlayEvent) -> Prediction:
+        agent = PredictionAgent()
+        for item in plays:
+            agent.handle(item)
+        return agent.handle(play(99, "substitution", minute=60, located=False))[0]
+
+    quiet = forecast()
+    assert quiet.win_home == pytest.approx(quiet.win_away) and max(quiet.danger) == 0
+    shooting = forecast(play(1, "shot", minute=30, xg=0.9, outcome="saved", danger=0.9, located=False))
+    assert (shooting.win_home, shooting.possession, shooting.next_actions) == (quiet.win_home, None, [])
+    carded = forecast(play(2, "red_card", team="away", minute=30, located=False))
+    assert carded.win_home > quiet.win_home
+
+
 # --- Player Tracking Agent -----------------------------------------------------------------------
 
 
@@ -227,6 +269,36 @@ def test_a_substitute_comes_on_and_a_sent_off_player_leaves():
     on_pitch = {line.player_id for line in report.players if line.on_pitch}
     assert "nbr-12" in on_pitch and not {"nbr-9", "hbc-4"} & on_pitch
     assert len(on_pitch) == 21
+
+
+def test_a_players_shot_counts_the_sources_xg_and_an_unlocated_touch_adds_no_heat():
+    tracker = PlayerTracker(Squad(HOME, AWAY))
+    tracker.handle(play(1, "shot", player_id="nbr-9", x=90, xg=0.05, outcome="saved"))
+    tracker.handle(play(2, "shot", player_id="nbr-9", x=90, outcome="off_target", located=False))
+    [report] = tracker.handle(play(3, minute=1, player_id="nbr-2", located=False))
+    striker = next(line for line in report.players if line.player_id == "nbr-9")
+    assert (striker.shots, striker.xg, striker.touches, sum(striker.heat)) == (2, 0.05, 2, 1)
+
+
+def test_the_squad_starts_the_players_marked_starting_and_learns_new_ones():
+    home = HOME.model_copy(
+        update={
+            "players": [p.model_copy(update={"starting": p.number in range(4, 15)}) for p in HOME.players]
+        }
+    )
+    squad = Squad(home, AWAY)
+    assert squad.on_pitch["home"] == [p.id for p in home.players if p.starting]
+    newcomer = Player(id="ol-1", name="New Scorer", number=0, position="MF")
+    squad.refresh(home.model_copy(update={"players": [*home.players, newcomer]}), AWAY)
+    assert squad.player_name("ol-1") == "New Scorer"
+    assert squad.on_pitch["home"] == [p.id for p in home.players if p.starting]
+
+
+def test_a_squad_with_no_starters_marked_starts_the_first_eleven():
+    home = HOME.model_copy(
+        update={"players": [p.model_copy(update={"starting": False}) for p in HOME.players]}
+    )
+    assert Squad(home, AWAY).on_pitch["home"] == [p.id for p in HOME.players[:11]]
 
 
 # --- Visualization Agent -------------------------------------------------------------------------
@@ -263,6 +335,21 @@ def test_danger_raises_a_column_and_an_attack_brings_the_camera_round():
     assert restart.lanes == []  # a new sequence starts with no pass lanes
 
 
+def test_the_visualization_agent_draws_nothing_for_an_unlocated_play():
+    assert (
+        VisualizationAgent(Squad(HOME, AWAY)).handle(play_of(event(1, "goal", "home", located=False))) == []
+    )
+
+
+def test_an_unlocated_play_leaves_the_picture_as_it_was():
+    agent = VisualizationAgent(Squad(HOME, AWAY))
+    agent.handle(play(1, x=20, y=20))
+    agent.handle(play(2, "goal", x=90, y=50, danger=1.0, located=False))
+    [scene] = agent.handle(play(3, x=40, y=30))
+    assert (scene.trail[0].x, scene.trail[0].y) == (20.0, 20.0) and scene.columns == []
+    assert [(lane.from_x, lane.to_x) for lane in scene.lanes] == [(20.0, 40.0)]
+
+
 # --- Highlights Agent ----------------------------------------------------------------------------
 
 
@@ -290,6 +377,27 @@ def test_a_good_save_from_a_lesser_chance_is_a_hidden_event():
     [found] = agent.handle(play(2, "save", team="away", player_id="hbc-1", second=1, x=97))
     assert (found.category, found.team, found.title) == ("big_save", "away", "Save by Osric Pendlebury")
     assert "Luca Marrowby" in found.reason
+
+
+def test_a_save_is_judged_by_the_sources_xg_and_never_by_a_position_it_lacks():
+    def saves(shot: PlayEvent) -> list[Highlight]:
+        agent = HighlightsAgent(Squad(HOME, AWAY))
+        agent.handle(shot)
+        return agent.handle(play(2, "save", team="away", player_id="hbc-1", second=1, x=97))
+
+    [found] = saves(play(1, "shot", player_id="nbr-9", x=50, y=50, xg=0.2, outcome="saved"))
+    assert "0.20 expected goals" in found.reason
+    assert saves(play(1, "shot", player_id="nbr-9", x=88, y=50, outcome="saved", located=False)) == []
+
+
+def test_winning_the_ball_high_is_found_only_where_the_position_is_known():
+    def turnovers(located: bool) -> list[Highlight]:
+        agent = HighlightsAgent(Squad(HOME, AWAY))
+        agent.handle(play(1, team="away", x=50))
+        return agent.handle(play(2, x=80, sequence=2, phase="transition", danger=0.4, located=located))
+
+    assert [h.category for h in turnovers(True)] == ["dangerous_turnover"]
+    assert turnovers(False) == []
 
 
 def test_a_foul_that_stops_a_break_is_found_once_per_cooldown():

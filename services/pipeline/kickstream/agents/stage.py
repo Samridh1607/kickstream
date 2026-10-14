@@ -45,14 +45,23 @@ class _Team:
         self.squad = Squad(status.home, status.away)
         names = {"home": status.home.name, "away": status.away.name}
         # In the registry's order: an agent comes after every agent it listens to.
-        self.agents: list[MatchAgent] = [
-            EventInterpreter(),
-            TacticalAnalyst(names),
-            PredictionAgent(),
-            PlayerTracker(self.squad),
-            VisualizationAgent(self.squad),
-            HighlightsAgent(self.squad),
-        ]
+        if status.detail == "key_events":
+            # Without positions the Tactical Analyst and the Visualization Agent would only invent.
+            self.agents: list[MatchAgent] = [
+                EventInterpreter(),
+                PredictionAgent(),
+                PlayerTracker(self.squad),
+                HighlightsAgent(self.squad),
+            ]
+        else:
+            self.agents = [
+                EventInterpreter(),
+                TacticalAnalyst(names),
+                PredictionAgent(),
+                PlayerTracker(self.squad),
+                VisualizationAgent(self.squad),
+                HighlightsAgent(self.squad),
+            ]
         self.explainability = ExplainabilityAgent(names)
         self.minute = 0
         self.tallies: dict[str, _Tally] = {}
@@ -89,6 +98,8 @@ class AgentsStage:
                 while len(self._teams) >= REMEMBERED_MATCHES:
                     del self._teams[next(iter(self._teams))]
                 self._teams[match_id] = _Team(payload)
+            else:
+                self._teams[match_id].squad.refresh(payload.home, payload.away)
             if payload.state in ("finished", "abandoned"):
                 await self._report(match_id, self._teams[match_id])
             return

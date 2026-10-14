@@ -52,6 +52,7 @@ class MatchState:
     last_swing_minute: int = -99
     pressure_since: dict[Side, int | None] = _per_side(lambda: None)
     last_pressure_minute: dict[Side, int] = _per_side(lambda: -99)
+    located_seen: bool = False
 
 
 def attack_pressure(state: MatchState, side: Side) -> float:
@@ -109,13 +110,20 @@ def _moment(
     )
 
 
+def _chance(event: MatchEvent, side: Side) -> float:
+    if event.xg is not None:
+        return event.xg
+    return xg(attacking_x(side, event.x), event.y) if event.located else 0.0
+
+
 def _record(state: MatchState, event: MatchEvent, cfg: AnalyticsConfig) -> list[KeyMoment]:
+    state.located_seen = state.located_seen or bool(event.located)
     side = event.team
     if side is None:
         return []
     tally = state.tally[side]
     weight = _PRESSURE_WEIGHT.get(event.type)
-    if weight is not None:
+    if weight is not None and event.located:
         state.grid[side][zone_index(event.x, event.y)] += weight
 
     if event.type == "pass":
@@ -123,7 +131,7 @@ def _record(state: MatchState, event: MatchEvent, cfg: AnalyticsConfig) -> list[
         tally.touches += 1
         tally.completed += 1 if event.completed else 0
     elif event.type == "shot":
-        chance = xg(attacking_x(side, event.x), event.y)
+        chance = _chance(event, side)
         tally.shots += 1
         tally.touches += 1
         tally.xg += chance
@@ -141,7 +149,11 @@ def _record(state: MatchState, event: MatchEvent, cfg: AnalyticsConfig) -> list[
             ]
     elif event.type == "goal":
         tally.goals += 1
-        facts = [("xg", tally.xg), ("shots", tally.shots), ("possession", _possession(state, side))]
+        facts = (
+            [("xg", tally.xg), ("shots", tally.shots), ("possession", _possession(state, side))]
+            if state.located_seen
+            else []
+        )
         return [_moment(state, event, "goal", side, facts, from_event=True)]
     elif event.type == "foul":
         tally.fouls += 1
@@ -149,7 +161,9 @@ def _record(state: MatchState, event: MatchEvent, cfg: AnalyticsConfig) -> list[
         tally.yellow += 1
     elif event.type == "red_card":
         tally.red += 1
-        facts = [("players_on_pitch", 11 - tally.red), ("fouls", tally.fouls)]
+        facts = [("players_on_pitch", 11 - tally.red)]
+        if state.located_seen:
+            facts.append(("fouls", tally.fouls))
         return [_moment(state, event, "red_card", side, facts, from_event=True)]
     return []
 
@@ -191,7 +205,7 @@ def _sustained(state: MatchState, event: MatchEvent, cfg: AnalyticsConfig) -> li
 
 
 def apply(
-    state: MatchState, event: MatchEvent, cfg: AnalyticsConfig
+    state: MatchState, event: MatchEvent, cfg: AnalyticsConfig, *, snapshots: bool = True
 ) -> list[KeyMoment | StatsSnapshot | PressureSnapshot]:
     at = event.minute * 60 + event.second
     decay = 0.5 ** (max(0.0, at - state.clock) / cfg.half_life_s)
@@ -200,6 +214,8 @@ def apply(
         state.grid[side] = [value * decay for value in state.grid[side]]
 
     out: list = [*_record(state, event, cfg), *_swing(state, event, cfg), *_sustained(state, event, cfg)]
+    if not snapshots:
+        return out
 
     period_end = event.type if event.type in ("half_time", "full_time") else None
     if event.minute > state.snapshot_minute or period_end:
