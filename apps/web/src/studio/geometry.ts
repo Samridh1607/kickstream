@@ -53,7 +53,7 @@ export function snapToGuides(rect: Rect, others: Rect[], threshold = SNAP_THRESH
   }
   const dx = nearestShift([rect.x, rect.x + rect.width / 2, rect.x + rect.width], xGuides, threshold);
   const dy = nearestShift([rect.y, rect.y + rect.height / 2, rect.y + rect.height], yGuides, threshold);
-  return clampRect({ ...rect, x: rect.x + dx, y: rect.y + dy });
+  return clampRect({ ...rect, x: Math.round(rect.x + dx), y: Math.round(rect.y + dy) });
 }
 
 export function moveBy(rect: Rect, dx: number, dy: number): Rect {

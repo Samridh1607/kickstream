@@ -77,11 +77,18 @@ test("when two guides compete, the closer one wins", () => {
 
 test("an edge already on a guide stays put rather than jumping to a farther one", () => {
   const other = box(400, 400, 100, 100); // left 400
-  // Left edge already at 400; the right edge (460) is 10 from nothing in reach.
+  // Left edge already at 400; the right edge (460) is 10 from the other's centre, out of reach.
   expect(snapToGuides(box(400, 50, 60, 60), [other], 8).x).toBe(400);
 });
 
 test("snapping never leaves the canvas", () => {
   const huge = { x: -50, y: -50, width: 100, height: 80 };
   expect(snapToGuides(huge, [])).toEqual(clampRect({ ...huge, x: 0, y: 0 }));
+});
+
+test("snapping to a half-pixel centre line still lands on a whole pixel", () => {
+  const odd = box(600, 600, 41, 41); // centre 620.5
+  const moved = snapToGuides(box(615, 100, 10, 10), [odd]);
+  expect(Number.isInteger(moved.x)).toBe(true);
+  expect(Number.isInteger(moved.y)).toBe(true);
 });
