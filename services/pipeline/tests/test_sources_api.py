@@ -323,11 +323,6 @@ def test_an_api_football_live_match_runs_to_full_time_without_position_data(tmp_
     assert stats and stats[-1].provided and "goals" in stats[-1].provided
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="live/rules.advance publishes the first kickoff before the first status, so analytics still takes "
-    "the match for full detail and draws one empty pressure map",
-)
 def test_a_live_match_draws_no_pressure_map(tmp_path):
     assert not any(item.type == "pressure" for item in play_live(tmp_path))
 

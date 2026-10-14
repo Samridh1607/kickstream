@@ -32,7 +32,8 @@ class LiveProgress:
 
 
 def advance(progress: LiveProgress, snap: LiveSnapshot) -> list[MatchEvent | MatchStatus | StatsSnapshot]:
-    """What to publish for this snapshot, in order: new events, then the status if anything changed, then stats."""
+    """What to publish for this snapshot, in order: new events, then the status if anything changed, then stats.
+    The first snapshot's status comes before its events."""
     previous = progress.state
     events: list[MatchEvent] = []
     if snap.state != previous:
@@ -54,7 +55,8 @@ def advance(progress: LiveProgress, snap: LiveSnapshot) -> list[MatchEvent | Mat
         period_end = "full_time"
     progress.state = snap.state
 
-    out: list[MatchEvent | MatchStatus | StatsSnapshot] = list(events)
+    first = progress.status is None
+    out: list[MatchEvent | MatchStatus | StatsSnapshot] = [] if first else list(events)
     status = MatchStatus(
         match_id=progress.match_id,
         state=snap.state,
@@ -72,6 +74,9 @@ def advance(progress: LiveProgress, snap: LiveSnapshot) -> list[MatchEvent | Mat
     if status != progress.status:
         progress.status = status
         out.append(status)
+    if first:
+        # Later stages learn from the first status that this match has no positions to draw.
+        out.extend(events)
 
     stats = _stats(progress, snap)
     if stats != progress.stats or period_end:

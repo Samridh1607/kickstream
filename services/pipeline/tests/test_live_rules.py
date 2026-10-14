@@ -174,7 +174,7 @@ def test_half_time_and_full_time_close_the_period_in_the_stats():
 def test_a_snapshot_already_in_the_second_half_starts_with_one_kickoff():
     out = advance(_progress(), live("live", 60, (1, 0), events=[goal("k1", 50, "home")]))
     assert _events(out) == [("kickoff", 0), ("goal", 50)]
-    assert _kinds(out) == ["MatchEvent", "MatchEvent", "MatchStatus", "StatsSnapshot"]
+    assert _kinds(out) == ["MatchStatus", "MatchEvent", "MatchEvent", "StatsSnapshot"]
 
 
 def test_events_found_at_a_period_end_come_before_it():
