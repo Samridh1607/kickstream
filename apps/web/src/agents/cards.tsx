@@ -123,7 +123,7 @@ export function PitchCard({ match, language, followId, tall = false }: CardProps
         </Select>
       }>
       <div className={mergeClasses(styles.pitch, tall && styles.tall)}>
-        <Pitch3D scene={match.pitch} colors={colorsOf(match.status)} camera={camera === "auto" ? undefined : camera} followId={followId}
+        <Pitch3D scene={match.pitch} colors={colorsOf(match.status)} camera={camera === "auto" ? undefined : camera} followId={followId} controls
           label={t(language, "pitch3d")} emptyText={t(language, "pitch3dEmpty")} />
       </div>
       {match.pitch && (
