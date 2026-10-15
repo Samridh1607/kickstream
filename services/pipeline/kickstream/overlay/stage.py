@@ -9,11 +9,13 @@ from kickstream.contracts import (
     Recap,
     StatsSnapshot,
 )
+from kickstream.domain.recent import make_room
 from kickstream.domain.types import LANGUAGES
 from kickstream.overlay.build import lower_third, pressure_map, recap_card, stat_card, stat_names
 from kickstream.ports.bus import INSIGHTS, NARRATIVES, OVERLAYS, STATUS, EventBus
 
 log = logging.getLogger(__name__)
+_REMEMBERED_MOMENTS = 500
 
 
 class OverlayStage:
@@ -32,9 +34,12 @@ class OverlayStage:
 
     def _build(self, match_id: str, payload) -> list[Overlay]:
         if isinstance(payload, MatchStatus):
+            for per_match in (self._team_names, self._detail, self._count):
+                make_room(per_match, match_id)
             self._team_names[match_id] = {"home": payload.home.name, "away": payload.away.name}
             self._detail[match_id] = payload.detail
         elif isinstance(payload, KeyMoment):
+            make_room(self._moments, payload.id, _REMEMBERED_MOMENTS)
             self._moments[payload.id] = payload
         elif isinstance(payload, StatsSnapshot):
             if stat_names(payload) and (payload.period_end or payload.minute % self._every == 0):

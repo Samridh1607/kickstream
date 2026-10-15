@@ -17,6 +17,7 @@ STAGES = {
     "copilot",
     "live",
     "sources",
+    "autolive",
 }
 SHARED = {"contracts", "domain", "ports"}
 

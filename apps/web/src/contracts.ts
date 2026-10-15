@@ -1466,3 +1466,84 @@ export interface Fixture {
   score_home?: number | null;
   score_away?: number | null;
 }
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "AutoLiveSettings".
+ */
+export interface AutoLiveSettings {
+  enabled: boolean;
+  rotate: boolean;
+  min_minutes: number;
+  max_minutes: number;
+  commentary: boolean;
+  talk_minutes: number;
+  narration: boolean;
+  voice: string;
+  rate: number;
+  /**
+   * @maxItems 25
+   */
+  scenes: string[];
+  keep_match: boolean;
+  match_speed: number;
+  stream: boolean;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "AutoLiveScene".
+ */
+export interface AutoLiveScene {
+  id: string;
+  name: string;
+  kind: "agent" | "match" | "analysis" | "fans" | "show";
+  agent?: string | null;
+  blurb: string;
+  /**
+   * @maxItems 40
+   */
+  elements: SceneElement[];
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "AutoCommentary".
+ */
+export interface AutoCommentary {
+  id: string;
+  scene_id: string;
+  text: string;
+  source: "model" | "scripted";
+  at: number;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "AutoSpeech".
+ */
+export interface AutoSpeech {
+  azure: boolean;
+  region?: string | null;
+  chars_today: number;
+  chars_limit: number;
+  problem?: string | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "AutoLive".
+ */
+export interface AutoLive {
+  revision: number;
+  server_time: number;
+  settings: AutoLiveSettings;
+  /**
+   * @maxItems 25
+   */
+  scenes: AutoLiveScene[];
+  scene_id: string;
+  changed_at: number;
+  next_at?: number | null;
+  transition: "fade" | "slide" | "zoom" | "wipe" | "push" | "iris";
+  commentary?: AutoCommentary | null;
+  speech: AutoSpeech;
+  matches_started?: number;
+  stream_restarts?: number;
+  problem?: string | null;
+}

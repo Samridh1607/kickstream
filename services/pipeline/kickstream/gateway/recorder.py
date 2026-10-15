@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from kickstream.contracts import MatchStatus
 from kickstream.domain.payloads import TYPE_NAMES
+from kickstream.domain.recent import make_room
 from kickstream.ports.broadcaster import Broadcaster
 from kickstream.ports.bus import AGENTS, EVENTS, INSIGHTS, NARRATIVES, OVERLAYS, STATUS, EventBus
 from kickstream.ports.store import LogItem, MatchStore
@@ -26,6 +27,7 @@ class Recorder:
             log.warning("not recording unknown payload type %s", type(payload).__name__)
             return None
         if isinstance(payload, MatchStatus):
+            make_room(self._team_ids, match_id)
             self._team_ids[match_id] = {"home": payload.home.id, "away": payload.away.id}
         side = getattr(payload, "team", None)
         item = self._store.append(

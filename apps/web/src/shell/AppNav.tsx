@@ -1,5 +1,5 @@
 import { Button, makeStyles, mergeClasses, Text, tokens, Tooltip } from "@fluentui/react-components";
-import { DataTrendingRegular, HomeRegular, VideoClipMultipleRegular, WeatherMoonRegular, WeatherSunnyRegular } from "@fluentui/react-icons";
+import { BotSparkleRegular, DataTrendingRegular, HomeRegular, VideoClipMultipleRegular, WeatherMoonRegular, WeatherSunnyRegular } from "@fluentui/react-icons";
 import type { ReactNode } from "react";
 import type { Output } from "../contracts";
 import { AskCopilot } from "../copilot/AskCopilot";
@@ -7,11 +7,12 @@ import { LiveStatus } from "../output/OutputTab";
 import { useIsDark, useThemeChoice } from "../theme";
 import { BrandLogo } from "./BrandLogo";
 
-export type NavPage = "home" | "studio" | "match";
+export type NavPage = "home" | "studio" | "live" | "match";
 
 const LINKS: { page: NavPage; href: string; label: string; icon: ReactNode }[] = [
   { page: "home", href: "/", label: "Home", icon: <HomeRegular /> },
   { page: "studio", href: "/studio", label: "Studio", icon: <VideoClipMultipleRegular /> },
+  { page: "live", href: "/live", label: "Auto live", icon: <BotSparkleRegular /> },
   { page: "match", href: "/match", label: "Match data", icon: <DataTrendingRegular /> },
 ];
 

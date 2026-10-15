@@ -10,6 +10,7 @@ import logging
 from kickstream.agents.base import Declared
 from kickstream.agents.tactics import PATTERN_PHRASES
 from kickstream.contracts import Explanation, Highlight, Prediction, TacticalInsight
+from kickstream.domain.recent import make_room
 from kickstream.domain.types import MODES, SIDES, Side
 from kickstream.ports.explainer import ExplainContext, Explainer, ExplainError, WrittenExplanation
 
@@ -195,6 +196,7 @@ class ExplainService:
 
     async def _write(self, match_id: str, ctx: ExplainContext) -> tuple[dict, str]:
         if self._primary is not None and self._spent.get(match_id, 0) < self._max_calls:
+            make_room(self._spent, match_id)
             self._spent[match_id] = self._spent.get(match_id, 0) + 1
             try:
                 written = await asyncio.wait_for(self._primary.explain(ctx), self._timeout_s)

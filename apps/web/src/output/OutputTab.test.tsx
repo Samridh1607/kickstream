@@ -83,13 +83,18 @@ test("idle destinations can be switched, removed and sent live", async () => {
   const { calls } = setup(doc);
   const first = within(screen.getByTestId("destination-d1"));
   expect(first.getByText("Key ending wxyz")).toBeTruthy();
-  fireEvent.click(first.getByRole("switch", { name: "Send to YouTube" }));
+  // Each change keeps the controls disabled until its answer arrives: the next one waits for that.
+  const ready = async <T extends HTMLElement>(find: () => T) => {
+    await waitFor(() => expect((find() as HTMLElement & { disabled: boolean }).disabled).toBe(false));
+    return find();
+  };
+  fireEvent.click(await ready(() => first.getByRole("switch", { name: "Send to YouTube" })));
   await waitFor(() => expect(last(calls)).toMatchObject({ url: "/api/studio/output/destinations/d1", method: "PUT", body: { enabled: false } }));
-  fireEvent.click(within(screen.getByTestId("destination-d2")).getByRole("button", { name: "Remove Recording" }));
+  fireEvent.click(await ready(() => within(screen.getByTestId("destination-d2")).getByRole("button", { name: "Remove Recording" })));
   await waitFor(() => expect(last(calls)).toMatchObject({ url: "/api/studio/output/destinations/d2", method: "DELETE" }));
-  fireEvent.change(screen.getByLabelText("Quality"), { target: { value: "1080p30" } });
+  fireEvent.change(await ready(() => screen.getByLabelText("Quality")), { target: { value: "1080p30" } });
   await waitFor(() => expect(last(calls).body).toEqual({ quality: "1080p30" }));
-  fireEvent.click(screen.getByRole("button", { name: "Go live" }));
+  fireEvent.click(await ready(() => screen.getByRole("button", { name: "Go live" })));
   await waitFor(() => expect(last(calls).url).toBe("/api/studio/output/start"));
 });
 

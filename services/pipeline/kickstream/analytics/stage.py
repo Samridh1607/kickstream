@@ -1,5 +1,6 @@
 from kickstream.analytics.state import AnalyticsConfig, MatchState, apply
 from kickstream.contracts import MatchEvent, MatchStatus
+from kickstream.domain.recent import make_room
 from kickstream.ports.bus import EVENTS, INSIGHTS, STATUS, EventBus
 
 
@@ -15,10 +16,12 @@ class AnalyticsStage:
         async for message in self._messages:
             payload = message.payload
             if isinstance(payload, MatchStatus):
+                make_room(self._details, message.match_id)
                 self._details[message.match_id] = payload.detail or "full"
                 continue
             if not isinstance(payload, MatchEvent):
                 continue
+            make_room(self._states, message.match_id)
             state = self._states.setdefault(message.match_id, MatchState(message.match_id))
             full = self._details.get(message.match_id, "full") == "full"
             for insight in apply(state, payload, self._cfg, snapshots=full):

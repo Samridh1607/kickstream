@@ -3,6 +3,11 @@ output "url" {
   value       = "https://${local.fqdn}"
 }
 
+output "autolive_url" {
+  description = "Auto live's controls; the stream itself shows /live?output."
+  value       = "https://${local.fqdn}/live"
+}
+
 output "registry_name" {
   description = "The container registry the deploy scripts build the image in."
   value       = azurerm_container_registry.main.name

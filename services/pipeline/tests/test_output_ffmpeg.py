@@ -141,3 +141,15 @@ async def test_stopping_kills_a_sender_that_ignores_the_end_of_its_input(monkeyp
     assert process.returncode is not None  # really gone, not just abandoned
     await asyncio.wait_for(sender.wait(), 5)
     await asyncio.wait_for(sender.stop(), 5)  # twice is harmless
+
+
+async def test_stopping_the_encoder_ends_even_when_its_output_was_left_unread(monkeypatch):
+    # Once the stream is winding down nobody reads the encoder: its full pipe must not hold the stop up.
+    flood = "import sys\nwhile True: sys.stdout.buffer.write(b'x' * 65536); sys.stdout.flush()"
+    monkeypatch.setattr(ffmpeg, "encoder_args", lambda quality: ["-c", flood])
+    encoder = FfmpegEncoder(sys.executable)
+    await encoder.start(Quality(1280, 720, 3000))
+    process = encoder._process
+    await asyncio.sleep(1.0)  # its pipe fills up
+    await asyncio.wait_for(encoder.stop(), 15)
+    assert process.returncode is not None

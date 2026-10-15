@@ -88,11 +88,27 @@ async def _write(process: asyncio.subprocess.Process | None, data: bytes) -> Non
         await stdin.drain()
 
 
-async def _end(process: asyncio.subprocess.Process) -> None:
+async def _drain(stream: asyncio.StreamReader | None) -> None:
+    if stream is None:
+        return
+    with contextlib.suppress(Exception):  # read elsewhere already, or closed: either way it holds nothing up
+        while await stream.read(_READ):
+            pass
+
+
+async def _end(process: asyncio.subprocess.Process, timeout_s: float = 10.0) -> None:
+    """Kill it and wait for it to go.
+
+    A process is not reported gone until its pipes close, and a pipe nobody reads stays full and
+    open: its unread output is read away meanwhile, or the wait would never end.
+    """
     if process.returncode is None:
         with contextlib.suppress(ProcessLookupError):
             process.kill()
-    await process.wait()
+    with contextlib.suppress(TimeoutError):
+        await asyncio.wait_for(
+            asyncio.gather(process.wait(), _drain(process.stdout), _drain(process.stderr)), timeout_s
+        )
 
 
 class FfmpegEncoder:

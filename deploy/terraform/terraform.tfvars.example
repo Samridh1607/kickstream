@@ -11,3 +11,8 @@
 # llm_base_url     = "https://<resource>.openai.azure.com/openai/v1/"
 # llm_model        = "gpt-4.1-mini"
 # llm_api_key      = ""
+
+# Auto live (/live): on at first start; Azure Speech tier and daily character allowance for its voice.
+# autolive           = true
+# speech_sku         = "S0"
+# speech_daily_chars = 200000

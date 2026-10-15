@@ -25,6 +25,7 @@ terraform {
 provider "azurerm" {
   resource_providers_to_register = [
     "Microsoft.App",
+    "Microsoft.CognitiveServices",
     "Microsoft.Communication",
     "Microsoft.ContainerRegistry",
     "Microsoft.OperationalInsights",

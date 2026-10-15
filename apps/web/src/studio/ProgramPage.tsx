@@ -5,11 +5,12 @@ import { type ProgramCallOptions, useProgramCall } from "../people/useProgramCal
 import { useMatch } from "../stream/store";
 import { useLiveDocument } from "../stream/useLiveDocument";
 import { type CurrentMatchOptions, useCurrentMatch } from "../stream/useCurrentMatch";
-import { startCapture, type StopCapture } from "./capture";
+import { startCapture } from "./capture";
 import type { CameraTile } from "./elements";
 import { fitScale, nextLayer } from "./geometry";
 import { programMode } from "./mode";
 import { SceneCanvas } from "./SceneCanvas";
+import { useCaptureOffer } from "./useCaptureOffer";
 import { useNow, useStudio } from "./useStudio";
 
 const REPLAY_BOX = { x: 360, y: 180, width: 1200, height: 720 };
@@ -50,7 +51,7 @@ export function withFallbacks(scene: Scene, studio: Studio, cameras: readonly Ca
   return withFanFallbacks(withCamerasFallback(withReplayFallback(scene, studio), cameras), fans);
 }
 
-function useWindowSize() {
+export function useWindowSize() {
   const [size, setSize] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   useEffect(() => {
     const onResize = () => setSize({ width: window.innerWidth, height: window.innerHeight });
@@ -83,48 +84,7 @@ export function ProgramPage({
   const size = useWindowSize();
   const guests = useProgramCall({ eventSource, retryMs, newCall, seat, connectAudio, rejoinMs });
   const { doc: fans } = useLiveDocument<FanZone>(FANS_STREAM, eventSource, retryMs);
-
-  // Opened by the pipeline's hidden browser with a token, the page offers to record itself. It
-  // waits for the studio document, so the stream never begins on an empty frame. The pipeline
-  // calls the function; a page may only ask to be captured in answer to an action.
-  const token = useMemo(() => new URLSearchParams(window.location.search).get("capture"), []);
-  const ready = Boolean(studio);
-  useEffect(() => {
-    if (!token || !ready) return;
-    const page = window as unknown as { __kickstreamStartCapture?: () => Promise<void> };
-    // At most one capture at a time: a call while one starts or runs gets the same promise.
-    let current: Promise<void> | null = null;
-    let stopRunning: (() => void) | null = null;
-    let gone = false;
-    page.__kickstreamStartCapture = () => {
-      if (current) return current;
-      const attempt: Promise<void> = (async () => {
-        const stop = await capture(token, { width: window.innerWidth, height: window.innerHeight });
-        if (gone) {
-          stop();
-          return;
-        }
-        stopRunning = stop;
-        // Once it has ended by itself, a later call may start a new one.
-        void (stop as StopCapture).ended?.then(() => {
-          if (current === attempt) {
-            current = null;
-            stopRunning = null;
-          }
-        });
-      })();
-      current = attempt;
-      attempt.catch(() => {
-        if (current === attempt) current = null;
-      });
-      return attempt;
-    };
-    return () => {
-      gone = true;
-      stopRunning?.();
-      delete page.__kickstreamStartCapture;
-    };
-  }, [token, ready, capture]);
+  useCaptureOffer(Boolean(studio), capture);
 
   const active = studio?.scenes.find((scene) => scene.id === studio.active_scene_id) ?? studio?.scenes[0];
   return (

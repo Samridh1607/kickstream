@@ -1,6 +1,7 @@
 import { FluentProvider } from "@fluentui/react-components";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { AutoLiveOutput, AutoLivePage } from "./autolive/AutoLivePage";
 import { BroadcastPage } from "./broadcasts/BroadcastPage";
 import { StudioEntry } from "./broadcasts/StudioEntry";
 import { HomePage } from "./home/HomePage";
@@ -24,6 +25,7 @@ function Page() {
   const guest = /^\/guest\/([^/]+)$/.exec(path);
   if (guest) return <GuestPage secret={decodeURIComponent(guest[1])} />;
   if (path === "/studio") return isOutputView(window.location.search) ? <ProgramPage /> : <StudioEntry />;
+  if (path === "/live") return isOutputView(window.location.search) ? <AutoLiveOutput /> : <AutoLivePage />;
   if (path === "/match") return <MatchPage />;
   return <HomePage />;
 }

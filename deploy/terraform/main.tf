@@ -66,6 +66,15 @@ resource "azurerm_communication_service" "main" {
   data_location       = var.communication_data_location
 }
 
+# Auto live's commentary voice. Its key and region reach the app as KICKSTREAM_SPEECH_*.
+resource "azurerm_cognitive_account" "speech" {
+  name                = "speech-${var.name}-${local.suffix}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  kind                = "SpeechServices"
+  sku_name            = var.speech_sku
+}
+
 resource "azurerm_container_app_environment" "main" {
   name                       = "cae-${var.name}"
   location                   = azurerm_resource_group.main.location
@@ -106,6 +115,10 @@ resource "azurerm_container_app" "main" {
   secret {
     name  = "microsoft-provider-authentication-secret"
     value = azuread_application_password.studio.value
+  }
+  secret {
+    name  = "speech-key"
+    value = azurerm_cognitive_account.speech.primary_access_key
   }
   dynamic "secret" {
     for_each = local.given_secrets
@@ -149,6 +162,22 @@ resource "azurerm_container_app" "main" {
         name        = "KICKSTREAM_ACS_CONNECTION_STRING"
         secret_name = "acs-connection-string"
       }
+      env {
+        name        = "KICKSTREAM_SPEECH_KEY"
+        secret_name = "speech-key"
+      }
+      env {
+        name  = "KICKSTREAM_SPEECH_REGION"
+        value = azurerm_cognitive_account.speech.location
+      }
+      env {
+        name  = "KICKSTREAM_SPEECH_DAILY_CHARS"
+        value = tostring(var.speech_daily_chars)
+      }
+      env {
+        name  = "KICKSTREAM_AUTOLIVE"
+        value = var.autolive ? "on" : "off"
+      }
       dynamic "env" {
         for_each = local.given_secrets
         content {
@@ -167,6 +196,26 @@ resource "azurerm_container_app" "main" {
       volume_mounts {
         name = "data"
         path = "/data"
+      }
+
+      # Straight to the container, past the sign-in. A process that stops answering for three
+      # minutes is restarted; auto live then picks up its screens and its 24/7 stream from /data.
+      startup_probe {
+        transport               = "HTTP"
+        port                    = 8000
+        path                    = "/api/health"
+        interval_seconds        = 10
+        timeout                 = 5
+        failure_count_threshold = 30
+      }
+      liveness_probe {
+        transport               = "HTTP"
+        port                    = 8000
+        path                    = "/api/health"
+        initial_delay           = 30
+        interval_seconds        = 30
+        timeout                 = 10
+        failure_count_threshold = 6
       }
     }
 

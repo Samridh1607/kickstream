@@ -1157,6 +1157,78 @@ class Fixture(BaseModel):
     score_away: int | None = None
 
 
+class AutoLiveSettings(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    enabled: bool
+    rotate: bool
+    min_minutes: confloat(ge=0.5, le=120.0)
+    max_minutes: confloat(ge=0.5, le=120.0)
+    commentary: bool
+    talk_minutes: confloat(ge=0.0, le=60.0)
+    narration: bool
+    voice: constr(pattern=r'^[A-Za-z]{2,3}-[A-Za-z]{2,4}-[A-Za-z0-9]{2,40}$')
+    rate: confloat(ge=0.5, le=2.0)
+    scenes: list[str] = Field(..., max_length=25)
+    keep_match: bool
+    match_speed: confloat(ge=1.0, le=600.0)
+    stream: bool
+
+
+class AutoLiveScene(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: constr(min_length=1, max_length=64)
+    name: constr(min_length=1, max_length=60)
+    kind: Literal['agent', 'match', 'analysis', 'fans', 'show']
+    agent: str | None = None
+    blurb: constr(max_length=160)
+    elements: list[SceneElement] = Field(..., max_length=40)
+
+
+class AutoCommentary(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: str
+    scene_id: str
+    text: constr(min_length=1, max_length=600)
+    source: Literal['model', 'scripted']
+    at: float
+
+
+class AutoSpeech(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    azure: bool
+    region: str | None = None
+    chars_today: conint(ge=0)
+    chars_limit: conint(ge=0)
+    problem: str | None = None
+
+
+class AutoLive(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    revision: int
+    server_time: float
+    settings: AutoLiveSettings
+    scenes: list[AutoLiveScene] = Field(..., max_length=25)
+    scene_id: str
+    changed_at: float
+    next_at: float | None = None
+    transition: Literal['fade', 'slide', 'zoom', 'wipe', 'push', 'iris']
+    commentary: AutoCommentary | None = None
+    speech: AutoSpeech
+    matches_started: conint(ge=0) | None = 0
+    stream_restarts: conint(ge=0) | None = 0
+    problem: str | None = None
+
+
 class StudioSettings(BaseModel):
     model_config = ConfigDict(
         extra='forbid',

@@ -4,6 +4,7 @@ from collections import deque
 from dataclasses import dataclass
 
 from kickstream.contracts import KeyMoment, MatchStatus, StatsSnapshot, TeamSheet
+from kickstream.domain.recent import make_room
 from kickstream.domain.teams import find_player
 from kickstream.narration.service import NarrationService
 from kickstream.ports.bus import INSIGHTS, NARRATIVES, STATUS, EventBus
@@ -47,6 +48,8 @@ class NarrationStage:
 
     async def _intake(self, match_id: str, payload) -> None:
         if isinstance(payload, MatchStatus):
+            for per_match in (self._teams, self._stats, self._moments):
+                make_room(per_match, match_id)
             self._teams[match_id] = (payload.home, payload.away)
             return
         if match_id not in self._teams:

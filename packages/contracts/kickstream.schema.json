@@ -1160,6 +1160,78 @@
         "score_home": { "type": ["integer", "null"], "default": null },
         "score_away": { "type": ["integer", "null"], "default": null }
       }
+    },
+    "AutoLiveSettings": {
+      "type": "object", "additionalProperties": false,
+      "required": ["enabled", "rotate", "min_minutes", "max_minutes", "commentary", "talk_minutes", "narration", "voice", "rate", "scenes", "keep_match", "match_speed", "stream"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "rotate": { "type": "boolean" },
+        "min_minutes": { "type": "number", "minimum": 0.5, "maximum": 120 },
+        "max_minutes": { "type": "number", "minimum": 0.5, "maximum": 120 },
+        "commentary": { "type": "boolean" },
+        "talk_minutes": { "type": "number", "minimum": 0, "maximum": 60 },
+        "narration": { "type": "boolean" },
+        "voice": { "type": "string", "pattern": "^[A-Za-z]{2,3}-[A-Za-z]{2,4}-[A-Za-z0-9]{2,40}$" },
+        "rate": { "type": "number", "minimum": 0.5, "maximum": 2 },
+        "scenes": { "type": "array", "items": { "type": "string" }, "maxItems": 25 },
+        "keep_match": { "type": "boolean" },
+        "match_speed": { "type": "number", "minimum": 1, "maximum": 600 },
+        "stream": { "type": "boolean" }
+      }
+    },
+    "AutoLiveScene": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "name", "kind", "blurb", "elements"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "kind": { "enum": ["agent", "match", "analysis", "fans", "show"] },
+        "agent": { "type": ["string", "null"], "default": null },
+        "blurb": { "type": "string", "maxLength": 160 },
+        "elements": { "type": "array", "items": { "$ref": "#/$defs/SceneElement" }, "maxItems": 40 }
+      }
+    },
+    "AutoCommentary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "scene_id", "text", "source", "at"],
+      "properties": {
+        "id": { "type": "string" },
+        "scene_id": { "type": "string" },
+        "text": { "type": "string", "minLength": 1, "maxLength": 600 },
+        "source": { "enum": ["model", "scripted"] },
+        "at": { "type": "number" }
+      }
+    },
+    "AutoSpeech": {
+      "type": "object", "additionalProperties": false,
+      "required": ["azure", "chars_today", "chars_limit"],
+      "properties": {
+        "azure": { "type": "boolean" },
+        "region": { "type": ["string", "null"], "default": null },
+        "chars_today": { "type": "integer", "minimum": 0 },
+        "chars_limit": { "type": "integer", "minimum": 0 },
+        "problem": { "type": ["string", "null"], "default": null }
+      }
+    },
+    "AutoLive": {
+      "type": "object", "additionalProperties": false,
+      "required": ["revision", "server_time", "settings", "scenes", "scene_id", "changed_at", "transition", "speech"],
+      "properties": {
+        "revision": { "type": "integer" },
+        "server_time": { "type": "number" },
+        "settings": { "$ref": "#/$defs/AutoLiveSettings" },
+        "scenes": { "type": "array", "items": { "$ref": "#/$defs/AutoLiveScene" }, "maxItems": 25 },
+        "scene_id": { "type": "string" },
+        "changed_at": { "type": "number" },
+        "next_at": { "type": ["number", "null"], "default": null },
+        "transition": { "enum": ["fade", "slide", "zoom", "wipe", "push", "iris"] },
+        "commentary": { "anyOf": [{ "$ref": "#/$defs/AutoCommentary" }, { "type": "null" }], "default": null },
+        "speech": { "$ref": "#/$defs/AutoSpeech" },
+        "matches_started": { "type": "integer", "minimum": 0, "default": 0 },
+        "stream_restarts": { "type": "integer", "minimum": 0, "default": 0 },
+        "problem": { "type": ["string", "null"], "default": null }
+      }
     }
   }
 }

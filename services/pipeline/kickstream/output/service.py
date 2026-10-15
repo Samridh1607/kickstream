@@ -103,6 +103,7 @@ class OutputService:
         self._encoder = encoder
         self._new_sender = new_sender
         self._program_url = program_url
+        self._run_url = program_url
         self._recordings_dir = Path(recordings_dir)
         self._now = now
         self._sleep = sleep
@@ -192,11 +193,13 @@ class OutputService:
 
     # --- a run --------------------------------------------------------------------------------------
 
-    def start(self) -> None:
+    def start(self, program_url: str | None = None) -> None:
+        """Go live with the studio's program page, or with another page such as auto live's."""
         begun = rules.begin(self._state)
         missing = self._encoder.available() or self._capture.available()
         if missing:
             raise OutputError(503, "output", missing)
+        self._run_url = program_url or self._program_url
         self._apply(lambda _: begun, save=False)
         self._cancelled = False
         run = self._run = asyncio.create_task(self._supervise())
@@ -261,7 +264,7 @@ class OutputService:
             fan = asyncio.create_task(self._fan_out(quality, relays))
             watchers.append(fan)
             await self._capture.start(
-                capture_address(self._program_url, self._token), quality.width, quality.height
+                capture_address(self._run_url, self._token), quality.width, quality.height
             )
             gone = asyncio.create_task(self._capture.wait())
             lost = asyncio.create_task(self._feed_lost.wait())

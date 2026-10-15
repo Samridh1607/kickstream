@@ -1,6 +1,8 @@
 import time
 from collections.abc import Callable
 
+from kickstream.domain.recent import make_room
+
 
 class Budget:
     """Bounds model calls per match. Goals and recaps (priority) are served first."""
@@ -25,6 +27,8 @@ class Budget:
             last = self._last.get(match_id)
             if last is not None and self._now() - last < self._min_gap_s:
                 return False
+        make_room(self._used, match_id)
+        make_room(self._last, match_id)
         self._used[match_id] = self._used.get(match_id, 0) + cost
         self._last[match_id] = self._now()
         return True

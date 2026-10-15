@@ -1,11 +1,15 @@
 from pydantic import BaseModel
 
+from kickstream.domain.recent import make_room
 from kickstream.ports.store import LogItem
 
 
 class InMemoryMatchStore:
-    def __init__(self) -> None:
+    """The logs of the newest matches. An older match is forgotten, so a pipeline running for days stays bounded."""
+
+    def __init__(self, remembered: int = 6) -> None:
         self._logs: dict[str, list[LogItem]] = {}
+        self._remembered = remembered
 
     def append(
         self,
@@ -19,6 +23,7 @@ class InMemoryMatchStore:
         team_id: str | None = None,
         player_id: str | None = None,
     ) -> LogItem:
+        make_room(self._logs, match_id, self._remembered)
         log = self._logs.setdefault(match_id, [])
         item = LogItem(
             id=len(log) + 1,

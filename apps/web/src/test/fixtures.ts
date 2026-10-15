@@ -1,4 +1,5 @@
 import type {
+  AutoLive, AutoLiveSettings,
   AgentCatalog, AgentRun, AgentSpec, Explanation, FanComment, FanPoll, FanZone, Highlight, PitchScene, PlayerMetrics, PlayerReport,
   PlayEvent, Prediction, SuperChat, TacticalInsight, TeamTactics,
   Broadcast, Broadcasts, CallSeat, Destination, Guest, Invite, Output, People, Reel,
@@ -301,6 +302,24 @@ export const superchat = (over: Partial<SuperChat> = {}): SuperChat => ({
 export const fanPoll = (over: Partial<FanPoll> = {}): FanPoll => ({
   id: "p1", question: "Who wins?", state: "open", opened_at: 900, closes_at: null,
   options: [{ id: "o1", text: "Home", votes: 3 }, { id: "o2", text: "Away", votes: 1 }], ...over,
+});
+
+export const autoLiveSettings = (over: Partial<AutoLiveSettings> = {}): AutoLiveSettings => ({
+  enabled: true, rotate: true, min_minutes: 5, max_minutes: 10, commentary: true, talk_minutes: 2, narration: true,
+  voice: "en-GB-RyanNeural", rate: 1, scenes: ["welcome", "agent-tactics"], keep_match: true, match_speed: 1, stream: false, ...over,
+});
+
+export const autoLive = (over: Partial<AutoLive> = {}): AutoLive => ({
+  revision: 1, server_time: 1000, settings: autoLiveSettings(),
+  scenes: [
+    { id: "welcome", name: "Welcome", kind: "show", agent: null, blurb: "The opening card.",
+      elements: [element({ id: "e1", type: "scoreboard", x: 40, y: 112, width: 1100, height: 120, props: {} })] },
+    { id: "agent-tactics", name: "Tactical Analyst", kind: "agent", agent: "tactics", blurb: "Patterns.",
+      elements: [element({ id: "e1", type: "countdown", props: {} })] },
+  ],
+  scene_id: "welcome", changed_at: 900, next_at: 1300, transition: "fade", commentary: null,
+  speech: { azure: true, region: "centralindia", chars_today: 120, chars_limit: 200000, problem: null },
+  matches_started: 0, stream_restarts: 0, problem: null, ...over,
 });
 
 export const fanZone = (over: Partial<FanZone> = {}): FanZone => ({

@@ -8,18 +8,20 @@ from collections.abc import Callable, Collection, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from starlette.requests import cookie_parser
 
 from kickstream.adapters.acs_rooms import AcsRooms
+from kickstream.adapters.agent_commentary import AgentCommentaryWriter
 from kickstream.adapters.agent_copilot import AgentCopilotWriter
 from kickstream.adapters.agent_explainer import AgentExplainer
 from kickstream.adapters.agent_reels import AgentReelProducer
 from kickstream.adapters.agent_writer import AgentNarrativeWriter
 from kickstream.adapters.api_football import API_FOOTBALL, ApiFootball, DailyBudget
+from kickstream.adapters.azure_speech import AzureSpeech
 from kickstream.adapters.chromium_capture import ChromiumCapture
 from kickstream.adapters.clocks import RealClock
 from kickstream.adapters.demo_feed import DemoFeed
@@ -44,6 +46,12 @@ from kickstream.agents.explain import ExplainService
 from kickstream.agents.registry import AgentSwitches
 from kickstream.agents.stage import AgentsStage
 from kickstream.analytics.stage import AnalyticsStage
+from kickstream.autolive.api import build_autolive_router
+from kickstream.autolive.commentary import CommentaryService
+from kickstream.autolive.facts import MatchFacts
+from kickstream.autolive.service import AutoLiveService
+from kickstream.autolive.speech import SpeechService
+from kickstream.autolive.stage import AutoLiveStage
 from kickstream.broadcasts.api import build_broadcasts_router
 from kickstream.broadcasts.service import BroadcastService
 from kickstream.broadcasts.stage import BroadcastStage
@@ -72,12 +80,14 @@ from kickstream.people.api import COHOST_COOKIE, build_people_router
 from kickstream.people.service import PeopleService
 from kickstream.ports.calls import CallRooms
 from kickstream.ports.clock import Clock
+from kickstream.ports.commentary import CommentaryWriter
 from kickstream.ports.copilot import CopilotWriter, WebSearch
 from kickstream.ports.explainer import Explainer
 from kickstream.ports.match_source import LiveSource, ReplaySource
 from kickstream.ports.output import Encoder, ProgramCapture, Sender
 from kickstream.ports.reels import ClipCutter, ReelProducer
 from kickstream.ports.social import SocialFeed
+from kickstream.ports.speech import SpeechSynth
 from kickstream.ports.writer import NarrativeWriter
 from kickstream.sources.api import build_sources_router
 from kickstream.studio.api import build_studio_router, find_moment
@@ -321,6 +331,18 @@ class Settings:
     web_dir: Path | None = None
     # The header a sign-in proxy in front names the signed-in user in. See PublicHostGate.
     signed_in_header: str | None = None
+    # Auto live: the page the hidden browser streams, and its voice, Azure AI Speech.
+    autolive_on: bool = False  # whether auto live starts switched on, until its settings are first saved
+    autolive_url: str | None = (
+        None  # default: the program address with /live?output in place of /studio?output
+    )
+    speech_key: str | None = field(default=None, repr=False)
+    speech_region: str | None = None
+    speech_endpoint: str | None = (
+        None  # tests only: where speech is asked for instead of the region's address
+    )
+    speech_daily_chars: int = 200_000
+    autolive_llm_per_hour: int = 30
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] = os.environ) -> "Settings":
@@ -350,6 +372,13 @@ class Settings:
             live_poll_s=_seconds(env.get("KICKSTREAM_LIVE_POLL_S")),
             web_dir=Path(env["KICKSTREAM_WEB_DIR"]) if env.get("KICKSTREAM_WEB_DIR") else None,
             signed_in_header=(env.get("KICKSTREAM_SIGNED_IN_HEADER") or "").strip().lower() or None,
+            autolive_on=(env.get("KICKSTREAM_AUTOLIVE") or "").strip().lower() in ("1", "on", "true", "yes"),
+            autolive_url=env.get("KICKSTREAM_AUTOLIVE_URL") or None,
+            speech_key=env.get("KICKSTREAM_SPEECH_KEY") or None,
+            speech_region=env.get("KICKSTREAM_SPEECH_REGION") or None,
+            speech_endpoint=env.get("KICKSTREAM_SPEECH_ENDPOINT") or None,
+            speech_daily_chars=int(env.get("KICKSTREAM_SPEECH_DAILY_CHARS") or "200000"),
+            autolive_llm_per_hour=int(env.get("KICKSTREAM_AUTOLIVE_LLM_PER_HOUR") or "30"),
         )
 
     @property
@@ -363,6 +392,12 @@ class Settings:
     @property
     def public_origin(self) -> str | None:
         return f"https://{self.public_hosts[0]}" if self.public_hosts else None
+
+    @property
+    def autolive_program_url(self) -> str:
+        if self.autolive_url:
+            return self.autolive_url
+        return urlunsplit(urlsplit(self.program_url)._replace(path="/live", query="output"))
 
 
 @dataclass
@@ -382,6 +417,7 @@ class Pipeline:
     stages: list
     replays: Mapping[str, ReplaySource]
     live: Mapping[str, LiveSource]
+    autolive: AutoLiveService
     tasks: list[asyncio.Task] = field(default_factory=list)
 
     def start(self) -> None:
@@ -390,9 +426,11 @@ class Pipeline:
         self.tasks.append(asyncio.create_task(self.broadcasts.run()))
         self.tasks.append(asyncio.create_task(self.people.run()))
         self.tasks.append(asyncio.create_task(self.fans.run()))
+        self.tasks.append(asyncio.create_task(self.autolive.run()))
 
     async def stop(self) -> None:
         await self.broadcasts.stop()
+        await self.autolive.stop()
         await self.output.stop()
         await self.controller.stop()
         for task in self.tasks:
@@ -455,6 +493,8 @@ def build_pipeline(
     copilot_writer: CopilotWriter | None = None,
     replays: Mapping[str, ReplaySource] | None = None,
     live: Mapping[str, LiveSource] | None = None,
+    speech: SpeechSynth | None = None,
+    commentary_writer: CommentaryWriter | None = None,
 ) -> Pipeline:
     bus, store, broadcaster = InMemoryEventBus(), InMemoryMatchStore(), InProcessBroadcaster()
     primary = writer
@@ -544,6 +584,35 @@ def build_pipeline(
         agents=agents.catalog(model=False).agents,
         now=now,
     )
+    if commentary_writer is None and settings.llm_configured:
+        commentary_writer = AgentCommentaryWriter(
+            settings.llm_base_url, settings.llm_model, settings.llm_api_key
+        )
+    facts = MatchFacts()
+    autolive: AutoLiveService | None = None
+    voice = SpeechService(
+        speech or AzureSpeech(settings.speech_key, settings.speech_region, endpoint=settings.speech_endpoint),
+        JsonRecordStore(settings.data_dir / "speech-budget.json"),
+        settings.cache_dir / "speech",
+        daily_chars=settings.speech_daily_chars,
+        now=now,
+        on_change=lambda: autolive.changed() if autolive is not None else None,
+    )
+    autolive = AutoLiveService(
+        JsonRecordStore(settings.data_dir / "autolive.json"),
+        facts=facts,
+        commentary=CommentaryService(commentary_writer, per_hour=settings.autolive_llm_per_hour),
+        speech=voice,
+        running_match=controller.running,
+        start_match=lambda seed, speed: controller.start(seed, speed),
+        output_view=output.view,
+        start_output=output.start,
+        stop_output=output.stop,
+        program_url=settings.autolive_program_url,
+        fans=fans.view,
+        now=now,
+        enabled_at_first=settings.autolive_on,
+    )
     # Every stage subscribes in its constructor, so nothing published after this point is missed.
     stages = [
         AnalyticsStage(bus),
@@ -555,6 +624,7 @@ def build_pipeline(
         BroadcastStage(bus, broadcasts),
         FanStage(bus, fans),
         CopilotStage(bus, copilot),
+        AutoLiveStage(bus, facts),
     ]
     return Pipeline(
         bus,
@@ -572,6 +642,7 @@ def build_pipeline(
         stages,
         replays,
         live,
+        autolive,
     )
 
 
@@ -594,6 +665,8 @@ def create_app(
     copilot_writer: CopilotWriter | None = None,
     replays: Mapping[str, ReplaySource] | None = None,
     live: Mapping[str, LiveSource] | None = None,
+    speech: SpeechSynth | None = None,
+    commentary_writer: CommentaryWriter | None = None,
 ) -> FastAPI:
     # Match IDs are unique to this process, so an ID a browser kept from before a restart is
     # reported as unknown instead of silently naming a different match.
@@ -616,6 +689,8 @@ def create_app(
         copilot_writer=copilot_writer,
         replays=replays,
         live=live,
+        speech=speech,
+        commentary_writer=commentary_writer,
     )
 
     @asynccontextmanager
@@ -671,6 +746,18 @@ def create_app(
     )
     app.include_router(build_people_router(service=pipeline.people, socket_hosts=settings.socket_hosts))
     app.include_router(build_copilot_router(service=pipeline.copilot))
+    app.include_router(build_autolive_router(service=pipeline.autolive, socket_hosts=settings.socket_hosts))
+
+    @app.get("/api/health")
+    async def health() -> dict:
+        """For the platform's probes: answering at all shows the event loop is free."""
+        return {
+            "status": "ok",
+            "match": pipeline.controller.current,
+            "output": pipeline.output.view().state,
+            "autolive": pipeline.autolive.settings.enabled,
+        }
+
     app.include_router(build_fans_router(service=pipeline.fans, socket_hosts=settings.socket_hosts))
     app.include_router(
         build_agents_router(

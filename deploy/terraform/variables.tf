@@ -69,3 +69,25 @@ variable "llm_api_key" {
   default     = null
   sensitive   = true
 }
+
+variable "autolive" {
+  description = "Whether auto live starts switched on at /live: rotating screens, AI commentary and a match always playing."
+  type        = bool
+  default     = true
+}
+
+variable "speech_sku" {
+  description = "Azure AI Speech tier for auto live's voice. F0 is free but allows 0.5 million characters a month; S0 is pay as you go."
+  type        = string
+  default     = "S0"
+  validation {
+    condition     = contains(["F0", "S0"], var.speech_sku)
+    error_message = "Use F0 or S0."
+  }
+}
+
+variable "speech_daily_chars" {
+  description = "Most characters auto live sends to Azure Speech a day; past it the browser's voice speaks until midnight UTC."
+  type        = number
+  default     = 200000
+}

@@ -242,6 +242,33 @@ Stream keys are kept in `.data/output-keys.json` and are never sent back to a pa
 
 Pages follow live data over WebSockets, which the pipeline accepts only from pages on the host it was reached at. Behind a reverse proxy that rewrites the `Host` header, list the public hostnames in `KICKSTREAM_ALLOWED_HOSTS` (comma-separated, for example `kick.example,www.kick.example`).
 
+## Auto live
+
+**Auto live** (`/live`) runs a channel by itself, with no one in the studio. It cycles through 22 full-screen scenes: one for each of the seven match agents (Event Interpreter, Tactical Analyst, Prediction, Explainability, Visualization, Player Tracking, Highlights), one of all seven at work, and others such as the score centre, the 3D stadium, the pressure map, momentum, expected goals, win probability, key moments and the fan zone. Every 5 to 10 minutes (a random time between the two, which you set) it moves to another scene with an animated transition, and an AI commentator introduces it. Between scenes it speaks again as often as you set (every 2 minutes at first), and the match agents' narratives are read out as they come.
+
+The voice is Azure AI Speech (neural voices, chosen on the page). Without a Speech key, or while Azure fails, the page speaks with the browser's own voices instead, Microsoft Edge's natural voices when they are there. Only the Azure voice is carried on the stream: the hidden browser that captures the page has no speakers, so a stream relying on the browser voice is silent. Lines are written by the Explainability model when the `KICKSTREAM_LLM_*` variables are set, at most `KICKSTREAM_AUTOLIVE_LLM_PER_HOUR` of them an hour, and from templates otherwise.
+
+On the page you turn auto live on or off, choose which scenes it uses (or show one now), set the minutes between scenes, turn the commentary and narration on or off, pick the voice and its speed, and listen in. **Keep a match on** starts a replayed match whenever none is running, so there is always something to show. **Stream 24/7** puts `/live?output` on air through the destinations set up in the studio's **Stream** tool (add one there first) and keeps it there: if the stream stops it is started again after 5 seconds, then 15, 30, up to 5 minutes between tries, and 5 minutes back on air resets the wait. While the studio is on air, auto live waits for it to finish. Turning **Stream 24/7** or auto live off is how the stream it started ends; stopping it elsewhere only makes it start again. A **Record to file** destination left on fills the disk over days, so stream 24/7 to platforms only. Settings are kept in `.data/autolive.json` and survive a restart. Left open on a screen, `/live` keeps the screen from sleeping where the browser allows it, and loads itself again after two minutes without the server.
+
+| Variable | Use |
+|---|---|
+| `KICKSTREAM_AUTOLIVE` | `on`: auto live starts turned on (it is off otherwise until turned on in the page) |
+| `KICKSTREAM_SPEECH_KEY`, `KICKSTREAM_SPEECH_REGION` | An Azure AI Speech resource's key and region, for example `centralindia` |
+| `KICKSTREAM_SPEECH_DAILY_CHARS` | Characters spoken by Azure a day before falling back to the browser voice (default 200000) |
+| `KICKSTREAM_AUTOLIVE_URL` | The page the stream captures (default: `KICKSTREAM_PROGRAM_URL`'s address with `/live?output`) |
+| `KICKSTREAM_AUTOLIVE_LLM_PER_HOUR` | Model-written commentary lines an hour (default 30) |
+
+Azure Speech's standard tier charges for each character spoken; the free tier (F0) allows 500,000 characters a month, after which the page falls back to the browser voice and the stream goes quiet. Spoken lines are cached, so a line said again costs nothing.
+
+| Endpoint | Use |
+|---|---|
+| `GET /api/autolive`, `/stream`, `/socket` | Auto live's settings, scenes and current state, once or live |
+| `PUT /api/autolive/settings` | Change the settings |
+| `POST /api/autolive/next`, `/scenes/{id}/show` | Move to the next scene, or to that one |
+| `POST /api/autolive/say` | Have the commentator speak now |
+| `POST /api/autolive/speech` | `{text}`: Azure's MP3 of the text in the chosen voice; 503 when Azure is not set up or fails |
+| `GET /api/health` | For probes: the match, the stream's state, and whether auto live is on |
+
 ## Broadcasts and reels
 
 A broadcast is one show: a title, an optional description, and whether to record it. Create it on the home page, then press **Go live**. A broadcast that records turns on a file destination by itself, so it can go live with no platform set up. **End broadcast** stops the stream and saves what happened:
@@ -306,7 +333,7 @@ A co-host can do everything you can in the studio: go live, end or delete the br
 
 ## Deploy to Azure
 
-`deploy/` puts Kickstream on Azure Container Apps (Central India by default) with everything it needs: a registry, Azure Communication Services for cameras and voices, an Azure Files share for `/data`, and Microsoft Entra ID sign-in in front of the studio. You need the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) and [Terraform](https://developer.hashicorp.com/terraform/install) 1.9 or later, and an Azure account that may create app registrations; Docker is not needed, as the image is built in the registry.
+`deploy/` puts Kickstream on Azure Container Apps (Central India by default) with everything it needs: a registry, Azure Communication Services for cameras and voices, Azure AI Speech for auto live's commentator, an Azure Files share for `/data`, and Microsoft Entra ID sign-in in front of the studio. Auto live starts turned on there (`autolive = false` in `terraform.tfvars` to leave it off), and the platform restarts the app if `/api/health` stops answering. For a 24/7 stream, add a destination in the studio's **Stream** tool, then turn on **Stream 24/7** on `/live`. You need the [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) and [Terraform](https://developer.hashicorp.com/terraform/install) 1.9 or later, and an Azure account that may create app registrations; Docker is not needed, as the image is built in the registry.
 
 ```powershell
 ./deploy/deploy.ps1     # or ./deploy/deploy.sh; prints the address when done
@@ -320,7 +347,7 @@ Terraform's state, in `deploy/terraform`, holds every secret it created; it is i
 | Path | Contents |
 |---|---|
 | `deploy/docker/Dockerfile` | One image: the pipeline serving the API and the built web app, with Chromium and ffmpeg for going live |
-| `deploy/terraform/` | Resource group, registry, storage, Communication Services, the Container App and its Entra sign-in |
+| `deploy/terraform/` | Resource group, registry, storage, Communication Services, Speech, the Container App and its Entra sign-in |
 | `deploy/deploy.*`, `deploy/destroy.*` | Create or update everything; delete everything |
 
 | Variable | Use |
