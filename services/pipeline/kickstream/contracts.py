@@ -48,7 +48,7 @@ class MatchStatus(BaseModel):
     speed: float
     home: TeamSheet
     away: TeamSheet
-    source: Literal['simulated', 'statsbomb', 'api_football', 'openligadb'] | None = 'simulated'
+    source: Literal['simulated', 'statsbomb', 'api_football', 'openligadb', 'detector'] | None = 'simulated'
     detail: Literal['full', 'key_events'] | None = 'full'
     credit: str | None = None
     competition: str | None = None
@@ -73,6 +73,10 @@ class MatchEvent(BaseModel):
     player_in_id: str | None = None
     xg: float | None = None
     located: bool | None = True
+    pass_distance: float | None = None
+    pass_difficulty: int | None = None
+    ball_speed: float | None = None
+    shot_speed: float | None = None
 
 
 class TeamStats(BaseModel):
@@ -89,6 +93,8 @@ class TeamStats(BaseModel):
     yellow_cards: int
     red_cards: int
     xg: float
+    pass_distance: float | None = 0
+    pass_difficulty: float | None = 0
 
 
 class StatsSnapshot(BaseModel):
@@ -288,11 +294,21 @@ class Scene(BaseModel):
     elements: list[SceneElement] = Field(..., max_length=40)
 
 
+class LocalCamera(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    enabled: bool
+    camera: constr(max_length=200) | None = None
+    microphone: constr(max_length=200) | None = None
+    name: constr(max_length=60)
+
+
 class QueuedMatch(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    source: Literal['simulated', 'statsbomb', 'api_football', 'openligadb']
+    source: Literal['simulated', 'statsbomb', 'api_football', 'openligadb', 'detector']
     ref: constr(pattern=r'^[0-9]{1,10}(/[0-9]{1,10}){0,2}$') | None = None
     speed: confloat(ge=1.0, le=600.0)
     title: constr(max_length=120) | None = None
@@ -442,53 +458,13 @@ class BroadcastStats(BaseModel):
     score: BroadcastScore | None = None
 
 
-class Reel(BaseModel):
+class EditedReel(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    id: constr(min_length=1, max_length=64)
-    recording: constr(min_length=1, max_length=80)
-    moment_id: str | None = None
-    start_s: confloat(ge=0.0)
-    duration_s: confloat(ge=0.0)
-    title: constr(min_length=1, max_length=80)
-    caption: constr(max_length=300)
-    hashtags: list[str] = Field(..., max_length=6)
-    state: Literal['rendering', 'ready', 'failed']
-    agent: str
-    size_bytes: int | None = None
-    reason: str | None = None
-    made_at: float
-
-
-class Broadcast(BaseModel):
-    model_config = ConfigDict(
-        extra='forbid',
-    )
-    id: constr(min_length=1, max_length=64)
-    title: constr(min_length=1, max_length=80)
-    description: constr(max_length=500)
-    record: bool
-    state: Literal['ready', 'live', 'ended']
-    created_at: float
-    sessions: list[BroadcastSession] = Field(..., max_length=50)
-    recordings: list[BroadcastRecording] = Field(..., max_length=50)
-    moments: list[BroadcastMoment] = Field(..., max_length=100)
-    stats: BroadcastStats
-    reels: list[Reel] = Field(..., max_length=12)
-    generating: bool
-    problem: str | None = None
-
-
-class Broadcasts(BaseModel):
-    model_config = ConfigDict(
-        extra='forbid',
-    )
-    revision: int
-    server_time: float
-    broadcasts: list[Broadcast] = Field(..., max_length=100)
-    current_id: str | None = None
-    ai: bool
+    name: constr(max_length=120)
+    size_bytes: conint(ge=0)
+    added_at: float
 
 
 class Invite(BaseModel):
@@ -588,6 +564,10 @@ class PlayEvent(BaseModel):
     player_in_id: str | None = None
     xg: float | None = None
     located: bool | None = True
+    pass_distance: float | None = None
+    pass_difficulty: int | None = None
+    ball_speed: float | None = None
+    shot_speed: float | None = None
 
 
 class TeamTactics(BaseModel):
@@ -615,6 +595,8 @@ class TacticalInsight(BaseModel):
     away: TeamTactics
     rhythm: Literal['slow', 'steady', 'fast', 'frantic']
     summary: str
+    momentum: float | None = None
+    control: Literal['home', 'away'] | None = None
 
 
 class NextAction(BaseModel):
@@ -748,6 +730,9 @@ class PlayerMetrics(BaseModel):
     red_cards: int
     rating: confloat(ge=0.0, le=10.0)
     heat: list[float]
+    distance: float | None = 0
+    top_speed: float | None = 0
+    callout: str | None = None
 
 
 class PlayerReport(BaseModel):
@@ -1088,9 +1073,9 @@ class SourceInfo(BaseModel):
     model_config = ConfigDict(
         extra='forbid',
     )
-    id: Literal['simulated', 'statsbomb', 'api_football', 'openligadb']
+    id: Literal['simulated', 'statsbomb', 'api_football', 'openligadb', 'detector']
     name: str
-    kind: Literal['simulated', 'replay', 'live']
+    kind: Literal['simulated', 'replay', 'live', 'detector']
     detail: Literal['full', 'key_events']
     available: bool
     credit: str | None = None
@@ -1104,7 +1089,7 @@ class RunningMatch(BaseModel):
         extra='forbid',
     )
     match_id: str
-    source: Literal['simulated', 'statsbomb', 'api_football', 'openligadb']
+    source: Literal['simulated', 'statsbomb', 'api_football', 'openligadb', 'detector']
     ref: str | None = None
     title: str | None = None
     problem: str | None = None
@@ -1239,6 +1224,7 @@ class StudioSettings(BaseModel):
     auto_start: bool
     auto_half_time_break: bool
     queued_match: QueuedMatch | None = None
+    local_camera: LocalCamera | None = None
 
 
 class Studio(BaseModel):
@@ -1258,3 +1244,53 @@ class Studio(BaseModel):
     countdown: Countdown | None = None
     replay: Replay | None = None
     problem: str | None = None
+
+
+class Reel(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: constr(min_length=1, max_length=64)
+    recording: constr(min_length=1, max_length=80)
+    moment_id: str | None = None
+    start_s: confloat(ge=0.0)
+    duration_s: confloat(ge=0.0)
+    title: constr(min_length=1, max_length=80)
+    caption: constr(max_length=300)
+    hashtags: list[str] = Field(..., max_length=6)
+    state: Literal['rendering', 'ready', 'failed']
+    agent: str
+    size_bytes: int | None = None
+    reason: str | None = None
+    made_at: float
+    edited: EditedReel | None = None
+
+
+class Broadcast(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    id: constr(min_length=1, max_length=64)
+    title: constr(min_length=1, max_length=80)
+    description: constr(max_length=500)
+    record: bool
+    state: Literal['ready', 'live', 'ended']
+    created_at: float
+    sessions: list[BroadcastSession] = Field(..., max_length=50)
+    recordings: list[BroadcastRecording] = Field(..., max_length=50)
+    moments: list[BroadcastMoment] = Field(..., max_length=100)
+    stats: BroadcastStats
+    reels: list[Reel] = Field(..., max_length=12)
+    generating: bool
+    problem: str | None = None
+
+
+class Broadcasts(BaseModel):
+    model_config = ConfigDict(
+        extra='forbid',
+    )
+    revision: int
+    server_time: float
+    broadcasts: list[Broadcast] = Field(..., max_length=100)
+    current_id: str | None = None
+    ai: bool

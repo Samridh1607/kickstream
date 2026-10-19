@@ -9,6 +9,8 @@ from kickstream.domain.pitch import COLS, ROWS, attacking_x, xg, zone_index
 from kickstream.domain.types import SIDES
 
 BASE_RATING = 6.0
+DISTANCE_CALLOUT_M = 500.0
+SPEED_CALLOUT_MPS = 25.0
 
 
 @dataclass
@@ -25,6 +27,17 @@ class _Line:
     red: int = 0
     saves: int = 0
     heat: list[float] = field(default_factory=lambda: [0.0] * (COLS * ROWS))
+    distance: float = 0.0
+    top_speed: float = 0.0
+
+
+def _callout(name: str, distance: float, top_speed: float) -> str | None:
+    parts = []
+    if distance >= DISTANCE_CALLOUT_M:
+        parts.append(f"{name} covered {distance:.0f} m")
+    if top_speed >= SPEED_CALLOUT_MPS:
+        parts.append(f"{name} reached {top_speed:.0f} m/s")
+    return "; ".join(parts) or None
 
 
 def rating(line: _Line) -> float:
@@ -92,6 +105,9 @@ class PlayerTracker:
         if play.type == "pass":
             line.passes += 1
             line.completed += 1 if play.completed else 0
+            line.distance += play.pass_distance or 0.0
+            if play.ball_speed is not None:
+                line.top_speed = max(line.top_speed, play.ball_speed)
         elif play.type == "shot":
             line.shots += 1
             if play.xg is not None:
@@ -99,6 +115,8 @@ class PlayerTracker:
             elif play.located:
                 line.xg += xg(attacking_x(play.team, play.x), play.y)
             line.on_target += 1 if play.outcome in ("goal", "saved") else 0
+            if play.shot_speed is not None:
+                line.top_speed = max(line.top_speed, play.shot_speed)
         elif play.type == "goal":
             line.goals += 1
         elif play.type == "save":
@@ -137,6 +155,9 @@ class PlayerTracker:
                         red_cards=line.red,
                         rating=rating(line),
                         heat=line.heat,
+                        distance=round(line.distance, 1),
+                        top_speed=round(line.top_speed, 1),
+                        callout=_callout(player.name, line.distance, line.top_speed),
                     )
                 )
         best = max(players, key=lambda player: (player.rating, player.touches))

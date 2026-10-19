@@ -148,11 +148,10 @@ test("a failed start tells the viewer", async () => {
   expect(await screen.findByText("The match could not be started. Try again.")).toBeTruthy();
 });
 
-test("a viewer who saved the fan variant still streams the analyst one", async () => {
+test("a viewer who saved the fan variant streams the fan one", async () => {
   localStorage.setItem("kickstream.profile", JSON.stringify({ mode: "fan", language: "en", club: null, player: null }));
   serve({ current: ["m-1"] });
-  await joined();
-  expect(screen.queryByRole("tab", { name: "Fan" })).toBeNull();
+  await joined("m-1", "mode=fan&lang=en");
 });
 
 test("saved preferences choose the interface language", async () => {

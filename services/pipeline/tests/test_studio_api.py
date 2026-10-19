@@ -172,6 +172,7 @@ def test_templates_settings_and_ticker_are_saved(client):
     assert client.put("/api/studio/settings", json=settings).json()["settings"] == {
         **settings,
         "queued_match": None,
+        "local_camera": None,
     }
     ticker = {
         "enabled": True,

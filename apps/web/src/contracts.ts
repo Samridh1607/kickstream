@@ -40,7 +40,7 @@ export interface MatchStatus {
   speed: number;
   home: TeamSheet;
   away: TeamSheet;
-  source?: "simulated" | "statsbomb" | "api_football" | "openligadb";
+  source?: "simulated" | "statsbomb" | "api_football" | "openligadb" | "detector";
   detail?: "full" | "key_events";
   credit?: string | null;
   competition?: string | null;
@@ -77,6 +77,10 @@ export interface MatchEvent {
   player_in_id?: string | null;
   xg?: number | null;
   located?: boolean;
+  pass_distance?: number | null;
+  pass_difficulty?: number | null;
+  ball_speed?: number | null;
+  shot_speed?: number | null;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
@@ -93,6 +97,8 @@ export interface TeamStats {
   yellow_cards: number;
   red_cards: number;
   xg: number;
+  pass_distance?: number;
+  pass_difficulty?: number;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
@@ -371,16 +377,27 @@ export interface StudioSettings {
   auto_start: boolean;
   auto_half_time_break: boolean;
   queued_match?: QueuedMatch | null;
+  local_camera?: LocalCamera | null;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
  * via the `definition` "QueuedMatch".
  */
 export interface QueuedMatch {
-  source: "simulated" | "statsbomb" | "api_football" | "openligadb";
+  source: "simulated" | "statsbomb" | "api_football" | "openligadb" | "detector";
   ref?: string | null;
   speed: number;
   title?: string | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "LocalCamera".
+ */
+export interface LocalCamera {
+  enabled: boolean;
+  camera?: string | null;
+  microphone?: string | null;
+  name: string;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
@@ -588,6 +605,16 @@ export interface Reel {
   size_bytes?: number | null;
   reason?: string | null;
   made_at: number;
+  edited?: EditedReel | null;
+}
+/**
+ * This interface was referenced by `KickstreamContracts`'s JSON-Schema
+ * via the `definition` "EditedReel".
+ */
+export interface EditedReel {
+  name: string;
+  size_bytes: number;
+  added_at: number;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
@@ -750,6 +777,10 @@ export interface PlayEvent {
   player_in_id?: string | null;
   xg?: number | null;
   located?: boolean;
+  pass_distance?: number | null;
+  pass_difficulty?: number | null;
+  ball_speed?: number | null;
+  shot_speed?: number | null;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
@@ -791,6 +822,8 @@ export interface TacticalInsight {
   away: TeamTactics;
   rhythm: "slow" | "steady" | "fast" | "frantic";
   summary: string;
+  momentum?: number | null;
+  control?: "home" | "away" | null;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
@@ -939,6 +972,9 @@ export interface PlayerMetrics {
   red_cards: number;
   rating: number;
   heat: number[];
+  distance?: number;
+  top_speed?: number;
+  callout?: string | null;
 }
 /**
  * This interface was referenced by `KickstreamContracts`'s JSON-Schema
@@ -1398,9 +1434,9 @@ export interface CopilotInfo {
  * via the `definition` "SourceInfo".
  */
 export interface SourceInfo {
-  id: "simulated" | "statsbomb" | "api_football" | "openligadb";
+  id: "simulated" | "statsbomb" | "api_football" | "openligadb" | "detector";
   name: string;
-  kind: "simulated" | "replay" | "live";
+  kind: "simulated" | "replay" | "live" | "detector";
   detail: "full" | "key_events";
   available: boolean;
   credit?: string | null;
@@ -1414,7 +1450,7 @@ export interface SourceInfo {
  */
 export interface RunningMatch {
   match_id: string;
-  source: "simulated" | "statsbomb" | "api_football" | "openligadb";
+  source: "simulated" | "statsbomb" | "api_football" | "openligadb" | "detector";
   ref?: string | null;
   title?: string | null;
   problem?: string | null;

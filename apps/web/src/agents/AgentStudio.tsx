@@ -4,11 +4,12 @@ import type { ReactNode } from "react";
 import type { AgentCatalog, AgentSpec } from "../contracts";
 import { type Language, t } from "../i18n";
 import { MotionStyles, rise } from "../motion/motion";
+import { useCanUseStudio } from "../shell/viewer";
 import type { MatchData } from "../stream/store";
 import { AgentFlow } from "./AgentFlow";
 import { type AgentId, agentState, type AgentState, downstream, runsOf } from "./api";
 import {
-  ActivityList, AGENT_ICONS, Card, ExplanationsCard, HighlightsCard, PitchCard, PlayerCard, PlaysCard, PredictionCard, TacticsCard,
+  ActivityList, AGENT_ICONS, Card, ExplanationsCard, HighlightsCard, PitchCard, PlayerCard, PlaysCard, PredictionCard, TacticsCard, TheirMomentsCard,
 } from "./cards";
 
 /** What the page shows: the overview, one agent, or one of the two views the page had before the agents. */
@@ -45,6 +46,7 @@ const useStyles = makeStyles({
   page: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL, padding: tokens.spacingHorizontalXL, minWidth: 0 },
   grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: tokens.spacingHorizontalL, alignItems: "start" },
   wide: { gridColumn: "1 / -1" },
+  followed: { padding: `${tokens.spacingHorizontalXL} ${tokens.spacingHorizontalXL} 0` },
   hero: {
     display: "flex", flexWrap: "wrap", alignItems: "center", gap: tokens.spacingHorizontalL, padding: tokens.spacingHorizontalL,
     borderRadius: tokens.borderRadiusXLarge, backgroundColor: tokens.colorNeutralBackground1, boxShadow: tokens.shadow4,
@@ -114,9 +116,41 @@ interface StudioProps {
   problem: string | null;
 }
 
+/** Whether the viewer follows a player who is in this match: one on either team sheet. */
+export function follows(match: MatchData, playerId: string | null): playerId is string {
+  if (playerId === null) return false;
+  const sheets = match.status ? [...match.status.home.players, ...match.status.away.players] : [];
+  return sheets.some((player) => player.id === playerId) || (match.players?.players.some((player) => player.player_id === playerId) ?? false);
+}
+
+interface FollowedProps {
+  match: MatchData;
+  language: Language;
+  playerId: string;
+  view: StudioView;
+  onFollow(playerId: string | null): void;
+}
+
+/**
+ * The followed player's card, the pitch following them and their moments, kept above every view for
+ * the rest of the match. An agent's own page that already shows one of them is not given it twice.
+ */
+export function FollowedPlayer({ match, language, playerId, view, onFollow }: FollowedProps) {
+  const styles = useStyles();
+  return (
+    <section className={mergeClasses(styles.grid, styles.followed)} aria-label={t(language, "following")} data-testid="followed-player">
+      {view !== "player_tracking" && <PlayerCard match={match} language={language} playerId={playerId} onChoose={onFollow} />}
+      {view !== "visualization" && <PitchCard match={match} language={language} followId={playerId} />}
+      <TheirMomentsCard match={match} language={language} playerId={playerId} onStop={() => onFollow(null)} />
+    </section>
+  );
+}
+
 /** Every agent at once: the flow, then what each has most recently found. */
 export function AgentOverview({ catalog, match, language, playerId, onFollow, onView, problem }: StudioProps) {
   const styles = useStyles();
+  // A followed player's card and pitch are kept above the page instead.
+  const pinned = follows(match, playerId);
   return (
     <div className={styles.page}>
       {problem && (
@@ -130,10 +164,10 @@ export function AgentOverview({ catalog, match, language, playerId, onFollow, on
         </Card>
       )}
       <div className={styles.grid}>
-        <div className={styles.wide}><PitchCard match={match} language={language} followId={playerId} /></div>
+        {!pinned && <div className={styles.wide}><PitchCard match={match} language={language} followId={playerId} /></div>}
         <PredictionCard match={match} language={language} />
         <TacticsCard match={match} language={language} />
-        <PlayerCard match={match} language={language} playerId={playerId} onChoose={onFollow} />
+        {!pinned && <PlayerCard match={match} language={language} playerId={playerId} onChoose={onFollow} />}
         <ExplanationsCard match={match} language={language} />
         <HighlightsCard match={match} language={language} />
         <Card title="Activity" extra={<HistoryRegular aria-hidden />}>
@@ -166,6 +200,7 @@ function Output({ agent, match, language, playerId, onFollow }: { agent: AgentSp
 /** One agent, as Copilot Studio shows one: what it is told to do, what sets it off, its tools, and its work. */
 export function AgentDetail({ agent, catalog, match, language, playerId, onFollow, onView, onToggle, problem }: StudioProps & { agent: AgentSpec; catalog: AgentCatalog }) {
   const styles = useStyles();
+  const studio = useCanUseStudio();
   const state = agentState(agent, match);
   const listeners = downstream(catalog, agent.id);
   const name = (agentId: AgentId) => catalog.agents.find((other) => other.id === agentId)?.name ?? agentId;
@@ -189,7 +224,8 @@ export function AgentDetail({ agent, catalog, match, language, playerId, onFollo
         </div>
         <Badge appearance="tint" color={state === "working" ? "success" : state === "off" ? "subtle" : "informative"} data-testid="agent-state">{STATE_TEXT[state]}</Badge>
         {agent.id === "explainability" && <Badge appearance="outline">{catalog.model ? "Written by a model" : "Written from a script"}</Badge>}
-        <Switch label={agent.enabled ? "On" : "Off"} checked={agent.enabled} aria-label={`${agent.name} on`} onChange={(_, data) => onToggle(agent.id, data.checked)} />
+        <Switch label={agent.enabled ? "On" : "Off"} checked={agent.enabled} aria-label={`${agent.name} on`} disabled={!studio}
+          onChange={(_, data) => onToggle(agent.id, data.checked)} />
       </header>
       {!agent.enabled && listeners.length > 0 && (
         <MessageBar intent="warning">

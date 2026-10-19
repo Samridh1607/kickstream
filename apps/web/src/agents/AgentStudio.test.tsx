@@ -4,7 +4,7 @@ import type { AgentCatalog, MatchStatus } from "../contracts";
 import { EMPTY, type MatchData, useMatch } from "../stream/store";
 import {
   agentCatalog, agentRun, AWAY, envelope, explanation, FakeEventSource, FakeEventSourceCtor, highlight, HOME, pitchScene, play, playerReport,
-  prediction, status, tactics,
+  moment, prediction, status, tactics,
 } from "../test/fixtures";
 import { renderUi } from "../test/render";
 import { AgentFlow } from "./AgentFlow";
@@ -207,6 +207,50 @@ test("when the agents cannot be loaded the page says so and still shows their ou
   await waitFor(() => expect(screen.getByText("The agents could not be loaded. Their output is still shown as it arrives.")).toBeTruthy());
   expect(screen.queryByTestId("agent-flow")).toBeNull();
   expect(screen.getByTestId("card-prediction")).toBeTruthy();
+});
+
+test("a followed player's card, pitch and moments stay above every view until the viewer stops following", async () => {
+  serve();
+  const first = await opened({ detail: "full", source: "statsbomb" });
+  expect(screen.queryByTestId("followed-player")).toBeNull();
+  fireEvent.change(screen.getByLabelText("Player to follow"), { target: { value: "nbr-9" } });
+  await waitFor(() => expect(FakeEventSource.last).not.toBe(first));
+  const source = FakeEventSource.last;
+  expect(source.url).toBe("/api/matches/m-1/stream?mode=analyst&lang=en&player=nbr-9");
+  act(() => {
+    source.open();
+    [
+      envelope(1, "match_status", status({ minute: 30, detail: "full", source: "statsbomb" })),
+      envelope(2, "pitch_scene", pitchScene()),
+      envelope(3, "players", playerReport()),
+      envelope(4, "key_moment", moment(), true),
+      envelope(5, "highlight", highlight(), true),
+      envelope(6, "key_moment", moment({ id: "m-1-k2", minute: 28, kind: "big_chance", score_home: 1 }), true),
+      envelope(7, "key_moment", moment({ id: "m-1-k3", minute: 29, kind: "big_chance", player_id: "hbc-9", team: "away" })),
+    ].forEach((item) => source.emit({ ...item, minute: 30 }));
+  });
+
+  const followed = within(await screen.findByTestId("followed-player"));
+  expect(followed.getByTestId("tracked-name").textContent).toBe("Luca Marrowby");
+  expect(followed.getByTestId("pitch3d")).toBeTruthy();
+  expect(followed.getAllByTestId("their-moment").map((item) => item.textContent)).toEqual([
+    "28' Big chance1–0", "23' Goal for Northbridge FC: Luca Marrowbyexpected goals 0.42; the score is 1-0.",
+  ]);
+  expect(screen.getAllByTestId("card-player")).toHaveLength(1);
+  expect(screen.getAllByTestId("pitch3d")).toHaveLength(1);
+
+  for (const view of ["Match", "Overlay", "Prediction Agent"]) {
+    fireEvent.click(rail().getByRole("button", { name: view }));
+    expect(within(screen.getByTestId("followed-player")).getByTestId("tracked-name").textContent).toBe("Luca Marrowby");
+  }
+  fireEvent.click(rail().getByRole("button", { name: "Visualization Agent" }));
+  expect(screen.getAllByTestId("pitch3d")).toHaveLength(1);
+  fireEvent.click(rail().getByRole("button", { name: "Player Tracking Agent" }));
+  expect(screen.getAllByTestId("card-player")).toHaveLength(1);
+
+  fireEvent.click(followed.getByRole("button", { name: "Stop following" }));
+  expect(screen.queryByTestId("followed-player")).toBeNull();
+  await waitFor(() => expect(FakeEventSource.last.url).toBe("/api/matches/m-1/stream?mode=analyst&lang=en"));
 });
 
 test("the older views are still a click away", async () => {

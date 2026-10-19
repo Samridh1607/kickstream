@@ -267,3 +267,27 @@ test("with no room the program joins nothing", async () => {
   await new Promise((resolve) => setTimeout(resolve, 50));
   expect(call.joined).toHaveLength(0);
 });
+
+test("with this computer's camera on, the program shows it in a circle and carries its microphone", async () => {
+  serve(null);
+  const tracks = [{ kind: "video", stop: vi.fn() }, { kind: "audio", stop: vi.fn() }];
+  const camera = { getTracks: () => tracks, getAudioTracks: () => tracks.slice(1), getVideoTracks: () => tracks.slice(0, 1) } as unknown as MediaStream;
+  const media = {
+    enumerateDevices: vi.fn(async () => [{ kind: "videoinput", deviceId: "cam-1", label: "Smart Connect Camera", groupId: "g" } as MediaDeviceInfo]),
+    getUserMedia: vi.fn(async () => camera),
+  };
+  const connectAudio = vi.fn(() => () => {});
+  renderUi(<ProgramPage eventSource={FakeEventSourceCtor} retryMs={10} pollMs={10} media={media} connectAudio={connectAudio} />);
+  const local_camera = { enabled: true, camera: "Smart Connect Camera", microphone: null, name: "Yash" };
+  push(studio({ settings: { ...studio().settings, local_camera } }));
+  await waitFor(() => expect(screen.getByTestId("local-video")).toBeTruthy());
+  const tile = screen.getByTestId("camera-tile");
+  expect(tile.textContent).toContain("Yash");
+  expect(tile.style.borderRadius).toBe("50%");
+  expect(connectAudio).toHaveBeenCalledWith(camera);
+  expect(media.getUserMedia).toHaveBeenCalledWith(expect.objectContaining({ video: expect.objectContaining({ deviceId: { exact: "cam-1" } }), audio: true }));
+
+  push(studio({ revision: 2, settings: { ...studio().settings, local_camera: { ...local_camera, enabled: false } } }));
+  await waitFor(() => expect(screen.queryByTestId("camera-tile")).toBeNull());
+  expect(tracks.every((track) => track.stop.mock.calls.length === 1)).toBe(true);
+});

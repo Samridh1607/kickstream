@@ -270,9 +270,9 @@ def test_openligadb_is_free_unlimited_and_credited():
     assert OPENLIGADB == "https://api.openligadb.de"
 
 
-async def test_the_default_leagues_are_the_premier_league_laliga_and_the_champions_league():
-    served = Served({f"/getmatchdata/{league}": [] for league in ("pl", "la1", "ucl")})
+async def test_the_default_leagues_are_the_bundesliga_laliga_and_the_champions_league():
+    served = Served({f"/getmatchdata/{league}": [] for league in ("bl1", "la1", "ucl")})
     assert await OpenLigaDb(base_url=BASE, get=served).fixtures(DAY) == []
     assert [url for url, _ in served.calls] == [
-        f"{BASE}/getmatchdata/{league}" for league in ("pl", "la1", "ucl")
+        f"{BASE}/getmatchdata/{league}" for league in ("bl1", "la1", "ucl")
     ]

@@ -4,6 +4,7 @@ from kickstream.broadcasts import rules
 from kickstream.broadcasts.rules import BroadcastError
 from kickstream.contracts import (
     Destination,
+    EditedReel,
     MatchStatus,
     Narrative,
     Output,
@@ -317,6 +318,21 @@ def test_a_reel_is_added_finished_and_deleted():
         "ffmpeg failed",
     )
     assert rules.delete_reel(state, "b1", "r1").doc.broadcasts[0].reels == []
+
+
+def test_only_a_finished_reel_takes_an_edited_version_and_can_go_back_to_the_original():
+    edit = EditedReel(name="Derby day - edit.mp4", size_bytes=9_000_000, added_at=T0)
+    cutting = rules.add_reel(rules.begin_reels(recorded(), "b1"), "b1", reel())
+    with pytest.raises(BroadcastError, match="finished") as refused:
+        rules.set_edited(cutting, "b1", "r1", edit)
+    assert refused.value.status == 409
+    with pytest.raises(BroadcastError, match="no longer exists"):
+        rules.set_edited(cutting, "b1", "nope", edit)
+
+    ready = rules.finish_reel(cutting, "b1", "r1", 5000, None)
+    edited = rules.set_edited(ready, "b1", "r1", edit)
+    assert edited.doc.broadcasts[0].reels[0].edited == edit
+    assert rules.set_edited(edited, "b1", "r1", None).doc.broadcasts[0].reels[0].edited is None
 
 
 def test_a_broadcast_keeps_a_limited_number_of_reels():

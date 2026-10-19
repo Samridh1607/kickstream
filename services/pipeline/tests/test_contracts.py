@@ -118,6 +118,8 @@ def test_a_match_can_be_waiting_for_kick_off():
 def test_events_default_to_located_without_their_own_xg():
     event = MatchEvent(id="m-1-e1", match_id="m-1", seq=1, minute=0, second=0, type="pass", x=50, y=50)
     assert event.located is True and event.xg is None
+    assert event.pass_distance is None and event.pass_difficulty is None
+    assert event.ball_speed is None and event.shot_speed is None
 
 
 def test_plays_carry_the_events_xg_and_location_flag():

@@ -8,6 +8,8 @@ const ROWS: { field: keyof TeamStats; label: StringKey; id: string }[] = [
   { field: "shots_on_target", label: "shotsOnTarget", id: "shots-on-target" },
   { field: "xg", label: "xg", id: "xg" },
   { field: "pass_accuracy", label: "passAccuracy", id: "pass-accuracy" },
+  { field: "pass_distance", label: "passDistance", id: "pass-distance" },
+  { field: "pass_difficulty", label: "passDifficulty", id: "pass-difficulty" },
 ];
 const PLACEHOLDER = "–";
 

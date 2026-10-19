@@ -2,6 +2,7 @@ import pytest
 
 from kickstream.contracts import (
     KeyMoment,
+    LocalCamera,
     QueuedMatch,
     SceneElement,
     StatFact,
@@ -726,3 +727,32 @@ def test_the_extra_templates_are_offered_but_a_new_studio_does_not_start_with_th
     assert (made.name, made.mode) == (FAN_ZONE, "fan")
     assert {e.type for e in made.elements} >= {"comments", "poll", "superchat", "spotlight"}
     assert MATCH_INTELLIGENCE not in [s.template for s in default_studio().scenes]
+
+
+# --- this computer's camera ---------------------------------------------------------------------
+
+MINE = LocalCamera(enabled=True, camera="Smart Connect Camera", microphone="Jabra EVOLVE 20", name="Yash")
+
+
+def test_this_computer_s_camera_is_kept_in_the_settings_and_can_be_turned_off():
+    doc = default_studio()
+    assert doc.settings.local_camera is None
+    chosen = rules.set_settings(doc, doc.settings.model_copy(update={"local_camera": MINE}))
+    assert chosen.settings.local_camera == MINE
+    off = MINE.model_copy(update={"enabled": False})
+    assert (
+        rules.set_settings(
+            chosen, chosen.settings.model_copy(update={"local_camera": off})
+        ).settings.local_camera
+        == off
+    )
+
+
+def test_settings_that_do_not_mention_the_camera_keep_it():
+    doc = rules.set_settings(
+        default_studio(), default_studio().settings.model_copy(update={"local_camera": MINE})
+    )
+    settings = StudioSettings(
+        mode="analyst", language="en", auto_banner=True, auto_start=True, auto_half_time_break=False
+    )
+    assert rules.set_settings(doc, settings).settings.local_camera == MINE

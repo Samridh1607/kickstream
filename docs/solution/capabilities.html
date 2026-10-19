@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Capabilities · Kickstream IT solution</title>
+  <link rel="stylesheet" href="theme.css">
+</head>
+<body>
+  <header class="ks-header">
+    <div class="ks-header-inner">
+      <a class="ks-brand" href="index.html">
+        <span class="ks-mark" aria-hidden="true"></span>
+        <span class="ks-brand-name">Kickstream</span>
+        <span class="ks-brand-sub">IT solution</span>
+      </a>
+      <nav class="ks-nav" aria-label="Solution documents">
+        <a href="index.html">Overview</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="capabilities.html" aria-current="page">Capabilities</a>
+        <a href="security.html">Security</a>
+        <a href="operations.html">Operations</a>
+        <a href="integrations.html">Integrations</a>
+        <a href="constraints.html">Constraints</a>
+      </nav>
+    </div>
+  </header>
+  <main class="ks-main">
+    <article class="ks-sheet">
+      <p class="ks-eyebrow">Functional capabilities</p>
+      <h1>What an operator can do</h1>
+      <section data-area="functional-capabilities">
+        <p class="ks-lead">The path through the product is Home, then a broadcast, then the studio. The studio always works on one broadcast. Scenes are one library shared by every broadcast.</p>
+        <h2>Studio</h2>
+        <figure class="ks-figure">
+          <img src="figures/studio.png" alt="Kickstream studio with the program and scene strip">
+          <figcaption>Studio during a synthetic match. The scene strip switches the program with a click. Keyboard shortcuts are not implemented.</figcaption>
+        </figure>
+        <p>The program is the largest thing on screen. The top bar names the broadcast, the output state (Off air, Connecting, or LIVE with elapsed time), the scene on air, Edit layout, Ask Copilot, and the single Go live / End broadcast control. Backstage holds the host and guests. A scene strip under the stage switches the program with a click. Keyboard shortcuts are not implemented. The first nine tiles show the numbers 1–9, and the Shortcuts control stays disabled with the title “Coming in a later phase”. The tool rail opens one of: Match, Banners, Comments, Guests, Replays, Timer, Stream, Settings.</p>
+        <p>Built-in scene templates: Starting soon, Live match, Analyst desk, Break, Full-time, Interview, Match intelligence, Fan zone, and 3D pitch. Live match is a Fan scene and Analyst desk is an Analyst scene, so cutting between them changes the narration voice. Banners fire themselves for goals and red cards. Replays animate the 20 seconds before a key moment. A start countdown starts the queued match and cuts to the Live scene; a break cuts away and comes back.</p>
+        <p>Widgets include a score card, charts, a prediction, a “why it matters” card, a 3D pitch, a player card, comments, a poll, superchats, and a spotlight. Elements fade and rise unless the operating system asks for reduced motion. The host can show their own camera from Settings without Azure; the hidden browser is given the camera and microphone only, never the screen. A server has no camera, so remote guests use Communication Services instead.</p>
+        <h2>Going live, broadcasts, and reels</h2>
+        <p>The Stream tool sends the program to YouTube, X, Facebook and Twitch. The host pastes a stream key. YouTube, Facebook, and Twitch ingest addresses are filled in; X needs the account’s own address as well. Record to file writes an MP4 under <code>.data/recordings/</code> and needs no key. Each destination shows connecting, live, retrying, or failed. One failure does not stop the others. The stream’s only sound is the guest call: everyone unmuted in the room, including the host when they join with a camera. With nobody in the call, the stream is silent.</p>
+        <p>A broadcast is one show: title, optional description, and whether to record. End broadcast stops the stream and keeps sessions, recordings, time on air, destinations reached, the score, and key moments. Generate reels cuts up to four 15-second vertical clips (1080×1920) from the recording, around goals, red cards, and big chances. Each clip starts 8 seconds before its moment. With a model, a Highlight Editor picks moments and a Social Copywriter writes the title, caption, and hashtags. The agents never set the in and out points. Without a model, templates do the words.</p>
+        <h2>Match agents</h2>
+        <figure class="ks-figure">
+          <img src="figures/match.png" alt="Match data page with the seven agents and a 3D pitch">
+          <figcaption>Match data draws the agent flow beside the live synthetic score and the 3D pitch.</figcaption>
+        </figure>
+        <div class="ks-bars" aria-label="Calls allowed in one match">
+          <div><span>Explainability</span><span class="ks-bar"><i style="width:33%"></i></span><b>20</b></div>
+          <div><span>Copilot answers</span><span class="ks-bar"><i style="width:67%"></i></span><b>40</b></div>
+          <div><span>Narration calls</span><span class="ks-bar"><i style="width:100%"></i></span><b>60</b></div>
+        </div>
+        <p class="ks-muted">Calls the product allows in one match. These are caps, not a measured audience.</p>
+        <table>
+          <thead>
+            <tr><th>Agent</th><th>What it produces</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Event Interpreter</td><td>Third, flank, phase, possession sequence, and danger for each detection.</td></tr>
+            <tr><td>Tactical Analyst</td><td>Once a minute: pressure, tempo, field tilt, patterns, and a control or chaos fact.</td></tr>
+            <tr><td>Prediction Agent</td><td>Once a minute: win, draw, loss, chance of a goal in ten minutes, next action, danger grid.</td></tr>
+            <tr><td>Explainability Agent</td><td>English “why this matters” when patterns change, odds move by 12 points, or a hidden event appears.</td></tr>
+            <tr><td>Visualization Agent</td><td>3D pitch data. Only the ball and the player on it are known positions; others are placed from the formation and drawn dashed.</td></tr>
+            <tr><td>Player Tracking Agent</td><td>Touches, passing, shots, expected goals, rating, heat map, distance, top speed.</td></tr>
+            <tr><td>Highlights Agent</td><td>Ranked key moments and hidden events: long moves, good saves, high balls won, tactical fouls, unsung players.</td></tr>
+          </tbody>
+        </table>
+        <p>The match data page (<code>/match</code>) shows each agent the way a Copilot Studio agent is declared: instructions, triggers, tools, and connections, plus live output. Preferences there set Fan or Analyst, language, and a favourite club and player. Those preferences stay in the browser.</p>
+        <h2>Ask Copilot, fans, and auto live</h2>
+        <p>Ask Copilot, in the top bar of every streamer page, answers from the match being played and from finished matches on this installation (the newest 50 in <code>.data/matches.json</code>). Without a model, answers are assembled from the recorded numbers. With a model, an agent words the answer, at most 40 answers a match, and falls back to the assembled text. The cards and charts never come from the model. Web search is off until the host turns it on: Wikipedia by default, or Tavily when <code>KICKSTREAM_TAVILY_API_KEY</code> is set. Tagging <code>@tactics</code>, <code>@prediction</code>, or another agent limits the question to that agent’s part of the match. The same answers are MCP tools at <code>POST /mcp</code> (<code>ask_copilot</code>, <code>match_state</code>, <code>win_prediction</code>, <code>tactics</code>, <code>player_report</code>, <code>head_to_head</code>, <code>highlight</code>, <code>play_history</code>, <code>why_it_matters</code>, <code>where_play_is</code>). Those tools only read. They do not call a model or search the web.</p>
+        <p>The Comments tool is the fan zone. A new installation starts on a demo feed, marked Demo on the program. X can be a source with a bearer token and a search query. Any other platform posts to <code>POST /api/fans/ingest</code>. Kickstream keeps the newest 200 comments, one poll, and superchats. Fans pay on their platform. The mood is a word-list guide, not a measurement. Text is cut to length and shown as plain text.</p>
+        <figure class="ks-figure">
+          <img src="figures/live.png" alt="Auto live with twenty-two screens and the channel off">
+          <figcaption>Auto live. Twenty-two screens stay in the rotation. The channel in this picture is off.</figcaption>
+        </figure>
+        <p>Auto live (<code>/live</code>) runs a channel with nobody in the studio. It cycles 22 full-screen scenes, including one for each match agent, on a random gap of 5 to 10 minutes. Commentary uses Azure AI Speech when a key is set, otherwise the browser’s own voice. Only the Azure voice is carried on the captured stream, because the hidden browser has no speakers. Stream 24/7 puts <code>/live?output</code> on the studio’s destinations and restarts it if it drops. While the studio is on air, auto live waits.</p>
+        <h2>Guests</h2>
+        <p>Invites have a role. A Speaker and a Co-host can be placed on stage; a Member never can. A Co-host can open the studio and can do what the host can: go live, end or delete the broadcast, and make or revoke invites. Up to four people are on stage, including the host. Calls use Azure Communication Services Rooms. Revoke kills a link at once. Ending or deleting the broadcast ends them all.</p>
+      </section>
+    </article>
+  </main>
+  <footer class="ks-footer">
+    <p>Kickstream IT solution set. Describes this repository. It is not a Microsoft Marketplace listing.</p>
+  </footer>
+</body>
+</html>

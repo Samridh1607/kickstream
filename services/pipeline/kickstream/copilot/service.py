@@ -78,6 +78,28 @@ class CopilotService:
             self.remember(match_id)
         return view
 
+    def _question(self, question: str, agent: AgentId | None) -> tuple[str, AgentId | None]:
+        too_long = len(" ".join(question.split())) > MAX_QUESTION
+        tagged, question = self._mentions.find(question)
+        agent = agent or tagged
+        if agent is not None and not question:
+            question = f"What has the {self._mentions.name(agent)} found?"
+        if too_long or not question:
+            raise CopilotError(422, "question", f"A question must be 1 to {MAX_QUESTION} characters.")
+        return question, agent
+
+    def _draft(self, question: str, view: MatchView | None, agent: AgentId | None) -> answering.Draft:
+        if agent is None:
+            return answering.draft(question, view, self._archive)
+        return answering.agent_draft(agent, question, view, self._archive)
+
+    def from_facts(
+        self, question: str, *, match_id: str | None = None, mode: Mode = "fan", agent: AgentId | None = None
+    ) -> answering.Draft:
+        """The answer from the match and the archive alone: no web search and no model."""
+        question, agent = self._question(question, agent)
+        return self._draft(question, self._view(match_id, mode), agent)
+
     async def ask(
         self,
         question: str,
@@ -87,18 +109,9 @@ class CopilotService:
         web: bool = False,
         agent: AgentId | None = None,
     ) -> CopilotAnswer:
-        too_long = len(" ".join(question.split())) > MAX_QUESTION
-        tagged, question = self._mentions.find(question)
-        agent = agent or tagged
-        if agent is not None and not question:
-            question = f"What has the {self._mentions.name(agent)} found?"
-        if too_long or not question:
-            raise CopilotError(422, "question", f"A question must be 1 to {MAX_QUESTION} characters.")
+        question, agent = self._question(question, agent)
         view = self._view(match_id, mode)
-        if agent is None:
-            draft = answering.draft(question, view, self._archive)
-        else:
-            draft = answering.agent_draft(agent, question, view, self._archive)
+        draft = self._draft(question, view, agent)
 
         results: list[SearchResult] = []
         problem = None

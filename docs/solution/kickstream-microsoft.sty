@@ -1,0 +1,31 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{kickstream-microsoft}[2026/10/18 Kickstream Microsoft theme]
+% Typeface stack: Segoe UI Variable, with Segoe UI for bold and italic.
+% Accent: Communication Blue #0078D4.
+% Canvas #FFFFFF. Body ink #242424. Muted #616161.
+% Title size 28pt. Body size 11pt.
+\RequirePackage{xcolor}
+\definecolor{CommBlue}{HTML}{0078D4}
+\definecolor{Ink}{HTML}{242424}
+\definecolor{Muted}{HTML}{616161}
+\definecolor{Canvas}{HTML}{FFFFFF}
+\definecolor{Wash}{HTML}{F5F5F5}
+\definecolor{Rule}{HTML}{E1DFDD}
+
+\newcommand{\KickstreamApplyFonts}{%
+  \setmainfont{Segoe UI Variable}[%
+    BoldFont={Segoe UI Bold},%
+    ItalicFont={Segoe UI Italic},%
+    BoldItalicFont={Segoe UI Bold Italic},%
+    Ligatures=TeX%
+  ]%
+  \setsansfont{Segoe UI Variable}[%
+    BoldFont={Segoe UI Bold},%
+    ItalicFont={Segoe UI Italic},%
+    BoldItalicFont={Segoe UI Bold Italic},%
+    Ligatures=TeX%
+  ]%
+  \setmonofont{Segoe UI}[Ligatures=TeX]%
+}
+\newcommand{\KickstreamTitleSize}{\fontsize{28}{34}\selectfont}
+\newcommand{\KickstreamBodySize}{\fontsize{11}{15}\selectfont}

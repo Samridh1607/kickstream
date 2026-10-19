@@ -1,0 +1,139 @@
+name: Deploy
+
+# Ships main to Azure Container Apps once CI has passed on it, or on demand. It stays switched off until
+# deploy/github-setup.sh (or .ps1) has set the repository variables below; see "Deploy from GitHub" in the README.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      vars.AZURE_CLIENT_ID != '' &&
+      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.apply.outputs.url }}
+    env:
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ARM_USE_OIDC: "true"
+      TF_IN_AUTOMATION: "true"
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    defaults:
+      run:
+        working-directory: deploy/terraform
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SHA }}
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      # Local deploys keep their state on the machine; from GitHub it lives in the storage account the
+      # setup script made, so every run sees the same deployment.
+      - name: Terraform init (remote state)
+        run: |
+          printf 'terraform {\n  backend "azurerm" {}\n}\n' > backend_override.tf
+          terraform init -input=false \
+            -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ vars.TFSTATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=kickstream.tfstate" \
+            -backend-config="use_oidc=true" \
+            -backend-config="use_azuread_auth=true"
+
+      # Only settings that are set are passed, so an unset one keeps its Terraform default (often null).
+      - name: Settings
+        env:
+          KS_NAME: ${{ vars.APP_NAME }}
+          KS_LOCATION: ${{ vars.AZURE_LOCATION }}
+          KS_STUDIO_USERS: ${{ vars.STUDIO_USERS }}
+          KS_AUTOLIVE: ${{ vars.AUTOLIVE }}
+          KS_SPEECH_SKU: ${{ vars.SPEECH_SKU }}
+          KS_FOUNDRY_PROJECT_ENDPOINT: ${{ vars.FOUNDRY_PROJECT_ENDPOINT }}
+          KS_FOUNDRY_DEPLOYMENT: ${{ vars.FOUNDRY_DEPLOYMENT }}
+          KS_FOUNDRY_RESOURCE_ID: ${{ vars.FOUNDRY_RESOURCE_ID }}
+          KS_LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          KS_LLM_MODEL: ${{ vars.LLM_MODEL }}
+          KS_LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          KS_API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+
+          text = ["name", "location", "speech_sku", "foundry_project_endpoint", "foundry_deployment",
+                  "foundry_resource_id", "llm_base_url", "llm_model", "llm_api_key", "api_football_key"]
+          values = {key: os.environ[f"KS_{key.upper()}"].strip() for key in text if os.environ.get(f"KS_{key.upper()}", "").strip()}
+          users = os.environ.get("KS_STUDIO_USERS", "").replace("\n", ",")
+          if users.strip():
+              values["studio_users"] = [user.strip() for user in users.split(",") if user.strip()]
+          if os.environ.get("KS_AUTOLIVE", "").strip():
+              values["autolive"] = os.environ["KS_AUTOLIVE"].strip().lower() == "true"
+          with open("ci.auto.tfvars.json", "w") as file:
+              json.dump(values, file)
+          print("Settings passed:", ", ".join(sorted(values)) or "none")
+          PY
+
+      # The registry first: the app cannot start until its image is in it.
+      - name: Registry
+        run: terraform apply -input=false -auto-approve -target=azurerm_container_registry.main
+
+      - name: Build the image
+        id: image
+        run: |
+          registry="$(terraform output -raw registry_name)"
+          tag="${SHA::12}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          cd "$GITHUB_WORKSPACE"
+          if [ "${{ vars.LOCAL_BUILD }}" = "true" ]; then
+            server="$(az acr show --name "$registry" --query loginServer --output tsv)"
+            az acr login --name "$registry"
+            docker build --file deploy/docker/Dockerfile --tag "$server/kickstream:$tag" .
+            docker push "$server/kickstream:$tag"
+          else
+            az acr build --registry "$registry" --image "kickstream:$tag" --file deploy/docker/Dockerfile .
+          fi
+
+      - name: Apply
+        id: apply
+        run: |
+          terraform apply -input=false -auto-approve -var="image_tag=${{ steps.image.outputs.tag }}"
+          url="$(terraform output -raw url)"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Kickstream ${{ steps.image.outputs.tag }} is live at $url" >> "$GITHUB_STEP_SUMMARY"
+
+      # The sign-in in front answers an anonymous request with a redirect; a 5xx or no answer means the
+      # new revision is not serving.
+      - name: The app answers
+        run: |
+          for attempt in $(seq 1 30); do
+            code="$(curl --silent --output /dev/null --max-time 10 --write-out '%{http_code}' "${{ steps.apply.outputs.url }}/api/health" || true)"
+            if [ "$code" -ge 200 ] && [ "$code" -lt 500 ]; then
+              echo "Answered with $code"; exit 0
+            fi
+            sleep 10
+          done
+          echo "The app did not answer within 5 minutes" >&2
+          exit 1

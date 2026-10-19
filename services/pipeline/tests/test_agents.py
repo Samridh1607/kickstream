@@ -64,9 +64,24 @@ def test_danger_rises_towards_the_goal_being_attacked():
 
 
 def test_every_detection_becomes_one_structured_event_that_keeps_its_facts():
-    plays = interpret([event(1, "kickoff", "home"), event(2, "pass", "home", x=40, completed=True)])
+    plays = interpret(
+        [
+            event(1, "kickoff", "home"),
+            event(
+                2,
+                "pass",
+                "home",
+                x=40,
+                completed=True,
+                pass_distance=18.2,
+                pass_difficulty=3,
+                ball_speed=18.2,
+            ),
+        ]
+    )
     assert [p.event_id for p in plays] == [f"{MATCH}-e1", f"{MATCH}-e2"]
     assert (plays[0].phase, plays[1].phase, plays[1].completed) == ("restart", "progression", True)
+    assert (plays[1].pass_distance, plays[1].pass_difficulty, plays[1].ball_speed) == (18.2, 3, 18.2)
 
 
 def test_touches_by_one_side_form_a_sequence_until_the_other_side_has_the_ball():
@@ -174,6 +189,31 @@ def test_rhythm_follows_how_many_passes_are_being_played():
     assert [rhythm_of(rate) for rate in (3, 6, 7, 9)] == ["slow", "steady", "fast", "frantic"]
 
 
+def _frantic_minute(analyst, momentum) -> TacticalInsight:
+    analyst.momentum = momentum
+    for seq in range(1, 11):
+        analyst.handle(play(seq, minute=0, second=seq * 5))
+    [insight] = analyst.handle(play(11, minute=1))
+    return insight
+
+
+def test_momentum_past_the_swing_strength_is_control_and_a_frantic_game_nobody_controls_is_chaos():
+    controlled = _frantic_minute(TacticalAnalyst(NAMES), -0.5)
+    assert (controlled.rhythm, controlled.control, controlled.momentum) == ("frantic", "away", -0.5)
+    assert controlled.summary.endswith(f"Control: {AWAY.name} are in control.")
+    chaotic = _frantic_minute(TacticalAnalyst(NAMES), 0.2)
+    assert chaotic.control is None
+    assert chaotic.summary.endswith("Chaos: the rhythm is frantic and neither side is in control.")
+
+
+def test_a_calm_game_nobody_controls_has_neither_fact():
+    analyst = TacticalAnalyst(NAMES)
+    analyst.momentum = 0.1
+    analyst.handle(play(1, minute=0))
+    [insight] = analyst.handle(play(2, minute=1))
+    assert insight.control is None and "Control" not in insight.summary and "Chaos" not in insight.summary
+
+
 # --- Prediction Agent ----------------------------------------------------------------------------
 
 
@@ -258,6 +298,22 @@ def test_each_event_is_credited_to_the_player_who_made_it():
     assert striker.xg > 0 and sum(striker.heat) == 3
     assert striker.rating > lines["nbr-2"].rating > lines["hbc-4"].rating
     assert len(report.players) == 28 and "Luca Marrowby" in tracker.note
+
+
+def test_a_player_callout_fires_when_distance_or_speed_crosses_a_threshold():
+    quiet = PlayerTracker(Squad(HOME, AWAY))
+    quiet.handle(play(1, player_id="nbr-9", completed=True, pass_distance=100, ball_speed=12))
+    [below] = quiet.handle(play(2, minute=1, player_id="nbr-2", completed=True))
+    line = {item.player_id: item for item in below.players}["nbr-9"]
+    assert line.distance == 100 and line.top_speed == 12 and line.callout is None
+
+    loud = PlayerTracker(Squad(HOME, AWAY))
+    loud.handle(play(1, player_id="nbr-9", completed=True, pass_distance=600, ball_speed=30, shot_speed=None))
+    loud.handle(play(2, "shot", player_id="nbr-9", x=90, outcome="saved", shot_speed=33))
+    [above] = loud.handle(play(3, minute=1, player_id="nbr-2", completed=True))
+    striker = {item.player_id: item for item in above.players}["nbr-9"]
+    assert striker.distance == 600 and striker.top_speed == 33
+    assert striker.callout == "Luca Marrowby covered 600 m; Luca Marrowby reached 33 m/s"
 
 
 def test_a_substitute_comes_on_and_a_sent_off_player_leaves():
@@ -474,6 +530,17 @@ def test_tactics_are_explained_when_a_pattern_is_new_and_not_too_often():
     assert [c.topic for c in agent.consider(tactics(16, home=["high_press"], away=["low_block"]))] == [
         "pattern:low_block"
     ]
+
+
+def test_a_tactics_explanation_carries_the_control_or_chaos_fact():
+    agent = ExplainabilityAgent(NAMES)
+    agent.consider(tactics(10))
+    [held] = agent.consider(tactics(11, home=["high_press"]).model_copy(update={"control": "home"}))
+    assert held.fact("control") == f"{HOME.name} are in control" and held.fact("chaos") == ""
+    frantic = tactics(16, home=["high_press"], away=["low_block"]).model_copy(update={"rhythm": "frantic"})
+    [chaos] = agent.consider(frantic)
+    assert chaos.fact("chaos") == "the rhythm is frantic and neither side is in control"
+    assert chaos.fact("control") == ""
 
 
 def test_a_forecast_is_explained_when_the_odds_have_moved_enough():

@@ -3,6 +3,7 @@ import { App } from "./App";
 import type { Output } from "./contracts";
 import { OUTPUT_STREAM } from "./output/api";
 import { AppNav } from "./shell/AppNav";
+import { useCanUseStudio } from "./shell/viewer";
 import { useLiveDocument } from "./stream/useLiveDocument";
 import { useNow } from "./studio/useStudio";
 
@@ -11,7 +12,8 @@ const Page = memo(App);
 
 /** The match data behind the stream, under the streamer's navigation: /match. */
 export function MatchPage() {
-  const { doc: output, offset } = useLiveDocument<Output>(OUTPUT_STREAM);
+  // Only the studio's users may follow the output; a viewer is not shown it.
+  const { doc: output, offset } = useLiveDocument<Output>(useCanUseStudio() ? OUTPUT_STREAM : null);
   const now = useNow() + offset;
   return (
     <>

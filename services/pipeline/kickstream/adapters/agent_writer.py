@@ -2,15 +2,15 @@
 
 Commentator and Tactical Analyst work on a key moment concurrently; the Localizer then
 translates both. The Recap Writer produces both recap modes; the Localizer translates them.
-The model endpoint is any OpenAI-compatible Chat Completions endpoint.
+The model is a Microsoft Foundry project deployment or any OpenAI-compatible Chat Completions endpoint.
 """
 
 import json
 
 from agent_framework import Agent
-from agent_framework.openai import OpenAIChatCompletionClient
 from agent_framework.orchestrations import ConcurrentBuilder
 
+from kickstream.adapters.model_client import ClientFactory
 from kickstream.domain.labels import fact_text
 from kickstream.domain.types import MODES, Variant
 from kickstream.ports.writer import MomentContext, NarrationError, RecapContext, WrittenRecap, WrittenText
@@ -108,15 +108,12 @@ def recap_prompt(ctx: RecapContext) -> str:
 
 
 class AgentNarrativeWriter:
-    def __init__(self, base_url: str, model: str, api_key: str) -> None:
+    def __init__(self, new_client: ClientFactory, model: str) -> None:
         self.model = model
-        self._base_url = base_url
-        self._api_key = api_key
+        self._new_client = new_client
 
     def _agent(self, name: str) -> Agent:
-        # One client per agent: the Chat Completions client must not serve overlapping calls.
-        client = OpenAIChatCompletionClient(model=self.model, base_url=self._base_url, api_key=self._api_key)
-        return Agent(client=client, name=name, instructions=_INSTRUCTIONS[name])
+        return Agent(client=self._new_client(), name=name, instructions=_INSTRUCTIONS[name])
 
     async def write_moment(self, ctx: MomentContext) -> dict[Variant, WrittenText]:
         workflow = ConcurrentBuilder(participants=[self._agent(COMMENTATOR), self._agent(ANALYST)]).build()

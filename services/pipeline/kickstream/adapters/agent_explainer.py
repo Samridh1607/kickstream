@@ -1,9 +1,9 @@
 """Explanations written by a Microsoft Agent Framework agent, from the facts a match agent found."""
 
 from agent_framework import Agent
-from agent_framework.openai import OpenAIChatCompletionClient
 
 from kickstream.adapters.agent_writer import parse_json
+from kickstream.adapters.model_client import ClientFactory
 from kickstream.domain.types import MODES, Mode
 from kickstream.ports.explainer import ExplainContext, ExplainError, WrittenExplanation
 
@@ -32,14 +32,12 @@ def explain_prompt(ctx: ExplainContext) -> str:
 
 
 class AgentExplainer:
-    def __init__(self, base_url: str, model: str, api_key: str) -> None:
+    def __init__(self, new_client: ClientFactory, model: str) -> None:
         self.model = model
-        self._base_url = base_url
-        self._api_key = api_key
+        self._new_client = new_client
 
     async def explain(self, ctx: ExplainContext) -> dict[Mode, WrittenExplanation]:
-        client = OpenAIChatCompletionClient(model=self.model, base_url=self._base_url, api_key=self._api_key)
-        agent = Agent(client=client, name=EXPLAINABILITY, instructions=_INSTRUCTIONS)
+        agent = Agent(client=self._new_client(), name=EXPLAINABILITY, instructions=_INSTRUCTIONS)
         response = await agent.run(explain_prompt(ctx))
         try:
             raw = parse_json(response.text or "")

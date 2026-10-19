@@ -16,8 +16,10 @@ locals {
   given_secrets = nonsensitive(toset([for name, secret in local.optional_secrets : name if secret.value != null]))
   optional_env = {
     for name, value in {
-      KICKSTREAM_LLM_BASE_URL = var.llm_base_url
-      KICKSTREAM_LLM_MODEL    = var.llm_model
+      KICKSTREAM_LLM_BASE_URL             = var.llm_base_url
+      KICKSTREAM_LLM_MODEL                = var.llm_model
+      KICKSTREAM_FOUNDRY_PROJECT_ENDPOINT = var.foundry_project_endpoint
+      KICKSTREAM_FOUNDRY_DEPLOYMENT       = var.foundry_deployment
     } : name => value if value != null
   }
 }
@@ -75,6 +77,52 @@ resource "azurerm_cognitive_account" "speech" {
   sku_name            = var.speech_sku
 }
 
+# The match log: every event, stat, narrative and agent finding, kept after the app restarts.
+# Serverless, and signed in to with the app's managed identity only; keys are switched off.
+resource "azurerm_cosmosdb_account" "main" {
+  name                         = "cosmos-${var.name}-${local.suffix}"
+  location                     = azurerm_resource_group.main.location
+  resource_group_name          = azurerm_resource_group.main.name
+  offer_type                   = "Standard"
+  kind                         = "GlobalDocumentDB"
+  local_authentication_enabled = false
+
+  capabilities {
+    name = "EnableServerless"
+  }
+  consistency_policy {
+    consistency_level = "Session"
+  }
+  geo_location {
+    location          = azurerm_resource_group.main.location
+    failover_priority = 0
+  }
+}
+
+resource "azurerm_cosmosdb_sql_database" "main" {
+  name                = "kickstream"
+  resource_group_name = azurerm_resource_group.main.name
+  account_name        = azurerm_cosmosdb_account.main.name
+}
+
+resource "azurerm_cosmosdb_sql_container" "match_log" {
+  name                = "match_log"
+  resource_group_name = azurerm_resource_group.main.name
+  account_name        = azurerm_cosmosdb_account.main.name
+  database_name       = azurerm_cosmosdb_sql_database.main.name
+  partition_key_paths = ["/match_id"]
+  default_ttl         = var.match_log_ttl_days * 86400
+}
+
+# Cosmos DB Built-in Data Contributor, for the app's identity, on this account only.
+resource "azurerm_cosmosdb_sql_role_assignment" "app" {
+  resource_group_name = azurerm_resource_group.main.name
+  account_name        = azurerm_cosmosdb_account.main.name
+  role_definition_id  = "${azurerm_cosmosdb_account.main.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002"
+  principal_id        = azurerm_container_app.main.identity[0].principal_id
+  scope               = azurerm_cosmosdb_account.main.id
+}
+
 resource "azurerm_container_app_environment" "main" {
   name                       = "cae-${var.name}"
   location                   = azurerm_resource_group.main.location
@@ -97,6 +145,11 @@ resource "azurerm_container_app" "main" {
   container_app_environment_id = azurerm_container_app_environment.main.id
   resource_group_name          = azurerm_resource_group.main.name
   revision_mode                = "Single"
+
+  # Signs the app in to Cosmos DB and the Foundry project; see the role assignments.
+  identity {
+    type = "SystemAssigned"
+  }
 
   registry {
     server               = azurerm_container_registry.main.login_server
@@ -175,8 +228,33 @@ resource "azurerm_container_app" "main" {
         value = tostring(var.speech_daily_chars)
       }
       env {
+        name  = "KICKSTREAM_PUBLIC_VIEW"
+        value = var.public_view ? "on" : "off"
+      }
+      # With the public view the sign-in lets everyone through, and the app sends studio pages here.
+      env {
+        name  = "KICKSTREAM_SIGN_IN_URL"
+        value = var.public_view ? "/.auth/login/aad" : ""
+      }
+      env {
+        name  = "KICKSTREAM_REAL_SOURCES"
+        value = var.real_sources ? "on" : "off"
+      }
+      env {
         name  = "KICKSTREAM_AUTOLIVE"
         value = var.autolive ? "on" : "off"
+      }
+      env {
+        name  = "KICKSTREAM_COSMOS_ENDPOINT"
+        value = azurerm_cosmosdb_account.main.endpoint
+      }
+      env {
+        name  = "KICKSTREAM_COSMOS_DATABASE"
+        value = azurerm_cosmosdb_sql_database.main.name
+      }
+      env {
+        name  = "KICKSTREAM_COSMOS_CONTAINER"
+        value = azurerm_cosmosdb_sql_container.match_log.name
       }
       dynamic "env" {
         for_each = local.given_secrets
@@ -225,4 +303,11 @@ resource "azurerm_container_app" "main" {
       storage_type = "AzureFile"
     }
   }
+}
+
+resource "azurerm_role_assignment" "foundry" {
+  count                = var.foundry_resource_id != null ? 1 : 0
+  scope                = var.foundry_resource_id
+  role_definition_name = "Azure AI User"
+  principal_id         = azurerm_container_app.main.identity[0].principal_id
 }

@@ -15,12 +15,19 @@ test("with nothing extra on air the scene is unchanged", () => {
 
 const sam = { id: "i1", name: "Sam", acsId: "8:acs:1", present: true };
 
-test("people on stage get a picture-in-picture box when the scene shows no cameras", () => {
+test("people on stage get a camera circle in the corner when the scene shows no cameras", () => {
   const shown = withCamerasFallback(scene(), [sam]);
-  expect(shown.elements.at(-1)).toMatchObject({ id: "__cameras", type: "cameras", x: 1440, y: 740, width: 440, height: 300, visible: true });
+  expect(shown.elements.at(-1)).toMatchObject({
+    id: "__cameras", type: "cameras", x: 1620, y: 720, width: 260, height: 260, visible: true, props: { names: true, shape: "circle" },
+  });
   expect(withCamerasFallback(scene(), [])).toEqual(scene());
   const own = scene({ elements: [element({ id: "c", type: "cameras", props: {} })] });
   expect(withCamerasFallback(own, [sam])).toBe(own);
   const hidden = scene({ elements: [element({ id: "c", type: "cameras", visible: false, props: {} })] });
   expect(withCamerasFallback(hidden, [sam]).elements).toHaveLength(2);
+});
+
+test("each more person on stage adds a circle, the row growing to the left", () => {
+  const people = [sam, { ...sam, id: "i2" }, { ...sam, id: "i3" }];
+  expect(withCamerasFallback(scene(), people).elements.at(-1)).toMatchObject({ x: 1052, y: 720, width: 828, height: 260 });
 });

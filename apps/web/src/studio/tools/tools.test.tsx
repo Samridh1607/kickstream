@@ -6,6 +6,7 @@ import { SETUP } from "../../people/PeoplePanel";
 import { BannersTool } from "./BannersTool";
 import { GuestsTool } from "./GuestsTool";
 import { MatchTool } from "./MatchTool";
+import { SettingsPanel } from "./SettingsTool";
 import { StreamTool } from "./StreamTool";
 
 interface Sent {
@@ -214,4 +215,34 @@ test("the stream tool shows the output controls with one Stream region", () => {
   renderUi(<StreamTool output={output()} now={1000} onRun={vi.fn(async () => true)} />);
   expect(screen.getByRole("region", { name: "Stream" })).toBeTruthy();
   expect(screen.getByRole("region", { name: "Destinations" })).toBeTruthy();
+});
+
+test("the settings put this computer's camera and microphone on the program, chosen by name", async () => {
+  const saved: Studio["settings"][] = [];
+  const devices = [
+    { kind: "videoinput", deviceId: "cam-1", label: "Smart Connect Camera", groupId: "g" },
+    { kind: "audioinput", deviceId: "default", label: "Default - Microphone (Jabra)", groupId: "g" },
+    { kind: "audioinput", deviceId: "mic-1", label: "Microphone (Jabra)", groupId: "g" },
+  ] as MediaDeviceInfo[];
+  const media = { enumerateDevices: vi.fn(async () => devices), getUserMedia: vi.fn() };
+  const settings = studio().settings;
+  renderUi(<SettingsPanel settings={settings} onSave={(next) => saved.push(next)} media={media} />);
+  const section = within(screen.getByRole("region", { name: "This computer's camera" }));
+
+  fireEvent.click(section.getByRole("switch", { name: "Show my camera and use my microphone" }));
+  expect(saved.at(-1)?.local_camera).toEqual({ enabled: true, camera: null, microphone: null, name: "" });
+  await waitFor(() => expect(section.getByRole("option", { name: "Smart Connect Camera" })).toBeTruthy());
+  expect(section.queryByRole("option", { name: /Default - Microphone/ })).toBeNull();
+
+  fireEvent.change(section.getByRole("combobox", { name: "Camera" }), { target: { value: "Smart Connect Camera" } });
+  expect(saved.at(-1)?.local_camera?.camera).toBe("Smart Connect Camera");
+  fireEvent.change(section.getByRole("combobox", { name: "Microphone" }), { target: { value: "Microphone (Jabra)" } });
+  expect(saved.at(-1)?.local_camera?.microphone).toBe("Microphone (Jabra)");
+});
+
+test("a saved camera that is not plugged in stays chosen and says so", () => {
+  const local_camera = { enabled: false, camera: "Old webcam", microphone: null, name: "Yash" };
+  renderUi(<SettingsPanel settings={{ ...studio().settings, local_camera }} onSave={() => {}} media={{ enumerateDevices: vi.fn(async () => []), getUserMedia: vi.fn() }} />);
+  expect(screen.getByRole("option", { name: "Old webcam (not found)" })).toBeTruthy();
+  expect((screen.getByRole("combobox", { name: "Camera" }) as HTMLSelectElement).value).toBe("Old webcam");
 });

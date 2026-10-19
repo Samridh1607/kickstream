@@ -1,6 +1,7 @@
 import { Badge, Button, makeStyles, Select, Text, tokens } from "@fluentui/react-components";
 import type { MatchStatus, ViewerProfile } from "../contracts";
 import { LANGUAGE_NAMES, LANGUAGES, type Language, type StringKey, t } from "../i18n";
+import { useCanUseStudio } from "../shell/viewer";
 import type { Connection } from "../stream/store";
 
 const useStyles = makeStyles({
@@ -36,6 +37,7 @@ interface HeaderProps {
 
 export function Header({ status, connection, profile, onLanguageChange, onOpenPreferences, onStart, onChoose }: HeaderProps) {
   const styles = useStyles();
+  const studio = useCanUseStudio();
   const language = profile.language;
   const state = CONNECTION[connection];
   const credited = status && (status.competition || status.credit);
@@ -80,10 +82,12 @@ export function Header({ status, connection, profile, onLanguageChange, onOpenPr
           ))}
         </Select>
         <Button onClick={onOpenPreferences}>{t(language, "preferences")}</Button>
-        <Button onClick={onChoose}>{t(language, "chooseMatch")}</Button>
-        <Button appearance="primary" onClick={onStart}>
-          {t(language, status ? "restart" : "start")}
-        </Button>
+        {studio && <Button onClick={onChoose}>{t(language, "chooseMatch")}</Button>}
+        {studio && (
+          <Button appearance="primary" onClick={onStart}>
+            {t(language, status ? "restart" : "start")}
+          </Button>
+        )}
       </div>
     </header>
   );

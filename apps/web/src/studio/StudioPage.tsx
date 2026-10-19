@@ -3,6 +3,7 @@ import { DismissRegular } from "@fluentui/react-icons";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { endBroadcast, goLiveWith } from "../broadcasts/api";
 import { useStudioBroadcast } from "../broadcasts/StudioBroadcast";
+import { useThisComputer } from "../calls/thisComputer";
 import { useHostCall } from "../calls/useHostCall";
 import type { Broadcast, FanZone, Output, People, Scene, SceneElement, Studio, ViewerProfile } from "../contracts";
 import { AskCopilot } from "../copilot/AskCopilot";
@@ -114,6 +115,8 @@ export function StudioPage({ broadcastId, eventSource, retryMs, pollMs }: Studio
   const broadcastLive = link.broadcast?.state === "live";
   const hostOnStage = people?.stage.some((person) => person.id === HOST) ?? false;
   const host = useHostCall({ broadcastId: broadcastId ?? "", people, mutedLive: broadcastLive && !hostOnStage });
+  // The stage previews this computer's camera as the program shows it; its sound stays off here, or you would hear yourself.
+  const thisComputer = useThisComputer(studio?.settings.local_camera, { sound: false });
 
   // Null while live; otherwise the scene open in Edit layout.
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -248,7 +251,7 @@ export function StudioPage({ broadcastId, eventSource, retryMs, pollMs }: Studio
   const onAir = onAirScene(studio);
   const saved = editingId === null ? null : (studio.scenes.find((scene) => scene.id === editingId) ?? onAir);
   const editing = saved && pending?.id === saved.id ? pending : saved;
-  const cameras = stageTiles(people);
+  const cameras = thisComputer.tile ? [thisComputer.tile, ...stageTiles(people)] : stageTiles(people);
   const data = { match, studio, now, language: studio.settings.language, fans, cameras };
   const live = broadcastLive || output?.state === "live";
 

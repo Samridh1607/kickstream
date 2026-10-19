@@ -1,5 +1,6 @@
 # The studio has no sign-in of its own, so Container Apps signs people in with Microsoft Entra ID
-# in front of it. Only the users assigned below get in; guests' invite pages stay open.
+# in front of it. Only the users assigned below get in; guests' invite pages stay open, and with
+# public_view so do /live and /match, read-only.
 
 data "azuread_client_config" "current" {}
 
@@ -57,7 +58,9 @@ resource "azapi_resource" "auth" {
     properties = {
       platform = { enabled = true }
       globalValidation = {
-        unauthenticatedClientAction = "RedirectToLoginPage"
+        # With the public view, anyone gets through and the app decides: /live and /match only
+        # read, and its studio pages send whoever is not signed in to the sign-in (PublicHostGate).
+        unauthenticatedClientAction = var.public_view ? "AllowAnonymous" : "RedirectToLoginPage"
         redirectToProvider          = "azureactivedirectory"
         excludedPaths               = local.public_paths
       }

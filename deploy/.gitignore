@@ -3,6 +3,9 @@ terraform/.terraform/
 terraform/*.tfstate
 terraform/*.tfstate.*
 terraform/*.tfvars
+terraform/*.tfvars.json
 !terraform/*.tfvars.example
+# Written by the Deploy workflow for its remote state.
+terraform/backend_override.tf
 terraform/*.tfplan
 terraform/crash.log

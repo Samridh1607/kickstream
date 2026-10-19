@@ -8,7 +8,7 @@ import asyncio
 import logging
 
 from kickstream.agents.base import Declared
-from kickstream.agents.tactics import PATTERN_PHRASES
+from kickstream.agents.tactics import PATTERN_PHRASES, control_or_chaos
 from kickstream.contracts import Explanation, Highlight, Prediction, TacticalInsight
 from kickstream.domain.recent import make_room
 from kickstream.domain.types import MODES, SIDES, Side
@@ -100,6 +100,8 @@ class ExplainabilityAgent:
             ("left, centre and right", ", ".join(_percent(share) for share in team.lanes)),
             ("rhythm", insight.rhythm),
         ]
+        if (fact := control_or_chaos(self._names, insight.control, insight.rhythm)) is not None:
+            facts.append(fact)
         return [self._context(insight.id, "tactics", f"pattern:{pattern}", insight.minute, side, facts)]
 
     def _prediction(self, prediction: Prediction) -> list[ExplainContext]:

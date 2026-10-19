@@ -168,3 +168,95 @@ def test_the_document_is_followed_over_a_socket(client):
         with client.websocket_connect(f"{BASE}/socket", headers={"origin": "http://evil.example"}) as socket:
             socket.receive_text()
     assert refused.value.code == 1008
+
+
+# --- reels edited in Clipchamp ------------------------------------------------------------------
+
+# What an MP4 starts with: a box saying which kind of file it is.
+MP4 = b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2avc1mp41"
+
+
+def reels_made(client, rig) -> tuple[str, list[dict]]:
+    """An ended broadcast with its reels made, as after a real show."""
+    broadcast = client.post(BASE, json={"title": "Derby day"}).json()["broadcasts"][0]
+    client.post(f"{BASE}/{broadcast['id']}/live")
+    wait_for(lambda: rig.capture.started)
+    rig.encoder.emit(b"video")
+    wait_for(lambda: client.get(OUTPUT).json()["state"] == "live" and rig.senders and rig.senders[0].target)
+    rig.senders[0].go_live()
+    wait_for(lambda: only(client)["state"] == "live")
+    rig.now.at += 60
+    client.post(f"{BASE}/{broadcast['id']}/end")
+    client.post(f"{BASE}/{broadcast['id']}/reels")
+    wait_for(lambda: not only(client)["generating"])
+    return broadcast["id"], only(client)["reels"]
+
+
+def test_a_reel_edited_in_clipchamp_is_added_beside_the_original_and_played(client, rig):
+    broadcast_id, reels = reels_made(client, rig)
+    reel = reels[0]
+    # Bigger than any other request may be: a minute of 1080p from Clipchamp is tens of megabytes.
+    edited = MP4 + b"v" * (5 * 1024 * 1024)
+    added = client.put(
+        f"{BASE}/{broadcast_id}/reels/{reel['id']}/edited",
+        content=edited,
+        headers={"content-type": "video/mp4", "x-file-name": "Derby%20day%20-%20edit.mp4"},
+    )
+    assert added.status_code == 200
+    [changed] = [r for r in added.json()["broadcasts"][0]["reels"] if r["id"] == reel["id"]]
+    assert changed["edited"] == {
+        "name": "Derby day - edit.mp4",
+        "size_bytes": len(edited),
+        "added_at": rig.now.at,
+    }
+
+    played = client.get(f"{BASE}/{broadcast_id}/reels/{reel['id']}/edited.mp4")
+    assert (played.status_code, played.headers["content-type"], played.content) == (200, "video/mp4", edited)
+    part = client.get(f"{BASE}/{broadcast_id}/reels/{reel['id']}/edited.mp4", headers={"range": "bytes=0-31"})
+    assert (part.status_code, part.content) == (206, edited[:32])
+    # The original is kept, untouched.
+    assert len(client.get(f"{BASE}/{broadcast_id}/reels/{reel['id']}.mp4").content) == 4000
+
+    again = MP4 + b"w" * 100
+    client.put(f"{BASE}/{broadcast_id}/reels/{reel['id']}/edited", content=again)
+    assert client.get(f"{BASE}/{broadcast_id}/reels/{reel['id']}/edited.mp4").content == again
+    [replaced] = [r for r in only(client)["reels"] if r["id"] == reel["id"]]
+    assert replaced["edited"]["name"] == "Edited in Clipchamp.mp4", "a file sent without a name gets one"
+
+    removed = client.delete(f"{BASE}/{broadcast_id}/reels/{reel['id']}/edited")
+    [back] = [r for r in removed.json()["broadcasts"][0]["reels"] if r["id"] == reel["id"]]
+    assert back["edited"] is None
+    assert client.get(f"{BASE}/{broadcast_id}/reels/{reel['id']}/edited.mp4").status_code == 404
+    assert client.get(f"{BASE}/{broadcast_id}/reels/{reel['id']}.mp4").status_code == 200
+
+
+def test_only_an_mp4_of_a_finished_reel_is_taken_and_a_refused_one_leaves_nothing(client, rig, monkeypatch):
+    broadcast_id, reels = reels_made(client, rig)
+    path = f"{BASE}/{broadcast_id}/reels/{reels[0]['id']}/edited"
+    refused = client.put(path, content=b"<html>not a video</html>")
+    assert (refused.status_code, field(refused)) == (422, "edited")
+    assert "MP4" in refused.json()["detail"][0]["msg"]
+    assert client.get(f"{path}.mp4").status_code == 404
+    assert client.put(f"{BASE}/{broadcast_id}/reels/nope/edited", content=MP4).status_code == 404
+    assert client.put(f"{BASE}/nope/reels/{reels[0]['id']}/edited", content=MP4).status_code == 404
+
+    from kickstream.broadcasts import service as broadcast_service
+
+    monkeypatch.setattr(broadcast_service, "MAX_EDITED_BYTES", 1000)
+    too_big = client.put(path, content=MP4 + b"v" * 2000)
+    assert (too_big.status_code, field(too_big)) == (422, "edited")
+    assert client.get(f"{path}.mp4").status_code == 404
+    leftovers = [p.name for p in (rig.data / "reels" / broadcast_id).iterdir() if "edited" in p.name]
+    assert leftovers == [], "a refused upload leaves no part of itself on disk"
+
+
+def test_deleting_a_reel_deletes_its_edited_version(client, rig):
+    broadcast_id, reels = reels_made(client, rig)
+    reel_id = reels[0]["id"]
+    client.put(f"{BASE}/{broadcast_id}/reels/{reel_id}/edited", content=MP4 + b"v")
+    client.delete(f"{BASE}/{broadcast_id}/reels/{reel_id}")
+    assert not any((rig.data / "reels" / broadcast_id).glob(f"{reel_id}*"))
+
+
+def test_other_requests_keep_their_small_limit(client):
+    assert client.post(BASE, content=b"x" * (4 * 1024 * 1024)).status_code == 413

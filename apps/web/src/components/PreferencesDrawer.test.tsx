@@ -32,6 +32,14 @@ test("choosing a favorite reports the whole updated profile", () => {
   expect(handlers.onChange).toHaveBeenCalledWith({ ...profile, language: "hi" });
 });
 
+test("it offers Fan and Analyst and reports the chosen mode", () => {
+  const handlers = setup();
+  expect(options("Mode")).toEqual(["Fan", "Analyst"]);
+  expect((screen.getByLabelText("Mode") as HTMLSelectElement).value).toBe("fan");
+  fireEvent.change(screen.getByLabelText("Mode"), { target: { value: "analyst" } });
+  expect(handlers.onChange).toHaveBeenCalledWith({ ...profile, mode: "analyst" });
+});
+
 test("choosing None clears the favorite", () => {
   const handlers = setup({ club: "nbr" });
   fireEvent.change(screen.getByLabelText("Favorite club"), { target: { value: "" } });

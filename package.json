@@ -6,6 +6,7 @@
     "dev:api": "uv run --project services/pipeline uvicorn kickstream.app:create_app --factory --port 8000",
     "dev:web": "pnpm --filter @kickstream/web dev",
     "test:api": "uv run --project services/pipeline pytest services/pipeline/tests",
-    "test:web": "pnpm --filter @kickstream/web test"
+    "test:web": "pnpm --filter @kickstream/web test",
+    "test:docs": "node --test docs/solution/solution-docs.test.mjs"
   }
 }

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Operations · Kickstream IT solution</title>
+  <link rel="stylesheet" href="theme.css">
+</head>
+<body>
+  <header class="ks-header">
+    <div class="ks-header-inner">
+      <a class="ks-brand" href="index.html">
+        <span class="ks-mark" aria-hidden="true"></span>
+        <span class="ks-brand-name">Kickstream</span>
+        <span class="ks-brand-sub">IT solution</span>
+      </a>
+      <nav class="ks-nav" aria-label="Solution documents">
+        <a href="index.html">Overview</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="capabilities.html">Capabilities</a>
+        <a href="security.html">Security</a>
+        <a href="operations.html" aria-current="page">Operations</a>
+        <a href="integrations.html">Integrations</a>
+        <a href="constraints.html">Constraints</a>
+      </nav>
+    </div>
+  </header>
+  <main class="ks-main">
+    <article class="ks-sheet">
+      <p class="ks-eyebrow">Deployment and operations</p>
+      <h1>Deploy, probe, and tear down</h1>
+      <section data-area="deployment-and-operations">
+        <p class="ks-lead"><code>deploy/deploy.ps1</code> and <code>deploy/deploy.sh</code> sign in with the Azure CLI, set <code>ARM_SUBSCRIPTION_ID</code> from <code>az account show</code>, create the registry first, build the image, then apply the rest of the stack. <code>deploy/destroy.ps1</code> and <code>deploy/destroy.sh</code> remove that stack, including the Entra app registration. The PowerShell destroy script shows the plan and asks unless <code>-Force</code> is passed.</p>
+        <h2>Toolchain</h2>
+        <ul>
+          <li>Terraform 1.9 or newer. Providers: <code>azurerm</code> ~> 4.0, <code>azuread</code> ~> 3.0, <code>azapi</code> ~> 2.0, <code>random</code> ~> 3.6.</li>
+          <li>Azure CLI, already logged in. The subscription comes from the account that is current.</li>
+          <li>Image build: <code>az acr build</code> by default, or Docker on the operator’s machine with <code>-LocalBuild</code> / <code>--local-build</code>.</li>
+          <li>Default region <code>centralindia</code>. Communication Services data location defaults to India. The app name defaults to <code>kickstream</code> and must match <code>^[a-z][a-z0-9-]{1,22}[a-z0-9]$</code>.</li>
+        </ul>
+        <p>The script applies Terraform twice. The first apply targets <code>azurerm_container_registry.main</code> so the image has a registry. The image is <code>kickstream:&lt;tag&gt;</code>, and the tag defaults to a timestamp. The second apply passes <code>image_tag</code>. The Container App cannot start until that image exists.</p>
+        <div class="ks-grid">
+          <div class="ks-card"><h3>1 replica</h3><p>Match, studio, and ffmpeg stay in one process.</p></div>
+          <div class="ks-card"><h3>2 vCPU</h3><p>The hidden browser and ffmpeg need both.</p></div>
+          <div class="ks-card"><h3>4 GiB</h3><p>Container Apps pairs 2 GiB with each vCPU.</p></div>
+          <div class="ks-card"><h3>90 days</h3><p>Default Cosmos match-log TTL.</p></div>
+        </div>
+        <figure class="ks-figure">
+          <svg viewBox="0 0 760 210" role="img" aria-label="Container App connected to registry, files, Cosmos, calls, speech, and the Entra gate">
+            <style>
+              .n { fill: #F5F5F5; stroke: #0078D4; stroke-width: 1.5; }
+              .c { fill: #0078D4; }
+              .t { font: 600 13px "Segoe UI Variable", "Segoe UI", sans-serif; fill: #242424; }
+              .w { font: 600 14px "Segoe UI Variable", "Segoe UI", sans-serif; fill: #FFFFFF; }
+              .s { font: 12px "Segoe UI Variable", "Segoe UI", sans-serif; fill: #FFFFFF; }
+            </style>
+            <defs>
+              <marker id="hub" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0 0 L6 3 L0 6 Z" fill="#0078D4"/>
+              </marker>
+            </defs>
+            <rect class="n" x="24" y="12" width="180" height="44" rx="4"/>
+            <rect class="n" x="290" y="12" width="180" height="44" rx="4"/>
+            <rect class="n" x="556" y="12" width="180" height="44" rx="4"/>
+            <text class="t" x="114" y="39" text-anchor="middle">Registry</text>
+            <text class="t" x="380" y="39" text-anchor="middle">Files, 10 GiB</text>
+            <text class="t" x="646" y="39" text-anchor="middle">Cosmos, 90 days</text>
+            <rect class="c" x="270" y="82" width="220" height="52" rx="4"/>
+            <text class="w" x="380" y="104" text-anchor="middle">Container App</text>
+            <text class="s" x="380" y="122" text-anchor="middle">1 replica · 2 vCPU · 4 GiB</text>
+            <rect class="n" x="24" y="156" width="180" height="44" rx="4"/>
+            <rect class="n" x="290" y="156" width="180" height="44" rx="4"/>
+            <rect class="n" x="556" y="156" width="180" height="44" rx="4"/>
+            <text class="t" x="114" y="183" text-anchor="middle">Calls</text>
+            <text class="t" x="380" y="183" text-anchor="middle">Speech, S0</text>
+            <text class="t" x="646" y="183" text-anchor="middle">Entra gate</text>
+            <path d="M114 56 L300 82" stroke="#0078D4" stroke-width="1.5" fill="none" marker-end="url(#hub)"/>
+            <path d="M380 56 V82" stroke="#0078D4" stroke-width="1.5" fill="none" marker-end="url(#hub)"/>
+            <path d="M646 56 L490 82" stroke="#0078D4" stroke-width="1.5" fill="none" marker-end="url(#hub)"/>
+            <path d="M114 156 L300 134" stroke="#0078D4" stroke-width="1.5" fill="none" marker-end="url(#hub)"/>
+            <path d="M380 156 V134" stroke="#0078D4" stroke-width="1.5" fill="none" marker-end="url(#hub)"/>
+            <path d="M646 156 L490 134" stroke="#0078D4" stroke-width="1.5" fill="none" marker-end="url(#hub)"/>
+          </svg>
+          <figcaption>Terraform creates these resources and no others. Foundry is not one of them. Region default is centralindia.</figcaption>
+        </figure>
+        <h2>Resources Terraform defines</h2>
+        <table>
+          <thead>
+            <tr><th>Resource</th><th>Name pattern</th><th>Settings that matter</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Resource group</td><td><code>rg-${name}</code></td><td>Deletion is not blocked when the group still holds resources.</td></tr>
+            <tr><td>Log Analytics</td><td><code>log-${name}-${suffix}</code></td><td>PerGB2018, 30-day retention. Destroy deletes the workspace permanently.</td></tr>
+            <tr><td>Container Registry</td><td>name with dashes removed, plus a 6-character suffix</td><td>Basic, admin user enabled.</td></tr>
+            <tr><td>Storage account and file share</td><td>account trimmed to 24 characters; share <code>data</code></td><td>Standard LRS, TLS 1.2 minimum, 10 GiB quota, mounted read-write at <code>/data</code>.</td></tr>
+            <tr><td>Communication Services</td><td><code>acs-${name}-${suffix}</code></td><td>Guest rooms. Connection string is a Container App secret.</td></tr>
+            <tr><td>Azure AI Speech</td><td><code>speech-${name}-${suffix}</code></td><td>Kind SpeechServices. SKU <code>F0</code> or <code>S0</code>, default <code>S0</code>.</td></tr>
+            <tr><td>Cosmos DB</td><td><code>cosmos-${name}-${suffix}</code></td><td>Serverless, session consistency, keys off. Database <code>kickstream</code>, container <code>match_log</code>, partition <code>/match_id</code>, TTL <code>match_log_ttl_days</code> (default 90).</td></tr>
+            <tr><td>Container Apps environment</td><td><code>cae-${name}</code></td><td>Wired to the Log Analytics workspace.</td></tr>
+            <tr><td>Container App</td><td><code>${name}</code></td><td>System-assigned identity, external ingress on port 8000, single revision, <code>min_replicas = 1</code> and <code>max_replicas = 1</code>.</td></tr>
+            <tr><td>Entra application and auth config</td><td>Kickstream studio; auth config <code>current</code></td><td>See Security. Not a Marketplace purchase app.</td></tr>
+            <tr><td>Azure AI User role</td><td>Only if <code>foundry_resource_id</code> is set</td><td>Does not create a Foundry resource.</td></tr>
+          </tbody>
+        </table>
+        <p>The six-character suffix is a random lowercase string so registry, storage, and Cosmos names stay unique. Providers registered at apply: <code>Microsoft.App</code>, <code>Microsoft.CognitiveServices</code>, <code>Microsoft.Communication</code>, <code>Microsoft.ContainerRegistry</code>, <code>Microsoft.DocumentDB</code>, <code>Microsoft.OperationalInsights</code>, <code>Microsoft.Storage</code>.</p>
+        <h2>Size, probes, and runtime switches</h2>
+        <p>The container asks for 2 vCPU and 4 GiB. The hidden browser and ffmpeg need at least 2 vCPU to go live, and Container Apps pairs 2 GiB of memory with each vCPU. Ingress is external, transport auto, 100 percent of traffic on the latest revision.</p>
+        <p>Both probes call <code>/api/health</code> on port 8000, straight to the container, past the sign-in. The startup probe runs every 10 seconds with a 5-second timeout and allows 30 failures. The liveness probe waits 30 seconds, then every 30 seconds, with a 10-second timeout and 6 failures. A process that stops answering is restarted. Auto live then reads its screens and its 24/7 stream back from <code>/data</code>. The health payload reports the match, the stream’s state, and whether auto live is on.</p>
+        <p>Defaults an operator can override in <code>terraform.tfvars</code> (git-ignored; the example file lists every key): <code>autolive</code> true, <code>public_view</code> true, <code>real_sources</code> false, <code>speech_sku</code> S0, <code>speech_daily_chars</code> 200000, <code>match_log_ttl_days</code> 90. Optional values that become environment variables only when set: API-Football key, LLM base URL, model, and key, Foundry project endpoint and deployment name.</p>
+        <h2>What an operator watches</h2>
+        <ul>
+          <li>Container App logs in the Log Analytics workspace, kept 30 days.</li>
+          <li><code>/api/health</code> for match, stream, and auto live.</li>
+          <li>The studio top bar and the Stream tool for each destination: connecting, live, retrying, failed.</li>
+          <li>Disk on the file share. A Record to file destination left on under Stream 24/7 fills the share. Stream 24/7 is for platforms.</li>
+          <li>Speech characters. Past <code>speech_daily_chars</code>, auto live falls back to the browser voice until midnight UTC, and a captured stream that needed Azure speech goes quiet.</li>
+        </ul>
+        <p>Outputs after apply: the studio URL, the auto-live URL, the registry name, the resource group, the Cosmos endpoint, and the Container App name.</p>
+      </section>
+    </article>
+  </main>
+  <footer class="ks-footer">
+    <p>Kickstream IT solution set. Describes this repository. It is not a Microsoft Marketplace listing.</p>
+  </footer>
+</body>
+</html>

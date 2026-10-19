@@ -38,6 +38,19 @@ def test_possession_and_pass_accuracy_come_from_passes():
     assert snapshot.away.pass_accuracy == 100.0
 
 
+def test_pass_distance_and_difficulty_sit_beside_accuracy():
+    events = [
+        event(1, "pass", "home", completed=True, pass_distance=10, pass_difficulty=1),
+        event(2, "pass", "home", completed=False, pass_distance=30, pass_difficulty=5),
+        event(3, "half_time", minute=45),
+    ]
+    snapshot = last_stats(run(events)[1])
+    assert snapshot.home.pass_accuracy == pytest.approx(50.0)
+    assert snapshot.home.pass_distance == pytest.approx(20.0)
+    assert snapshot.home.pass_difficulty == pytest.approx(3.0)
+    assert snapshot.away.pass_distance == 0
+
+
 def test_possession_is_even_before_any_touch():
     snapshot = last_stats(run([event(1, "kickoff", "home")])[1])
     assert snapshot.home.possession == 50.0 and snapshot.away.possession == 50.0

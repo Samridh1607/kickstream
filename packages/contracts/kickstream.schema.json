@@ -38,7 +38,7 @@
         "speed": { "type": "number" },
         "home": { "$ref": "#/$defs/TeamSheet" },
         "away": { "$ref": "#/$defs/TeamSheet" },
-        "source": { "enum": ["simulated", "statsbomb", "api_football", "openligadb"], "default": "simulated" },
+        "source": { "enum": ["simulated", "statsbomb", "api_football", "openligadb", "detector"], "default": "simulated" },
         "detail": { "enum": ["full", "key_events"], "default": "full" },
         "credit": { "type": ["string", "null"], "default": null },
         "competition": { "type": ["string", "null"], "default": null }
@@ -62,7 +62,11 @@
         "completed": { "type": ["boolean", "null"], "default": null },
         "player_in_id": { "type": ["string", "null"], "default": null },
         "xg": { "type": ["number", "null"], "default": null },
-        "located": { "type": "boolean", "default": true }
+        "located": { "type": "boolean", "default": true },
+        "pass_distance": { "type": ["number", "null"], "default": null },
+        "pass_difficulty": { "type": ["integer", "null"], "default": null },
+        "ball_speed": { "type": ["number", "null"], "default": null },
+        "shot_speed": { "type": ["number", "null"], "default": null }
       }
     },
     "TeamStats": {
@@ -78,7 +82,9 @@
         "fouls": { "type": "integer" },
         "yellow_cards": { "type": "integer" },
         "red_cards": { "type": "integer" },
-        "xg": { "type": "number" }
+        "xg": { "type": "number" },
+        "pass_distance": { "type": "number", "default": 0 },
+        "pass_difficulty": { "type": "number", "default": 0 }
       }
     },
     "StatsSnapshot": {
@@ -298,14 +304,25 @@
         "auto_banner": { "type": "boolean" },
         "auto_start": { "type": "boolean" },
         "auto_half_time_break": { "type": "boolean" },
-        "queued_match": { "anyOf": [{ "$ref": "#/$defs/QueuedMatch" }, { "type": "null" }], "default": null }
+        "queued_match": { "anyOf": [{ "$ref": "#/$defs/QueuedMatch" }, { "type": "null" }], "default": null },
+        "local_camera": { "anyOf": [{ "$ref": "#/$defs/LocalCamera" }, { "type": "null" }], "default": null }
+      }
+    },
+    "LocalCamera": {
+      "type": "object", "additionalProperties": false,
+      "required": ["enabled", "name"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "camera": { "type": ["string", "null"], "maxLength": 200, "default": null },
+        "microphone": { "type": ["string", "null"], "maxLength": 200, "default": null },
+        "name": { "type": "string", "maxLength": 60 }
       }
     },
     "QueuedMatch": {
       "type": "object", "additionalProperties": false,
       "required": ["source", "speed"],
       "properties": {
-        "source": { "enum": ["simulated", "statsbomb", "api_football", "openligadb"] },
+        "source": { "enum": ["simulated", "statsbomb", "api_football", "openligadb", "detector"] },
         "ref": { "type": ["string", "null"], "pattern": "^[0-9]{1,10}(/[0-9]{1,10}){0,2}$", "default": null },
         "speed": { "type": "number", "minimum": 1, "maximum": 600 },
         "title": { "type": ["string", "null"], "maxLength": 120, "default": null }
@@ -493,7 +510,17 @@
         "agent": { "type": "string" },
         "size_bytes": { "type": ["integer", "null"], "default": null },
         "reason": { "type": ["string", "null"], "default": null },
-        "made_at": { "type": "number" }
+        "made_at": { "type": "number" },
+        "edited": { "anyOf": [{ "$ref": "#/$defs/EditedReel" }, { "type": "null" }], "default": null }
+      }
+    },
+    "EditedReel": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "size_bytes", "added_at"],
+      "properties": {
+        "name": { "type": "string", "maxLength": 120 },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "added_at": { "type": "number" }
       }
     },
     "Broadcast": {
@@ -622,7 +649,11 @@
         "completed": { "type": ["boolean", "null"], "default": null },
         "player_in_id": { "type": ["string", "null"], "default": null },
         "xg": { "type": ["number", "null"], "default": null },
-        "located": { "type": "boolean", "default": true }
+        "located": { "type": "boolean", "default": true },
+        "pass_distance": { "type": ["number", "null"], "default": null },
+        "pass_difficulty": { "type": ["integer", "null"], "default": null },
+        "ball_speed": { "type": ["number", "null"], "default": null },
+        "shot_speed": { "type": ["number", "null"], "default": null }
       }
     },
     "TeamTactics": {
@@ -647,7 +678,9 @@
         "home": { "$ref": "#/$defs/TeamTactics" },
         "away": { "$ref": "#/$defs/TeamTactics" },
         "rhythm": { "enum": ["slow", "steady", "fast", "frantic"] },
-        "summary": { "type": "string" }
+        "summary": { "type": "string" },
+        "momentum": { "type": ["number", "null"], "default": null },
+        "control": { "enum": ["home", "away", null], "default": null }
       }
     },
     "NextAction": {
@@ -776,7 +809,10 @@
         "yellow_cards": { "type": "integer" },
         "red_cards": { "type": "integer" },
         "rating": { "type": "number", "minimum": 0, "maximum": 10 },
-        "heat": { "type": "array", "items": { "type": "number" } }
+        "heat": { "type": "array", "items": { "type": "number" } },
+        "distance": { "type": "number", "default": 0 },
+        "top_speed": { "type": "number", "default": 0 },
+        "callout": { "type": ["string", "null"], "default": null }
       }
     },
     "PlayerReport": {
@@ -1092,9 +1128,9 @@
       "type": "object", "additionalProperties": false,
       "required": ["id", "name", "kind", "detail", "available"],
       "properties": {
-        "id": { "enum": ["simulated", "statsbomb", "api_football", "openligadb"] },
+        "id": { "enum": ["simulated", "statsbomb", "api_football", "openligadb", "detector"] },
         "name": { "type": "string" },
-        "kind": { "enum": ["simulated", "replay", "live"] },
+        "kind": { "enum": ["simulated", "replay", "live", "detector"] },
         "detail": { "enum": ["full", "key_events"] },
         "available": { "type": "boolean" },
         "credit": { "type": ["string", "null"], "default": null },
@@ -1108,7 +1144,7 @@
       "required": ["match_id", "source"],
       "properties": {
         "match_id": { "type": "string" },
-        "source": { "enum": ["simulated", "statsbomb", "api_football", "openligadb"] },
+        "source": { "enum": ["simulated", "statsbomb", "api_football", "openligadb", "detector"] },
         "ref": { "type": ["string", "null"], "default": null },
         "title": { "type": ["string", "null"], "default": null },
         "problem": { "type": ["string", "null"], "default": null }

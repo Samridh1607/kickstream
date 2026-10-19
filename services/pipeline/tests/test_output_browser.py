@@ -52,12 +52,25 @@ NEVER_SETTLES = (
     "<!doctype html><script>window.__kickstreamStartCapture = () => new Promise(() => {});</script>"
 )
 NEVER_READY = "<!doctype html><title>nothing</title>"
+# Starts only if the page may use the camera and the microphone, as the program does with this computer's camera.
+ASKS_CAMERA = """<!doctype html><script>window.__kickstreamStartCapture = async () => {
+  for (const name of ["camera", "microphone"]) {
+    const state = (await navigator.permissions.query({ name })).state;
+    if (state !== "granted") throw new Error(`${name} ${state}`);
+  }
+};</script>"""
 
 
 @pytest.fixture
 def pages():
     """A local web server with the three pages above."""
-    bodies = {"/captures": CAPTURES, "/refuses": REFUSES, "/never": NEVER_READY, "/hangs": NEVER_SETTLES}
+    bodies = {
+        "/captures": CAPTURES,
+        "/refuses": REFUSES,
+        "/never": NEVER_READY,
+        "/hangs": NEVER_SETTLES,
+        "/camera": ASKS_CAMERA,
+    }
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
@@ -138,6 +151,13 @@ async def test_the_page_records_its_own_tab_at_the_asked_size_and_stop_ends_the_
     await capture.stop()
     await asyncio.wait_for(waiting, 10)
     await capture.stop()  # twice is harmless
+
+
+@needs_browser
+async def test_the_program_page_may_use_this_computer_s_camera_and_microphone(pages):
+    capture = ChromiumCapture()
+    await capture.start(f"{pages}/camera", 640, 360)
+    await capture.stop()
 
 
 @needs_browser

@@ -14,6 +14,37 @@ from kickstream.domain.types import SIDES, Side, other
 HALF = 2700.0
 FULL = 5400.0
 _SHOT_WEIGHT = {"FW": 5, "MF": 3, "DF": 1}
+# Pitch units are 0-100. A full pitch is 105 m by 68 m.
+_LENGTH_M = 105.0
+_WIDTH_M = 68.0
+
+
+def _meters(ax0: float, y0: float, ax1: float, y1: float) -> float:
+    dx = (ax1 - ax0) / 100.0 * _LENGTH_M
+    dy = (y1 - y0) / 100.0 * _WIDTH_M
+    return (dx * dx + dy * dy) ** 0.5
+
+
+def _difficulty(distance_m: float) -> int:
+    if distance_m < 8:
+        return 1
+    if distance_m < 16:
+        return 2
+    if distance_m < 25:
+        return 3
+    if distance_m < 35:
+        return 4
+    return 5
+
+
+def _ball_speed(distance_m: float) -> float:
+    return round(min(32.0, 10.0 + distance_m * 0.45), 1)
+
+
+def _shot_speed(ax: float, y: float) -> float:
+    dx = (100.0 - ax) / 100.0 * _LENGTH_M
+    dy = (y - 50.0) / 100.0 * _WIDTH_M
+    return round(min(38.0, 22.0 + (dx * dx + dy * dy) ** 0.5 * 0.4), 1)
 
 
 def _clamp(value: float, low: float = 3.0, high: float = 97.0) -> float:
@@ -94,10 +125,27 @@ class _Sim:
 
 def _pass(sim: _Sim, t: float, side: Side, ax: float, y: float) -> tuple[Side, float, float]:
     completed = sim.rng.random() < 0.82
-    sim.emit(t, "pass", side, sim.passer(side), ax, y, completed=completed)
+    passer = sim.passer(side)
     if completed:
-        return side, _clamp(ax + sim.rng.uniform(-8.0, 18.0)), _clamp(y + sim.rng.uniform(-25.0, 25.0))
-    return other(side), _clamp(100.0 - ax), y
+        nax = _clamp(ax + sim.rng.uniform(-8.0, 18.0))
+        ny = _clamp(y + sim.rng.uniform(-25.0, 25.0))
+        next_side = side
+    else:
+        nax, ny, next_side = _clamp(100.0 - ax), y, other(side)
+    distance = round(_meters(ax, y, nax, ny), 1)
+    sim.emit(
+        t,
+        "pass",
+        side,
+        passer,
+        ax,
+        y,
+        completed=completed,
+        pass_distance=distance,
+        pass_difficulty=_difficulty(distance),
+        ball_speed=_ball_speed(distance),
+    )
+    return next_side, nax, ny
 
 
 def _foul(sim: _Sim, t: float, side: Side, ax: float, y: float) -> None:
@@ -119,8 +167,9 @@ def _corner(sim: _Sim, t: float, side: Side) -> tuple[Side, float, float, float]
 
 def _shot(sim: _Sim, t: float, side: Side, ax: float, y: float) -> tuple[Side, float, float, float]:
     rng, shooter, defending = sim.rng, sim.shooter(side), other(side)
+    speed = _shot_speed(ax, y)
     if rng.random() < xg(ax, y):
-        sim.emit(t, "shot", side, shooter, ax, y, outcome="goal")
+        sim.emit(t, "shot", side, shooter, ax, y, outcome="goal", shot_speed=speed)
         sim.emit(t, "goal", side, shooter, 100.0, 50.0)
         boundary = HALF if t < HALF else FULL
         restart = max(t, min(t + 45.0, boundary - 1.0))
@@ -128,15 +177,15 @@ def _shot(sim: _Sim, t: float, side: Side, ax: float, y: float) -> tuple[Side, f
         return defending, 50.0, 50.0, restart
     kind = rng.random()
     if kind < 0.40:
-        sim.emit(t, "shot", side, shooter, ax, y, outcome="saved")
+        sim.emit(t, "shot", side, shooter, ax, y, outcome="saved", shot_speed=speed)
         sim.emit(t, "save", defending, sim.keeper(defending), 3.0, 50.0)
         if rng.random() < 0.30:
             return _corner(sim, t, side)
         return defending, 12.0, 50.0, t
     if kind < 0.75:
-        sim.emit(t, "shot", side, shooter, ax, y, outcome="off_target")
+        sim.emit(t, "shot", side, shooter, ax, y, outcome="off_target", shot_speed=speed)
         return defending, 10.0, 50.0, t
-    sim.emit(t, "shot", side, shooter, ax, y, outcome="blocked")
+    sim.emit(t, "shot", side, shooter, ax, y, outcome="blocked", shot_speed=speed)
     if rng.random() < 0.30:
         return _corner(sim, t, side)
     return defending, _clamp(100.0 - ax), y, t

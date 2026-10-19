@@ -28,6 +28,7 @@ provider "azurerm" {
     "Microsoft.CognitiveServices",
     "Microsoft.Communication",
     "Microsoft.ContainerRegistry",
+    "Microsoft.DocumentDB",
     "Microsoft.OperationalInsights",
     "Microsoft.Storage",
   ]

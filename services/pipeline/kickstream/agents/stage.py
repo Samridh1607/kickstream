@@ -18,7 +18,7 @@ from kickstream.agents.squad import Squad
 from kickstream.agents.tactics import TacticalAnalyst
 from kickstream.agents.tracking import PlayerTracker
 from kickstream.agents.visualize import VisualizationAgent
-from kickstream.contracts import AgentRun, KeyMoment, MatchEvent, MatchStatus, PlayEvent
+from kickstream.contracts import AgentRun, KeyMoment, MatchEvent, MatchStatus, PlayEvent, StatsSnapshot
 from kickstream.domain.payloads import TYPE_NAMES
 from kickstream.ports.bus import AGENTS, EVENTS, INSIGHTS, STATUS, EventBus
 from kickstream.ports.explainer import ExplainContext
@@ -62,6 +62,7 @@ class _Team:
                 VisualizationAgent(self.squad),
                 HighlightsAgent(self.squad),
             ]
+        self.tactics = next((agent for agent in self.agents if isinstance(agent, TacticalAnalyst)), None)
         self.explainability = ExplainabilityAgent(names)
         self.minute = 0
         self.tallies: dict[str, _Tally] = {}
@@ -104,6 +105,8 @@ class AgentsStage:
                 await self._report(match_id, self._teams[match_id])
             return
         team = self._teams.get(match_id)
+        if team is not None and team.tactics is not None and isinstance(payload, StatsSnapshot):
+            team.tactics.momentum = payload.momentum
         if team is None or not isinstance(payload, (MatchEvent, KeyMoment)):
             return
         if payload.minute > team.minute:

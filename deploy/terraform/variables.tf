@@ -70,6 +70,30 @@ variable "llm_api_key" {
   sensitive   = true
 }
 
+variable "match_log_ttl_days" {
+  description = "How long Cosmos DB keeps each match's log, in days."
+  type        = number
+  default     = 90
+}
+
+variable "foundry_project_endpoint" {
+  description = "Optional Microsoft Foundry project endpoint; with foundry_deployment, used instead of llm_base_url."
+  type        = string
+  default     = null
+}
+
+variable "foundry_deployment" {
+  description = "Optional model deployment name in the Foundry project."
+  type        = string
+  default     = null
+}
+
+variable "foundry_resource_id" {
+  description = "Optional resource ID of the Foundry project (or its account); the app's identity is made an Azure AI User there."
+  type        = string
+  default     = null
+}
+
 variable "autolive" {
   description = "Whether auto live starts switched on at /live: rotating screens, AI commentary and a match always playing."
   type        = bool
@@ -90,4 +114,16 @@ variable "speech_daily_chars" {
   description = "Most characters auto live sends to Azure Speech a day; past it the browser's voice speaks until midnight UTC."
   type        = number
   default     = 200000
+}
+
+variable "public_view" {
+  description = "Let anyone watch /live and /match, read-only, without signing in. Every other page still needs a studio user."
+  type        = bool
+  default     = true
+}
+
+variable "real_sources" {
+  description = "Offer real match data (StatsBomb, API-Football, OpenLigaDB) besides the synthetic match. Off for the hackathon, whose rules ask for synthetic data."
+  type        = bool
+  default     = false
 }

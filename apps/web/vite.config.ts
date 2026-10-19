@@ -11,7 +11,10 @@ export default defineConfig(({ mode }) => {
     // A tunnel's hostnames (KICKSTREAM_PUBLIC_HOSTS) are served too, so guests can open their links.
     // Through a tunnel anyone can ask for any allowed file, so only the app and its packages are
     // allowed, never the data directory with its invite secrets and stream keys.
+    // 127.0.0.1, not "localhost": Node may resolve that to ::1 alone, and the hidden browser that
+    // captures the program for going live opens http://127.0.0.1:5173/studio?output.
     server: {
+      host: "127.0.0.1",
       port: 5173,
       allowedHosts: publicHosts,
       fs: {

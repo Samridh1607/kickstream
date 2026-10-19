@@ -12,7 +12,14 @@
 # llm_model        = "gpt-4.1-mini"
 # llm_api_key      = ""
 
+# Or a Microsoft Foundry project, signed in to with the app's managed identity; used instead of llm_*.
+# foundry_project_endpoint = "https://<resource>.services.ai.azure.com/api/projects/<project>"
+# foundry_deployment       = "gpt-4.1-mini"
+# foundry_resource_id      = "/subscriptions/<id>/resourceGroups/<rg>/providers/Microsoft.CognitiveServices/accounts/<resource>"
+
 # Auto live (/live): on at first start; Azure Speech tier and daily character allowance for its voice.
 # autolive           = true
+# public_view        = true  # anyone may watch /live and /match, read-only; false puts them behind sign-in too
+# real_sources       = false # true adds StatsBomb, API-Football and OpenLigaDB beside the synthetic match
 # speech_sku         = "S0"
 # speech_daily_chars = 200000

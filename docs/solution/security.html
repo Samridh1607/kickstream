@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Security · Kickstream IT solution</title>
+  <link rel="stylesheet" href="theme.css">
+</head>
+<body>
+  <header class="ks-header">
+    <div class="ks-header-inner">
+      <a class="ks-brand" href="index.html">
+        <span class="ks-mark" aria-hidden="true"></span>
+        <span class="ks-brand-name">Kickstream</span>
+        <span class="ks-brand-sub">IT solution</span>
+      </a>
+      <nav class="ks-nav" aria-label="Solution documents">
+        <a href="index.html">Overview</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="capabilities.html">Capabilities</a>
+        <a href="security.html" aria-current="page">Security</a>
+        <a href="operations.html">Operations</a>
+        <a href="integrations.html">Integrations</a>
+        <a href="constraints.html">Constraints</a>
+      </nav>
+    </div>
+  </header>
+  <main class="ks-main">
+    <article class="ks-sheet">
+      <p class="ks-eyebrow">Security, privacy, and identity</p>
+      <h1>Who can open the studio, and what is stored</h1>
+      <section data-area="security-privacy-identity">
+        <p class="ks-lead">Kickstream has two different fronts. On a developer machine the application has no sign-in of its own. On Azure, Container Apps authentication sits in front of the app and signs studio users in with Microsoft Entra ID.</p>
+        <figure class="ks-figure">
+          <svg viewBox="0 0 760 168" role="img" aria-label="Local pages reach the pipeline with no sign-in. Azure pages pass an Entra gate.">
+            <style>
+              .n { fill: #F5F5F5; stroke: #0078D4; stroke-width: 1.5; }
+              .t { font: 600 13px "Segoe UI Variable", "Segoe UI", sans-serif; fill: #242424; }
+              .s { font: 600 12px "Segoe UI Variable", "Segoe UI", sans-serif; fill: #616161; }
+            </style>
+            <defs>
+              <marker id="gate" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0 0 L6 3 L0 6 Z" fill="#0078D4"/>
+              </marker>
+            </defs>
+            <text class="s" x="8" y="28">Local</text>
+            <rect class="n" x="78" y="8" width="150" height="36" rx="4"/>
+            <rect class="n" x="268" y="8" width="170" height="36" rx="4"/>
+            <rect class="n" x="478" y="8" width="260" height="36" rx="4"/>
+            <text class="t" x="153" y="31" text-anchor="middle">Page</text>
+            <text class="t" x="353" y="31" text-anchor="middle">No sign-in</text>
+            <text class="t" x="608" y="31" text-anchor="middle">Keys stay off the page</text>
+            <path d="M228 26 H268" stroke="#0078D4" stroke-width="1.6" fill="none" marker-end="url(#gate)"/>
+            <path d="M438 26 H478" stroke="#0078D4" stroke-width="1.6" fill="none" marker-end="url(#gate)"/>
+            <text class="s" x="8" y="108">Azure</text>
+            <rect class="n" x="78" y="88" width="150" height="36" rx="4"/>
+            <rect class="n" x="268" y="88" width="170" height="36" rx="4"/>
+            <rect class="n" x="478" y="88" width="260" height="36" rx="4"/>
+            <text class="t" x="153" y="111" text-anchor="middle">Page</text>
+            <text class="t" x="353" y="111" text-anchor="middle">Entra gate</text>
+            <text class="t" x="608" y="111" text-anchor="middle">Read-only or studio</text>
+            <path d="M228 106 H268" stroke="#0078D4" stroke-width="1.6" fill="none" marker-end="url(#gate)"/>
+            <path d="M438 106 H478" stroke="#0078D4" stroke-width="1.6" fill="none" marker-end="url(#gate)"/>
+            <text class="s" x="78" y="152">AzureADMyOrg. Public view keeps /live and /match read-only. Studio pages go to sign-in.</text>
+          </svg>
+          <figcaption>Two fronts. Stream keys are not returned to the page. The header the app trusts is x-ms-client-principal-id.</figcaption>
+        </figure>
+        <h2>Local machine</h2>
+        <p>Anyone who can reach the pipeline can stream to the configured channels. The intended local deployment keeps the API and the web server on that machine. Stream keys live in <code>.data/output-keys.json</code> and are never sent back to a page. Guest pages are the exception: an HTTPS tunnel (Cloudflare Tunnel or ngrok) to port 5173 can expose them, because browsers allow cameras only on <code>https://</code> or <code>localhost</code>. The tunnel hostname must be listed in <code>KICKSTREAM_PUBLIC_HOSTS</code> before start. On that hostname only guest routes, and a co-host’s studio routes, answer. If <code>KICKSTREAM_PUBLIC_HOSTS</code> is empty, the gate is off and a tunnel would open the whole studio.</p>
+        <h2>Entra studio gate</h2>
+        <p><code>deploy/terraform/auth.tf</code> creates an application registration named “Kickstream studio” plus the resource name. <code>sign_in_audience</code> is <code>AzureADMyOrg</code>. The app requests Microsoft Graph <code>User.Read</code> only. A service principal requires app-role assignment. The deployer and every object id in <code>studio_users</code> receive the default access role. The redirect URI is <code>https://&lt;fqdn&gt;/.auth/login/aad/callback</code>.</p>
+        <p>Container Apps auth (<code>Microsoft.App/containerApps/authConfigs</code>, name <code>current</code>) enables the Azure Active Directory identity provider. Allowed principals are those same studio users. The app learns who signed in from the header named by <code>KICKSTREAM_SIGNED_IN_HEADER</code>, which the template sets to <code>x-ms-client-principal-id</code>. When <code>public_view</code> is true (the default), unauthenticated clients are allowed through and the app decides: <code>/live</code> and <code>/match</code> are read-only, and studio pages send everyone else to <code>KICKSTREAM_SIGN_IN_URL</code>, set to <code>/.auth/login/aad</code>. When <code>public_view</code> is false, unauthenticated clients are redirected to login. These paths stay open either way: <code>/guest/*</code>, <code>/api/guest/*</code>, and <code>/assets/*</code>.</p>
+        <div class="ks-note">
+          <p>This registration is a single-tenant gate for people who run the studio. Kickstream does not implement Microsoft Marketplace SaaS fulfillment, an Entra purchase landing page, or a live Partner Center offer.</p>
+        </div>
+        <h2>Data and secrets</h2>
+        <table>
+          <thead>
+            <tr><th>Item</th><th>How it is held</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Cosmos DB match log</td><td>Serverless account, session consistency, <code>local_authentication_enabled = false</code>. The Container App’s system-assigned identity has Cosmos DB Built-in Data Contributor on that account only.</td></tr>
+            <tr><td>Foundry</td><td>Not created by Terraform. If <code>foundry_resource_id</code> is set, the same identity is granted Azure AI User on that existing resource. Sign-in is Entra, not an API key.</td></tr>
+            <tr><td>Container App secrets</td><td>Registry admin password, Communication Services connection string, the Entra client secret (<code>microsoft-provider-authentication-secret</code>), the Speech key, and, only when provided, the API-Football key and the LLM API key.</td></tr>
+            <tr><td>Azure Files</td><td>Standard LRS, minimum TLS 1.2. The share is mounted with the storage account access key. Broadcasts, the studio document, uploads, and the narration cache live there.</td></tr>
+            <tr><td>Container Registry</td><td>Basic, admin user enabled, so the app can pull <code>kickstream:&lt;tag&gt;</code>. The admin password is a secret on the app.</td></tr>
+            <tr><td>Fan text and Copilot</td><td>Comments are truncated and rendered as plain text. MCP tools on a deployment sit behind the same sign-in as the studio and only read. Copilot web search sends the question the match cannot answer to Wikipedia, or to Tavily if that key is set.</td></tr>
+            <tr><td>Recordings and reels</td><td>MP4 files on the data share. They contain the program, including guest cameras the host put on stage and the commentary that was spoken.</td></tr>
+          </tbody>
+        </table>
+        <h2>Privileges inside the product</h2>
+        <p>A co-host is not a limited director. From the studio they can go live, end or delete the broadcast, and create or revoke invites. Their “Join with camera” takes the host’s seat in the room. A speaker can be placed on stage and cannot open the studio. A member can join the call and cannot be placed on stage. While the broadcast is live, everyone backstage is muted.</p>
+        <p>Clubs and players in the synthetic match are fictional. Preferences such as a favourite club stay in the browser on the match page. The head-to-head record is only matches this installation has finished, not a licensed player database.</p>
+      </section>
+    </article>
+  </main>
+  <footer class="ks-footer">
+    <p>Kickstream IT solution set. Describes this repository. It is not a Microsoft Marketplace listing.</p>
+  </footer>
+</body>
+</html>

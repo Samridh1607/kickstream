@@ -1,0 +1,377 @@
+\documentclass[aspectratio=169,11pt,t]{beamer}
+\usepackage{fontspec}
+\IfFileExists{lmodern.sty}
+  {\usepackage{lmodern}\usepackage{microtype}}
+  {\usepackage{anyfontsize}\usepackage[expansion=false]{microtype}}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{tikz}
+\IfFileExists{fontawesome5.sty}{\usepackage{fontawesome5}}{\newcommand{\faIcon}[1]{\textbullet}}
+\usepackage{kickstream-microsoft}
+
+\usetheme[font=none,chrome=minimal,sectionslide=true,progressbar=true]{Triad}
+\usepackage{triadgraphics}
+\triadpalette{0078D4}{106EBE}{0078D4}{242424}{FFFFFF}{616161}{F5F5F5}
+\triadbleed{FFFFFF}{242424}{0078D4}
+\triadon{FFFFFF}{FFFFFF}{FFFFFF}
+\KickstreamApplyFonts
+\renewcommand{\familydefault}{\sfdefault}
+
+\title[Kickstream]{The match goes live\\with the studio}
+\subtitle{One broadcast. Four platforms. The match explains itself.}
+\author[Kickstream]{Kickstream IT solution}
+\institute{Football broadcast studio on Azure}
+\date{Solution briefing}
+
+\newcommand{\tick}[1]{\par\noindent\makebox[5.5mm][l]{\color{triadPrimary}\small\faIcon{check-circle}}#1\par\vskip0.7ex}
+
+\begin{document}
+
+% area:solution-overview
+\begin{frame}[plain,noframenumbering]
+  \vspace{1.5mm}
+  {\color{triadAccent}\rule{\textwidth}{3.2pt}\par}
+  \vspace{7mm}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.58\textwidth}
+      {\scriptsize\bfseries\color{triadAccent} KICKSTREAM IT SOLUTION\par}
+      \vspace{3.2mm}
+      {\fontsize{26}{30}\selectfont\bfseries The match goes live\par}
+      {\fontsize{26}{30}\selectfont\bfseries with the \triadhl{studio}.\par}
+      \vspace{3.5mm}
+      {\large Kickstream is live-streaming software for football.\par}
+      \vspace{3mm}
+      {\setlength{\baselineskip}{6.4mm}%
+        \triadchip*{STUDIO}\hskip1.4mm
+        \triadchip{YOUTUBE}\hskip1.4mm
+        \triadchip{X}\hskip1.4mm
+        \triadchip{TWITCH}\par}
+    \end{column}
+    \begin{column}{0.38\textwidth}
+      \vspace{2mm}
+      \begin{tikzpicture}
+        \node[draw=triadAccent, line width=1.4pt, rounded corners=3pt,
+              minimum width=52mm, minimum height=34mm, fill=triadWash] (mon) {};
+        \node[anchor=north west, font=\scriptsize\bfseries, text=triadAccent]
+          at ([shift={(2.2mm,-2mm)}]mon.north west) {PROGRAM};
+        \node[font=\scriptsize\bfseries, text=triadOnAccent, fill=triadAccent,
+              rounded corners=1pt, inner sep=1.4pt]
+          at ([shift={(-2.4mm,-2.2mm)}]mon.north east) {LIVE};
+        \node[font=\LARGE\bfseries, text=triadInk] at ([yshift=-1mm]mon.center) {1\,--\,0};
+        \node[anchor=south west, font=\scriptsize, text=triadMuted]
+          at ([shift={(2.2mm,2mm)}]mon.south west) {Why it matters};
+      \end{tikzpicture}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}[plain,noframenumbering]
+  \triadstatement[YouTube, X, Facebook and Twitch. One encode.]
+    {The studio sends the match, and the match explains itself.}
+\end{frame}
+
+\begin{frame}{This is the program the host sends}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.62\textwidth}
+      \triadshot[78mm]{figures/studio.png}
+    \end{column}
+    \begin{column}{0.33\textwidth}
+      \triaditem{\faIcon{mouse-pointer}}{Click to switch}{Numbers 1--9 are labels. Keyboard shortcuts are not implemented.}
+      \triaditem{\faIcon{desktop}}{One picture}{ffmpeg copies it. Destinations do not get a second encode.}
+      \triaditem{\faIcon{comment}}{Why it matters}{English, at most 20 explanations a match.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\section{The product}
+
+\begin{frame}{Four jobs, one broadcast}
+  \begin{minipage}[t]{0.235\textwidth}
+    \triadcardbox[equal height group=jobs]{\faIcon{video}}{Go live}{Home, broadcast, studio. One Go live control.}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.235\textwidth}
+    \triadcardbox[equal height group=jobs]{\faIcon{futbol}}{Show the match}{Score, pitch, banners and narration on the program.}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.235\textwidth}
+    \triadcardbox[equal height group=jobs]{\faIcon{users}}{Bring guests}{Speaker, co-host, member. Four seats on stage.}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.235\textwidth}
+    \triadcardbox[equal height group=jobs]{\faIcon{film}}{Cut reels}{Up to four 15-second vertical clips.}
+  \end{minipage}
+  \vskip2.4ex
+  {\large\bfseries A scene library is shared. \triadhl{Live match} speaks as a fan, \triadhl{Analyst desk} as an analyst.\par}
+\end{frame}
+
+\begin{frame}{Home is the operator's desk}
+  \centering
+  \triadshot[112mm]{figures/home-wide.png}\par
+  \vspace{1mm}
+  {\scriptsize\color{triadMuted} Local demo. Next broadcast, program preview, destinations still off air.\par}
+\end{frame}
+
+\begin{frame}{Create, compose, go live, then cut}
+  \vspace{4mm}
+  \triadtimeline{Create, Compose, {Go live}, End, Reels}
+  \vspace{4mm}
+  \triadtakeaway{Record to file needs no stream key. YouTube, Facebook and Twitch need a key. X also needs that account's server address.}
+\end{frame}
+
+\begin{frame}{The host's line, in the product's words}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.56\textwidth}
+      \triadquote[HOST]{Put the match on YouTube, X, Facebook and Twitch without stitching the graphics on afterwards.}
+      \vskip2mm
+      \triadquote[OPERATOR]{Keep a channel on overnight, and restart it if the encode drops.}
+    \end{column}
+    \begin{column}{0.40\textwidth}
+      \triaditem{\faIcon{volume-up}}{Sound is the call}{Unmuted guests and the host. Otherwise silence.}
+      \triaditem{\faIcon{closed-captioning}}{Words have a fallback}{Templates when no model is configured.}
+      \triaditem{\faIcon{clock}}{Auto live waits}{It does not fight a studio that is already on air.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\section{The system}
+
+% area:architecture-and-data-flow
+\begin{frame}{One process, five stages, one encode}
+  \vspace{1mm}
+  \begin{tikzpicture}
+    \node[tnode sm] (in) {Ingest};
+    \node[tnode sm, tfill soft, right=3.2mm of in] (an) {Interpret};
+    \node[tnode sm, right=3.2mm of an] (ex) {Explain};
+    \node[tnode sm, tfill soft, right=3.2mm of ex] (re) {Render};
+    \node[tnode sm, right=3.2mm of re] (gw) {Gateway};
+    \draw[tarrow accent] (in) -- (an);
+    \draw[tarrow accent] (an) -- (ex);
+    \draw[tarrow accent] (ex) -- (re);
+    \draw[tarrow accent] (re) -- (gw);
+    \node[tnode sm, tfill ghost, below=7mm of ex] (ag) {7 agents};
+    \node[tnode sm, tfill ghost, below=7mm of gw] (ff) {ffmpeg};
+    \draw[tarrow soft] (ex) -- (ag);
+    \draw[tarrow soft] (gw) -- (ff);
+  \end{tikzpicture}
+  \vspace{2mm}
+
+  {\small\color{triadMuted} Memory holds the match, the studio and the encode.
+  Files sit on Azure Files. The match log sits in Cosmos DB \texttt{match\_log}.\par}
+\end{frame}
+
+\begin{frame}{Seven agents, all of them working}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.60\textwidth}
+      \triadshot[76mm]{figures/match.png}
+    \end{column}
+    \begin{column}{0.35\textwidth}
+      {\small The match page draws the same flow the pipeline runs.\par}
+      \vspace{2mm}
+      \triaditem{\faIcon{futbol}}{Synthetic score}{Northbridge and Harbour City. Fictional clubs.}
+      \triaditem{\faIcon{cube}}{3D pitch}{Only the ball and the player on it are known positions.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% area:functional-capabilities
+\begin{frame}{Seven agents, one of them writes}
+  \small
+  \begin{tabular}{@{}lp{78mm}@{}}
+    \toprule
+    Agent & What the match page shows \\
+    \midrule
+    Event Interpreter & Third, flank, phase, danger \\
+    Tactical Analyst & Pressure, tempo, patterns, control or chaos \\
+    Prediction & Win, draw, loss, next ten minutes \\
+    Explainability & English ``why this matters'', at most 20 a match \\
+    Visualization & 3D pitch from the ball and the player on it \\
+    Player Tracking & Rating, heat map, distance, top speed \\
+    Highlights & Ranked moments and hidden events \\
+    \bottomrule
+  \end{tabular}
+\end{frame}
+
+% area:integrations-and-data-sources
+\begin{frame}{Templates carry the show when the model is absent}
+  \begin{minipage}[t]{0.48\textwidth}
+    \begin{triadcard}[equal height group=src]
+      \triadkicker{WORDS}
+      \vspace{1mm}
+      {\bfseries\footnotesize WITH A MODEL\par}
+      {\small Foundry, or an OpenAI-compatible endpoint. Cached per mode and language.\par}
+      \vspace{1.2mm}
+      {\bfseries\footnotesize WITHOUT ONE\par}
+      {\small Scripted narration. The item is marked scripted.\par}
+    \end{triadcard}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.48\textwidth}
+    \begin{triadcard}[equal height group=src]
+      \triadkicker{MATCH}
+      \vspace{1mm}
+      {\bfseries\footnotesize DEPLOY DEFAULT\par}
+      {\small The synthetic match. Fictional clubs. Same seed, same game.\par}
+      \vspace{1.2mm}
+      {\bfseries\footnotesize OPTIONAL FEEDS\par}
+      {\small StatsBomb, API-Football, OpenLigaDB. Off unless \texttt{real\_sources}.\par}
+    \end{triadcard}
+  \end{minipage}
+\end{frame}
+
+\begin{frame}{One encode, five places}
+  \centering
+  \begin{tikzpicture}[x=1mm, y=1mm,
+    dest/.style={tnode sm, tfill soft, minimum width=22mm, inner sep=1mm}]
+    \node[tnode sm, tfill accent] (e) at (63,24) {One encode};
+    \draw[triadAccent, line width=0.9pt] (e.south) -- (63,14);
+    \draw[triadAccent, line width=0.9pt] (11,14) -- (115,14);
+    \node[dest] (yt) at (11,3) {YouTube};
+    \node[dest] (x) at (37,3) {X};
+    \node[dest] (fb) at (63,3) {Facebook};
+    \node[dest] (tw) at (89,3) {Twitch};
+    \node[dest] (rec) at (115,3) {Record};
+    \draw[tarrow accent] (11,14) -- (yt.north);
+    \draw[tarrow accent] (37,14) -- (x.north);
+    \draw[tarrow accent] (63,14) -- (fb.north);
+    \draw[tarrow accent] (89,14) -- (tw.north);
+    \draw[tarrow accent] (115,14) -- (rec.north);
+  \end{tikzpicture}\par
+  \vspace{2mm}
+  {\small\color{triadMuted} ffmpeg copies that one picture. A failed destination does not stop the others.\par}
+\end{frame}
+
+\begin{frame}{A free day barely holds one match}
+  \begin{triadfigure}
+  \begin{tikzpicture}
+  \begin{axis}[triad hbars,
+    symbolic y coords={One match,Free day},
+    ytick=data, xlabel={API-Football requests}, xmax=120,
+    width=0.92\textwidth, height=0.38\textheight]
+  \addplot[triad fill a] coordinates {(80,One match)(100,Free day)};
+  \end{axis}
+  \end{tikzpicture}
+  \end{triadfigure}
+  \triadnote{About 80 requests for one match. The free plan is about 100 a day. Provider limits, not a measured audience.}
+\end{frame}
+
+\section{Running it}
+
+% area:deployment-and-operations
+\begin{frame}{The deploy is one replica in Central India}
+  \begin{minipage}[t]{0.235\textwidth}
+    \begin{triadcard}[equal height group=num]
+      {\color{triadPrimary}\fontsize{26}{28}\selectfont\bfseries 1\par}
+      \vspace{0.6ex}
+      {\small\color{triadMuted} replica. Memory is not shared.\par}
+    \end{triadcard}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.235\textwidth}
+    \begin{triadcard}[equal height group=num]
+      {\color{triadPrimary}\fontsize{26}{28}\selectfont\bfseries 2\par}
+      \vspace{0.6ex}
+      {\small\color{triadMuted} vCPU. ffmpeg and the hidden browser.\par}
+    \end{triadcard}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.235\textwidth}
+    \begin{triadcard}[equal height group=num]
+      {\color{triadPrimary}\fontsize{26}{28}\selectfont\bfseries 4Gi\par}
+      \vspace{0.6ex}
+      {\small\color{triadMuted} memory. 2 GiB for each vCPU.\par}
+    \end{triadcard}
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.235\textwidth}
+    \begin{triadcard}[equal height group=num]
+      {\color{triadPrimary}\fontsize{26}{28}\selectfont\bfseries 90d\par}
+      \vspace{0.6ex}
+      {\small\color{triadMuted} Cosmos match-log TTL.\par}
+    \end{triadcard}
+  \end{minipage}
+  \vskip2.2ex
+  {\small Region default \triadhl{centralindia}. Probes call \texttt{/api/health} on port 8000, past the sign-in.\par}
+\end{frame}
+
+\begin{frame}{Calls the product allows in one match}
+  \begin{triadfigure}
+  \begin{tikzpicture}
+  \begin{axis}[triad hbars,
+    symbolic y coords={Explainability,Copilot,Narration},
+    ytick=data, xlabel={Calls}, xmax=70, width=0.92\textwidth, height=0.42\textheight]
+  \addplot[triad fill a] coordinates {(20,Explainability)(40,Copilot)(60,Narration)};
+  \end{axis}
+  \end{tikzpicture}
+  \end{triadfigure}
+  \triadnote{Caps from the product, not a measured audience. Past the cap, templates or assembled answers take over.}
+\end{frame}
+
+\begin{frame}{Auto live rotates twenty-two screens}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.64\textwidth}
+      \triadshot[80mm]{figures/live.png}
+    \end{column}
+    \begin{column}{0.29\textwidth}
+      {\small Off until the operator turns it on. A screen stays 5 to 10 minutes.\par}
+      \vspace{2mm}
+      {\small\color{triadMuted} Only Azure speech is carried on the captured stream.\par}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% area:security-privacy-identity
+\begin{frame}{Entra guards the studio. Guests stay on the invite}
+  \triaditem{\faIcon{id-badge}}{AzureADMyOrg}{The deployer and \texttt{studio\_users}. Header \texttt{x-ms-client-principal-id}.}
+  \triaditem{\faIcon{eye}}{Public view is read-only}{\texttt{/live} and \texttt{/match} without a sign-in. Studio pages still redirect.}
+  \triaditem{\faIcon{key}}{Keys stay off the page}{Stream keys are not returned. Cosmos local keys are disabled.}
+  \triaditem{\faIcon{user-shield}}{A co-host is an operator}{They can go live, and they can end or delete the broadcast.}
+\end{frame}
+
+\begin{frame}{Two fronts, one product}
+  \centering
+  \begin{tikzpicture}[x=1mm, y=1mm,
+    box/.style={tnode sm, tfill soft, minimum width=30mm, inner sep=1mm}]
+    \node[font=\scriptsize\bfseries, text=triadMuted, anchor=east] (ll) at (4,18) {Local};
+    \node[box] (a) at (28,18) {Page};
+    \node[box] (b) at (66,18) {No sign-in};
+    \node[box, minimum width=42mm] (c) at (110,18) {Keys off the page};
+    \draw[tarrow accent] (a) -- (b);
+    \draw[tarrow accent] (b) -- (c);
+    \node[font=\scriptsize\bfseries, text=triadMuted, anchor=east] at (4,2) {Azure};
+    \node[box] (d) at (28,2) {Page};
+    \node[box] (e) at (66,2) {Entra gate};
+    \node[box, minimum width=42mm] (f) at (110,2) {Read-only or studio};
+    \draw[tarrow accent] (d) -- (e);
+    \draw[tarrow accent] (e) -- (f);
+  \end{tikzpicture}
+  \vspace{2mm}
+  {\small\color{triadMuted} \texttt{AzureADMyOrg}. The app reads \texttt{x-ms-client-principal-id}.\par}
+\end{frame}
+
+% area:assumptions-constraints-risks
+\begin{frame}{A restart keeps files and the log}
+  \centering
+  \begin{tikzpicture}[node distance=8mm]
+    \node[tnode sm, tfill ghost, minimum width=32mm] (m) {Memory\\gone};
+    \node[tnode sm, tfill soft, minimum width=32mm, right=8mm of m] (f) {Files\\remain};
+    \node[tnode sm, tfill soft, minimum width=36mm, right=8mm of f] (c) {Cosmos log\\remains};
+  \end{tikzpicture}\par
+  \vspace{4mm}
+  {\small Auto live can start a 24/7 stream again from saved settings.\par}
+  {\small\color{triadMuted} A studio encode does not resume itself.\par}
+\end{frame}
+
+\begin{frame}{Four limits to say out loud}
+  \small
+  \begin{tabular}{@{}p{42mm}p{88mm}@{}}
+    \toprule
+    Limit & What it means for this repository \\
+    \midrule
+    StatsBomb & StatsBomb Open Data is non-commercial and must not ship in a paid offer. \\
+    Marketplace & Kickstream does not implement Microsoft Marketplace SaaS fulfillment, an Entra purchase landing page, or a live Partner Center offer. \\
+    One box & A second replica would not see this match, this studio, or this ffmpeg process. \\
+    Speech & Only Azure speech is on the captured stream. The browser voice is silence on air. \\
+    \bottomrule
+  \end{tabular}
+\end{frame}
+
+\begin{frame}[plain,noframenumbering]
+  \triadstatement[Synthetic match by default. Paid offers leave StatsBomb out.]
+    {Ship the studio. The purchase flow is not in the product.}
+\end{frame}
+
+\end{document}

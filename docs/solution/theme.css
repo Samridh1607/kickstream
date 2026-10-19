@@ -1,0 +1,397 @@
+/* Kickstream IT solution — Microsoft theme.
+   Typeface stack: Segoe UI Variable, Segoe UI.
+   Accent: Communication Blue #0078D4.
+   Canvas #FFFFFF, ink #242424, muted #616161.
+   Title size 28px. Body size 14px. */
+
+:root {
+  --ks-font: "Segoe UI Variable", "Segoe UI", sans-serif;
+  --ks-accent: #0078D4;
+  --ks-accent-hover: #106EBE;
+  --ks-accent-soft: #EFF6FC;
+  --ks-canvas: #FFFFFF;
+  --ks-page: #F5F5F5;
+  --ks-ink: #242424;
+  --ks-muted: #616161;
+  --ks-border: #E1DFDD;
+  --ks-title: 28px;
+  --ks-subtitle: 20px;
+  --ks-body: 14px;
+  --ks-small: 12px;
+  --ks-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--ks-page);
+}
+
+body {
+  margin: 0;
+  background: var(--ks-page);
+  color: var(--ks-ink);
+  font-family: var(--ks-font);
+  font-size: var(--ks-body);
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+h1,
+h2,
+h3,
+p,
+li,
+td,
+th,
+dd,
+dt,
+figcaption,
+.ks-lead {
+  font-family: var(--ks-font);
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: var(--ks-title);
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ks-ink);
+}
+
+h2 {
+  margin: 28px 0 8px;
+  font-size: var(--ks-subtitle);
+  line-height: 1.3;
+  font-weight: 600;
+  color: var(--ks-ink);
+}
+
+h3 {
+  margin: 20px 0 6px;
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+p {
+  margin: 0 0 12px;
+}
+
+a {
+  color: var(--ks-accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+a:hover {
+  color: var(--ks-accent-hover);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ks-accent);
+  outline-offset: 2px;
+}
+
+code {
+  font-family: var(--ks-font);
+  font-size: 0.95em;
+  background: var(--ks-page);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.ks-header {
+  background: var(--ks-canvas);
+  border-top: 4px solid var(--ks-accent);
+  border-bottom: 1px solid var(--ks-border);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.ks-header-inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 12px 24px 0;
+}
+
+.ks-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--ks-ink);
+  font-weight: 600;
+}
+
+.ks-mark {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--ks-accent);
+  display: inline-block;
+}
+
+.ks-brand-sub {
+  color: var(--ks-muted);
+  font-weight: 400;
+  font-size: var(--ks-small);
+}
+
+.ks-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-top: 10px;
+}
+
+.ks-nav a {
+  color: var(--ks-muted);
+  text-decoration: none;
+  font-size: var(--ks-small);
+  font-weight: 600;
+  padding: 8px 0 10px;
+  border-bottom: 2px solid transparent;
+}
+
+.ks-nav a:hover {
+  color: var(--ks-accent-hover);
+}
+
+.ks-nav a[aria-current="page"] {
+  color: var(--ks-accent);
+  border-bottom-color: var(--ks-accent);
+}
+
+.ks-main {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.ks-sheet {
+  background: var(--ks-canvas);
+  border: 1px solid var(--ks-border);
+  border-radius: 4px;
+  box-shadow: var(--ks-shadow);
+  padding: 32px 36px 40px;
+}
+
+.ks-eyebrow {
+  margin: 0 0 8px;
+  color: var(--ks-accent);
+  font-size: var(--ks-small);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ks-lead {
+  font-size: 16px;
+  line-height: 1.45;
+  margin-bottom: 16px;
+}
+
+.ks-muted {
+  color: var(--ks-muted);
+}
+
+.ks-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 16px 0 8px;
+}
+
+.ks-card {
+  background: var(--ks-canvas);
+  border: 1px solid var(--ks-border);
+  border-radius: 4px;
+  padding: 12px 14px;
+  border-top: 3px solid var(--ks-accent);
+}
+
+.ks-card h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.ks-card p {
+  margin: 0;
+  color: var(--ks-muted);
+  font-size: var(--ks-small);
+}
+
+.ks-note,
+.ks-risk {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-radius: 2px;
+}
+
+.ks-note {
+  background: var(--ks-accent-soft);
+  border-left: 4px solid var(--ks-accent);
+}
+
+.ks-risk {
+  background: var(--ks-page);
+  border-left: 4px solid var(--ks-ink);
+}
+
+.ks-note p,
+.ks-risk p {
+  margin: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+  font-size: var(--ks-body);
+}
+
+th,
+td {
+  text-align: left;
+  vertical-align: top;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ks-border);
+}
+
+th {
+  font-weight: 600;
+  color: var(--ks-ink);
+  background: var(--ks-page);
+}
+
+.ks-flow {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ks-flow li {
+  background: var(--ks-canvas);
+  border: 1px solid var(--ks-border);
+  border-left: 3px solid var(--ks-accent);
+  border-radius: 4px;
+  padding: 8px 12px;
+  min-width: 140px;
+}
+
+.ks-flow strong {
+  display: block;
+}
+
+.ks-flow span {
+  color: var(--ks-muted);
+  font-size: var(--ks-small);
+}
+
+.ks-footer {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 24px 32px;
+  color: var(--ks-muted);
+  font-size: var(--ks-small);
+}
+
+.ks-footer p {
+  margin: 0 0 4px;
+}
+
+ul {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+li {
+  margin: 0 0 4px;
+}
+
+.ks-figure {
+  margin: 16px 0 20px;
+}
+
+.ks-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--ks-border);
+  border-radius: 4px;
+}
+
+.ks-figure figcaption {
+  margin-top: 6px;
+  color: var(--ks-muted);
+  font-size: var(--ks-small);
+}
+
+.ks-figure svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.ks-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 0 0 8px;
+}
+
+.ks-pair .ks-figure {
+  margin: 0;
+}
+
+.ks-bars {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+
+.ks-bars div {
+  display: grid;
+  grid-template-columns: 148px 1fr 40px;
+  gap: 8px;
+  align-items: center;
+}
+
+.ks-bar {
+  display: block;
+  height: 10px;
+  background: var(--ks-page);
+  border-radius: 2px;
+}
+
+.ks-bar i {
+  display: block;
+  height: 100%;
+  background: var(--ks-accent);
+  border-radius: 2px;
+}
+
+@media (max-width: 800px) {
+  .ks-grid,
+  .ks-pair {
+    grid-template-columns: 1fr;
+  }
+
+  .ks-sheet {
+    padding: 20px 16px 28px;
+  }
+
+  .ks-main {
+    padding: 16px;
+  }
+}

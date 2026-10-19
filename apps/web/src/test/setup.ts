@@ -1,5 +1,6 @@
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
+import { forgetViewer } from "../shell/viewer";
 
 const inBrowser = typeof window !== "undefined";
 
@@ -8,6 +9,7 @@ afterEach(() => {
   if (inBrowser) localStorage.clear();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  forgetViewer();
 });
 
 // jsdom does not implement these browser APIs that Fluent UI components call.

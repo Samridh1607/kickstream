@@ -30,6 +30,19 @@ def test_match_has_a_complete_ordered_structure():
     assert len(halves) == 1 and halves[0].minute == 45
 
 
+def test_passes_carry_distance_difficulty_and_ball_speed_and_shots_carry_shot_speed():
+    events = _match()
+    passes = [e for e in events if e.type == "pass"]
+    shots = [e for e in events if e.type == "shot"]
+    assert passes and shots
+    assert all(e.pass_distance is not None and e.pass_distance >= 0 for e in passes)
+    assert all(e.pass_difficulty in range(1, 6) for e in passes)
+    assert all(e.ball_speed is not None and 0 < e.ball_speed <= 32 for e in passes)
+    assert all(e.shot_speed is not None and 0 < e.shot_speed <= 38 for e in shots)
+    assert all(e.shot_speed is None for e in passes)
+    assert all(e.ball_speed is None for e in shots)
+
+
 def test_every_event_is_on_the_pitch_and_names_a_real_player():
     known = {p.id for p in HOME.players} | {p.id for p in AWAY.players}
     for e in _match():

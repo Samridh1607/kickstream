@@ -1,8 +1,8 @@
 """Auto live commentary written by a Microsoft Agent Framework agent, from the facts on screen."""
 
 from agent_framework import Agent
-from agent_framework.openai import OpenAIChatCompletionClient
 
+from kickstream.adapters.model_client import ClientFactory
 from kickstream.ports.commentary import CommentaryContext, CommentaryError
 
 COMMENTATOR = "auto-commentator"
@@ -31,14 +31,12 @@ def commentary_prompt(ctx: CommentaryContext) -> str:
 
 
 class AgentCommentaryWriter:
-    def __init__(self, base_url: str, model: str, api_key: str) -> None:
+    def __init__(self, new_client: ClientFactory, model: str) -> None:
         self.model = model
-        self._base_url = base_url
-        self._api_key = api_key
+        self._new_client = new_client
 
     async def write(self, ctx: CommentaryContext) -> str:
-        client = OpenAIChatCompletionClient(model=self.model, base_url=self._base_url, api_key=self._api_key)
-        agent = Agent(client=client, name=COMMENTATOR, instructions=_INSTRUCTIONS)
+        agent = Agent(client=self._new_client(), name=COMMENTATOR, instructions=_INSTRUCTIONS)
         response = await agent.run(commentary_prompt(ctx))
         text = " ".join((response.text or "").split()).strip().strip('"')
         if len(text) < 12:

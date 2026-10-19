@@ -145,6 +145,8 @@ export function MatchPicker({ onStarted, extraSpeed, language = "en", sources: g
     ? null
     : source === "simulated"
       ? { source, speed }
+      : source === "detector"
+        ? { source, speed: 1 }
       : source === "statsbomb"
         ? replay === null ? null : { source, ref: replay, speed }
         : fixture?.source === source ? { source, ref: fixture.ref, speed: 1 } : null;

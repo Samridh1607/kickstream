@@ -5,6 +5,7 @@ import pytest
 
 from kickstream.adapters.agent_reels import AgentReelProducer, editor_prompt
 from kickstream.adapters.ffmpeg_clips import FfmpegClipCutter, clip_args
+from kickstream.adapters.model_client import openai_compatible
 from kickstream.adapters.scripted_reels import ScriptedReelProducer
 from kickstream.broadcasts import reels
 from kickstream.contracts import (
@@ -179,7 +180,7 @@ def llm(server):
 
 
 def producer(llm) -> AgentReelProducer:
-    return AgentReelProducer(base_url=llm.base_url, model="fake-model", api_key="test-key")
+    return AgentReelProducer(openai_compatible(llm.base_url, "fake-model", "test-key"), "fake-model")
 
 
 FOUND = [

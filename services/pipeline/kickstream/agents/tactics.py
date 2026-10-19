@@ -4,6 +4,7 @@ from collections import deque
 
 from kickstream.agents.base import POSSESSION, Declared
 from kickstream.contracts import PlayEvent, TacticalInsight, TeamTactics
+from kickstream.domain.momentum import in_control
 from kickstream.domain.pitch import attacking_x
 from kickstream.domain.types import SIDES, Side, other
 
@@ -41,6 +42,15 @@ def rhythm_of(passes_per_minute: float) -> str:
     return "fast" if passes_per_minute < 8.0 else "frantic"
 
 
+def control_or_chaos(names: dict[Side, str], control: Side | None, rhythm: str) -> tuple[str, str] | None:
+    """One labelled fact: who holds control, or chaos when the game is frantic and nobody does."""
+    if control is not None:
+        return "control", f"{names[control]} are in control"
+    if rhythm == "frantic":
+        return "chaos", "the rhythm is frantic and neither side is in control"
+    return None
+
+
 class TacticalAnalyst:
     declared = Declared(
         id="tactical_analyst",
@@ -72,6 +82,7 @@ class TacticalAnalyst:
         self._sequences: deque[tuple[int, Side, int]] = deque()  # minute it ended, side, length
         self._open: tuple[int, Side, int] | None = None  # the sequence being played: number, side, length
         self._minute = 0
+        self.momentum: float | None = None  # the analytics' latest, set by the orchestrator
 
     def handle(self, play: PlayEvent) -> list[TacticalInsight]:
         due = play.minute > self._minute
@@ -148,7 +159,8 @@ class TacticalAnalyst:
         teams = {side: self._team(side, minutes) for side in SIDES}
         recent = sum(play.type == "pass" and play.minute >= minute - RHYTHM_MIN for play in self._plays)
         rhythm = rhythm_of(recent / max(1, min(RHYTHM_MIN, minute)))
-        summary = self._summary(teams, rhythm)
+        control = in_control(self.momentum) if self.momentum is not None else None
+        summary = self._summary(teams, rhythm, control)
         self.note = summary
         return TacticalInsight(
             id=f"{match_id}-t{minute}",
@@ -158,9 +170,11 @@ class TacticalAnalyst:
             away=teams["away"],
             rhythm=rhythm,
             summary=summary,
+            momentum=None if self.momentum is None else round(self.momentum, 3),
+            control=control,
         )
 
-    def _summary(self, teams: dict[Side, TeamTactics], rhythm: str) -> str:
+    def _summary(self, teams: dict[Side, TeamTactics], rhythm: str, control: Side | None = None) -> str:
         parts = []
         for side in SIDES:
             phrases = [PATTERN_PHRASES[pattern] for pattern in teams[side].patterns[:2]]
@@ -171,4 +185,6 @@ class TacticalAnalyst:
             parts.append(
                 f"{self._names[leading]} have {teams[leading].field_tilt:.0f}% of the final-third play"
             )
-        return f"{'; '.join(parts)}. The rhythm is {rhythm}."
+        summary = f"{'; '.join(parts)}. The rhythm is {rhythm}."
+        fact = control_or_chaos(self._names, control, rhythm)
+        return summary if fact is None else f"{summary} {fact[0].capitalize()}: {fact[1]}."

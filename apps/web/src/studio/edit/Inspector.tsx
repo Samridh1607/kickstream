@@ -200,7 +200,15 @@ export function Inspector({ scene, selectedId, onChange, onUpload, status = null
         </Field>
       )}
       {selected.type === "cameras" && (
-        <Switch label="Name tags" checked={selected.props.names !== false} onChange={(_, data) => setProp(selected, "names", data.checked)} />
+        <>
+          <Field label="Shape" hint="Circles: one round camera for each person on stage, side by side">
+            <Select value={selected.props.shape === "circle" ? "circle" : "box"} onChange={(_, data) => setProp(selected, "shape", data.value)}>
+              <option value="box">Boxes</option>
+              <option value="circle">Circles</option>
+            </Select>
+          </Field>
+          <Switch label="Name tags" checked={selected.props.names !== false} onChange={(_, data) => setProp(selected, "names", data.checked)} />
+        </>
       )}
       {selected.type === "image" && (
         <>

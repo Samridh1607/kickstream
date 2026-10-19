@@ -267,9 +267,10 @@ def _check_queued(queued: QueuedMatch | None) -> None:
 
 
 def set_settings(doc: Studio, settings: StudioSettings) -> Studio:
-    # Settings saved without a queued match (an older page, a script) leave the choice as it was.
-    if "queued_match" not in settings.model_fields_set:
-        settings = settings.model_copy(update={"queued_match": doc.settings.queued_match})
+    # Settings saved without a queued match or a camera (an older page, a script) leave each as it was.
+    for kept in ("queued_match", "local_camera"):
+        if kept not in settings.model_fields_set:
+            settings = settings.model_copy(update={kept: getattr(doc.settings, kept)})
     _check_queued(settings.queued_match)
     return _with(doc, settings=settings)
 

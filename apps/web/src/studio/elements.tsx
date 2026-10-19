@@ -16,6 +16,22 @@ export interface CameraTile {
   name: string;
   acsId: string | null;
   present: boolean;
+  /** This computer's own camera, drawn straight from it rather than through the call. */
+  stream?: MediaStream | null;
+}
+
+/** A local camera's picture, filling its box. Muted: its sound reaches the program another way. */
+function LocalVideo({ stream }: { stream: MediaStream }) {
+  const video = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    if (!video.current) return;
+    video.current.srcObject = stream;
+    void video.current.play?.()?.catch(() => {});
+  }, [stream]);
+  return (
+    <video ref={video} data-testid="local-video" muted autoPlay playsInline
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+  );
 }
 
 /** Everything an element can draw from. `now` is the server's clock in Unix seconds. */
@@ -203,31 +219,62 @@ function ImageView({ imageId, fit }: { imageId: unknown; fit: unknown }) {
 const initials = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0].toUpperCase()).join("");
 
-function CameraFeed({ tile, names, renderVideo, language }: { tile: CameraTile; names: boolean; renderVideo?: ProgramData["renderVideo"]; language: Language }) {
+const CAMERA_GAP = 16;
+
+/** How one camera is drawn: a rounded box filling its grid cell, or a circle `diameter` across. */
+type CameraShape = { kind: "box" } | { kind: "circle"; diameter: number };
+
+function CameraFeed({ tile, names, renderVideo, language, shape = { kind: "box" } }: {
+  tile: CameraTile; names: boolean; renderVideo?: ProgramData["renderVideo"]; language: Language; shape?: CameraShape;
+}) {
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!tile.acsId || !renderVideo || !box.current) return;
     return renderVideo(tile.acsId, box.current);
   }, [tile.acsId, renderVideo]);
+  const circle = shape.kind === "circle";
+  const label = tile.present ? tile.name : `${tile.name} · ${t(language, "away")}`;
+  // A circle is ringed like a broadcast guest bubble; its initials and name tag scale with it.
+  const frame: CSSProperties = circle
+    ? { width: shape.diameter, height: shape.diameter, flex: "none", borderRadius: "50%", boxSizing: "border-box",
+        border: `${Math.max(3, Math.round(shape.diameter / 40))}px solid #FFFFFF`, boxShadow: "0 8px 24px rgba(0, 0, 0, 0.45)" }
+    : { borderRadius: 16 };
+  const initialsSize = circle ? Math.round(shape.diameter / 3) : 96;
   return (
     <div data-testid="camera-tile" data-person={tile.id}
-      style={{ position: "relative", overflow: "hidden", borderRadius: 16, backgroundColor: "#101828" }}>
-      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 96, fontWeight: 700, color: "rgba(255, 255, 255, 0.45)" }}>
+      style={{ position: "relative", overflow: "hidden", backgroundColor: "#101828", ...frame }}>
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: initialsSize, fontWeight: 700, color: "rgba(255, 255, 255, 0.45)" }}>
         {initials(tile.name)}
       </div>
       <div ref={box} style={{ position: "absolute", inset: 0 }} />
+      {tile.stream && <LocalVideo stream={tile.stream} />}
       {names && (
-        <span style={{ position: "absolute", left: 16, bottom: 16, padding: "4px 16px", borderRadius: 8, color: "#FFFFFF", backgroundColor: "rgba(16, 24, 40, 0.8)", fontSize: 28, fontWeight: 600 }}>
-          {tile.present ? tile.name : `${tile.name} · ${t(language, "away")}`}
+        <span style={circle
+          ? { position: "absolute", left: "50%", bottom: "16%", transform: "translateX(-50%)", maxWidth: "70%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              padding: "2px 12px", borderRadius: 999, color: "#FFFFFF", backgroundColor: "rgba(16, 24, 40, 0.8)", fontSize: Math.max(14, Math.round(shape.diameter / 11)), fontWeight: 600 }
+          : { position: "absolute", left: 16, bottom: 16, padding: "4px 16px", borderRadius: 8, color: "#FFFFFF", backgroundColor: "rgba(16, 24, 40, 0.8)", fontSize: 28, fontWeight: 600 }}>
+          {label}
         </span>
       )}
     </div>
   );
 }
 
-function CamerasView({ data, names }: { data: ProgramData; names: boolean }) {
+/** The people on stage: a grid of boxes, or a row of equal circles as large as the element allows. */
+function CamerasView({ data, names, circles, width, height }: { data: ProgramData; names: boolean; circles: boolean; width: number; height: number }) {
   const tiles = data.cameras ?? [];
   if (tiles.length === 0) return null;
+  if (circles) {
+    const diameter = Math.max(1, Math.floor(Math.min(height, (width - CAMERA_GAP * (tiles.length - 1)) / tiles.length)));
+    return (
+      <div data-testid="program-cameras"
+        style={{ width: "100%", height: "100%", display: "flex", gap: CAMERA_GAP, alignItems: "center", justifyContent: "flex-end" }}>
+        {tiles.map((tile) => (
+          <CameraFeed key={tile.id} tile={tile} names={names} renderVideo={data.renderVideo} language={data.language} shape={{ kind: "circle", diameter }} />
+        ))}
+      </div>
+    );
+  }
   const columns = tiles.length === 1 ? 1 : 2;
   const rows = tiles.length <= 2 ? 1 : 2;
   return (
@@ -297,6 +344,6 @@ export function ElementView({ element, data }: { element: SceneElement; data: Pr
     case "image":
       return <ImageView imageId={props.image_id} fit={props.fit} />;
     case "cameras":
-      return <CamerasView data={data} names={props.names !== false} />;
+      return <CamerasView data={data} names={props.names !== false} circles={props.shape === "circle"} width={element.width} height={element.height} />;
   }
 }

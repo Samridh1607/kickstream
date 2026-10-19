@@ -3,6 +3,7 @@
 from dataclasses import dataclass, field
 
 from kickstream.contracts import KeyMoment, MatchEvent, PressureSnapshot, StatFact, StatsSnapshot, TeamStats
+from kickstream.domain.momentum import SWING_STRENGTH
 from kickstream.domain.pitch import COLS, ROWS, attacking_third, attacking_x, xg, zone_index
 from kickstream.domain.types import SIDES, Side
 
@@ -12,7 +13,7 @@ _PRESSURE_WEIGHT = {"pass": 1.0, "corner": 3.0, "shot": 4.0, "goal": 5.0}
 @dataclass(frozen=True)
 class AnalyticsConfig:
     big_chance_xg: float = 0.30
-    swing_strength: float = 0.35  # |momentum| at which one side is "in control"
+    swing_strength: float = SWING_STRENGTH
     swing_window_min: int = 10  # control must change sides within this many minutes
     swing_cooldown_min: int = 8
     pressure_level: float = 12.0  # attacking-third pressure that counts as high
@@ -33,6 +34,8 @@ class _Tally:
     red: int = 0
     xg: float = 0.0
     touches: int = 0
+    pass_distance: float = 0.0
+    pass_difficulty: float = 0.0
 
 
 def _per_side(factory):
@@ -72,6 +75,8 @@ def _possession(state: MatchState, side: Side) -> float:
 def _team_stats(state: MatchState, side: Side) -> TeamStats:
     tally = state.tally[side]
     accuracy = 0.0 if tally.passes == 0 else round(tally.completed / tally.passes * 100, 1)
+    distance = 0.0 if tally.passes == 0 else round(tally.pass_distance / tally.passes, 1)
+    difficulty = 0.0 if tally.passes == 0 else round(tally.pass_difficulty / tally.passes, 1)
     return TeamStats(
         goals=tally.goals,
         possession=_possession(state, side),
@@ -83,6 +88,8 @@ def _team_stats(state: MatchState, side: Side) -> TeamStats:
         yellow_cards=tally.yellow,
         red_cards=tally.red,
         xg=round(tally.xg, 2),
+        pass_distance=distance,
+        pass_difficulty=difficulty,
     )
 
 
@@ -130,6 +137,8 @@ def _record(state: MatchState, event: MatchEvent, cfg: AnalyticsConfig) -> list[
         tally.passes += 1
         tally.touches += 1
         tally.completed += 1 if event.completed else 0
+        tally.pass_distance += event.pass_distance or 0.0
+        tally.pass_difficulty += event.pass_difficulty or 0
     elif event.type == "shot":
         chance = _chance(event, side)
         tally.shots += 1

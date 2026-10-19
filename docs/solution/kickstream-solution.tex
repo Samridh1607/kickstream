@@ -1,0 +1,602 @@
+\documentclass[11pt]{article}
+\usepackage{fontspec}
+\usepackage{kickstream-microsoft}
+\KickstreamApplyFonts
+\usepackage[a4paper,margin=22mm,headheight=18pt]{geometry}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\usepackage{xurl}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=CommBlue,
+  urlcolor=CommBlue,
+  pdftitle={Kickstream IT solution},
+  pdfauthor={Kickstream}
+}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\color{Muted}\fontsize{11}{14}\selectfont Kickstream IT solution}
+\fancyhead[R]{\color{Muted}\fontsize{11}{14}\selectfont\nouppercase{\leftmark}}
+\renewcommand{\headrule}{%
+  {\color{CommBlue}\hrule height 2.5pt}\vspace{1pt}%
+  {\color{Rule}\hrule height 0.4pt}%
+}
+\fancyfoot[L]{\color{Muted}\small Describes this repository. Not a Marketplace listing.}
+\fancyfoot[R]{\color{Muted}\small\thepage}
+\renewcommand{\sectionmark}[1]{\markboth{#1}{}}
+\titleformat{\section}
+  {\KickstreamTitleSize\bfseries\color{Ink}\raggedright}
+  {\textcolor{CommBlue}{\thesection}}
+  {0.6em}{}
+\titleformat{\subsection}
+  {\fontsize{16}{20}\selectfont\bfseries\color{Ink}}
+  {}{0em}{}
+\titlespacing*{\section}{0pt}{1.6em}{0.5em}
+\setlist[itemize]{leftmargin=1.2em,itemsep=0.2em,topsep=0.25em}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.45em}
+\raggedright
+\setlength{\emergencystretch}{2em}
+\urlstyle{same}
+\color{Ink}
+\pagecolor{Canvas}
+
+\newcommand{\DemoShot}[2]{%
+  \begin{center}
+    \includegraphics[width=\textwidth]{#1}%
+  \end{center}
+  \vspace{-0.4em}
+  {\small\color{Muted}#2\par}
+}
+
+\begin{document}
+
+\begin{titlepage}
+\thispagestyle{empty}
+{\color{CommBlue}\rule{\textwidth}{4pt}}
+\vspace{1.6em}
+{\color{CommBlue}\fontsize{12}{16}\selectfont\bfseries IT SOLUTION DOCUMENT\par}
+\vspace{0.8em}
+{\KickstreamTitleSize\bfseries Kickstream\par}
+\vspace{0.4em}
+{\fontsize{16}{22}\selectfont Live football broadcast studio\par}
+\vspace{1.2em}
+\color{Muted}
+The web studio, the match pipeline and agents, and the Azure resources
+defined in \texttt{deploy/terraform}.\\[0.4em]
+Kickstream does not implement Microsoft Marketplace SaaS fulfillment,
+an Entra purchase landing page, or a live Partner Center offer.\par
+\vspace{1.4em}
+{\color{CommBlue}\rule{48pt}{3pt}\par}
+\vfill
+{\small\color{Muted} Companion briefing: \texttt{kickstream-briefing.pdf}.
+HTML entry: \texttt{docs/solution/index.html}.\par}
+\end{titlepage}
+
+\tableofcontents
+\vspace{1em}
+
+\section{Solution overview and scope}
+% area:solution-overview
+
+Kickstream is live-streaming software for football.
+A host creates a broadcast, composes scenes in the studio, and goes live to
+YouTube, X, Facebook and Twitch at once.
+The picture on the program is a match event stream turned into live intelligence,
+AI narratives and recaps.
+Agents then cut the recording's best moments into vertical reels.
+
+This document describes the software in this repository: \texttt{apps/web},
+\texttt{services/pipeline}, and the resources \texttt{deploy/terraform} creates.
+It is not a store listing.
+
+\subsection{The running demo}
+
+These pictures are the local demo: a synthetic match, the operator's home, the studio, match data, and auto live.
+The scene strip switches the program with a click.
+Keyboard shortcuts are not implemented.
+
+\DemoShot{figures/home.png}{Home. The next broadcast, the program preview, and each destination.}
+\DemoShot{figures/studio.png}{Studio. The program, the tool rail, and the numbered scene strip.}
+\DemoShot{figures/match.png}{Match data. The seven agents, the agent flow, and the 3D pitch.}
+\DemoShot{figures/live.png}{Auto live. Twenty-two screens, with the channel off until an operator turns it on.}
+
+\begin{itemize}
+  \item \textbf{In scope.}
+    Home (\texttt{/}), a broadcast (\texttt{/broadcasts/\{id\}}), that broadcast's studio,
+    \texttt{/studio}, match data (\texttt{/match}), a guest page (\texttt{/guest/\{secret\}}),
+    and auto live (\texttt{/live}).
+    The pipeline is Python 3.13 and FastAPI.
+    The web app is Vite, React, TypeScript, and Fluent UI v9.
+    Match-page languages are English, Spanish, and Hindi.
+    Commentary modes are Fan and Analyst.
+  \item \textbf{Out of scope.}
+    A transactable Marketplace offer, fulfillment webhooks, metering, or a purchase landing page.
+    StatsBomb Open Data inside a paid offer.
+    A video detector: the synthetic match, or a JSON Lines file named by
+    \texttt{KICKSTREAM\_DETECTOR\_FILE}, stands in for detections.
+    Taking money from fans. Superchats are displayed; payment stays on the fan's platform.
+\end{itemize}
+
+The same boundaries are restated under Constraints so a reader who opens only that
+section still sees them.
+
+\section{Architecture and data flow}
+% area:architecture-and-data-flow
+
+Kickstream runs as one program.
+Locally that is FastAPI on port 8000 and the Vite app on port 5173.
+On Azure the template puts the server in a single Container App.
+Matches, the studio, and live streams are held in that process's memory, so the
+app is pinned to one replica (\texttt{min\_replicas = 1}, \texttt{max\_replicas = 1}).
+
+\subsection{Pipeline}
+
+A match moves through five stages. The seven match agents publish findings onto
+the same stream the browser reads.
+
+\begin{center}
+\small
+\begin{tabular}{@{}lllll@{}}
+\toprule
+Ingest & Interpret & Explain & Render & Personalize \\
+\midrule
+Simulator, detector & Analytics & Narration & Overlay & Gateway \\
+file, or a source & stats and pressure & Fan and Analyst & scene widgets & mode and language \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}
+\begin{tikzpicture}[
+  stage/.style={draw=CommBlue, line width=0.7pt, fill=Wash, rounded corners=2pt,
+    align=center, font=\scriptsize\bfseries, text=Ink,
+    minimum width=24mm, minimum height=9mm, inner sep=1pt},
+  arr/.style={-{Stealth[length=1.8mm]}, draw=CommBlue, line width=0.7pt},
+  node distance=5.5mm
+]
+  \node[stage] (a) {Ingest};
+  \node[stage, right=5.5mm of a] (b) {Interpret};
+  \node[stage, right=5.5mm of b] (c) {Explain};
+  \node[stage, right=5.5mm of c] (d) {Render};
+  \node[stage, right=5.5mm of d] (e) {Gateway};
+  \draw[arr] (a) -- (b);
+  \draw[arr] (b) -- (c);
+  \draw[arr] (c) -- (d);
+  \draw[arr] (d) -- (e);
+  \node[stage, fill=Canvas, below=8mm of c] (g) {7 agents};
+  \node[stage, fill=Canvas, below=8mm of e] (f) {ffmpeg};
+  \draw[arr] (c) -- (g);
+  \draw[arr] (e.south) -- ++(0,-3mm) -| (f.north);
+\end{tikzpicture}
+\end{center}
+{\small\color{Muted} One encode. ffmpeg copies that picture to every destination.\par}
+
+The gateway fans the match out with Server-Sent Events and WebSockets.
+A late joiner is replayed the newest pitch scene and the newest player report, not the whole history.
+WebSockets are accepted only from the host the pipeline was reached at.
+Behind a proxy that rewrites \texttt{Host}, public names go in \texttt{KICKSTREAM\_ALLOWED\_HOSTS}.
+On the Container App, \texttt{KICKSTREAM\_PUBLIC\_HOSTS} is the app's own address.
+
+Narration, when a model is configured, is four Microsoft Agent Framework agents:
+a Commentator and a Tactical Analyst on each key moment, a Recap Writer at
+half-time and full-time, and a Localizer into Spanish and Hindi.
+Each item is written once per mode and language.
+If the model fails, that item falls back to a template and is marked scripted.
+Only the Explainability Agent, among the seven match agents, writes prose.
+That prose is English, at most 20 explanations a match.
+
+\subsection{Where state lives}
+
+\begin{itemize}
+  \item \textbf{Playback, studio, encode.} Process memory locally, and the same inside the one replica.
+  \item \textbf{Broadcasts, studio document, uploads, cache, fans, auto live, keys, recordings, reels.} Directory \texttt{.data/} locally. Azure Files share \texttt{data}, mounted at \texttt{/data}.
+  \item \textbf{Match log.} Memory unless Cosmos is configured. On Azure: database \texttt{kickstream}, container \texttt{match\_log}, partition \texttt{/match\_id}.
+  \item \textbf{Guest calls.} Communication Services, or \texttt{KICKSTREAM\_ROOMS=fake}. The deploy creates the Communication Services resource.
+  \item \textbf{Model.} A Foundry project, or an OpenAI-compatible endpoint, otherwise templates. Terraform does not create Foundry.
+\end{itemize}
+
+Going live opens \texttt{/studio?output} (1920 by 1080) in a hidden Chromium browser.
+ffmpeg encodes that picture once and copies it to every destination.
+Microsoft Edge is used when it is present.
+Auto live captures \texttt{/live?output} the same way.
+
+\section{Functional capabilities}
+% area:functional-capabilities
+
+The path is Home, then a broadcast, then the studio.
+Scenes are one library shared by every broadcast.
+
+\subsection{Studio and the program}
+
+The top bar names the broadcast, the output state (Off air, Connecting, or LIVE
+with elapsed time), the scene on air, Edit layout, Ask Copilot, and the single
+Go live / End broadcast control.
+Tools, one at a time: Match, Banners, Comments, Guests, Replays, Timer, Stream, Settings.
+Templates: Starting soon, Live match, Analyst desk, Break, Full-time, Interview,
+Match intelligence, Fan zone, and 3D pitch.
+Live match is a Fan scene and Analyst desk is an Analyst scene, so a cut changes
+the narration.
+Banners fire for goals and red cards.
+Replays animate the 20 seconds before a key moment.
+Widgets cover score, charts, prediction, why it matters, 3D pitch, player card,
+comments, poll, superchats, and spotlight.
+The host can show a local camera without Azure; the hidden browser receives the
+camera and microphone only, never the screen.
+
+\subsection{Destinations, broadcasts, reels, guests}
+
+The Stream tool sends the program to YouTube, X, Facebook and Twitch.
+Record to file writes an MP4 and needs no key.
+Each destination shows connecting, live, retrying, or failed.
+One failure does not stop the others.
+The only sound is the guest call. With nobody unmuted, the stream is silent.
+
+End broadcast keeps sessions, recordings, time on air, destinations, the score,
+and key moments.
+Generate reels cuts up to four 15-second vertical clips (1080 by 1920).
+Each clip starts 8 seconds before its moment.
+A Highlight Editor and a Social Copywriter run when a model is set; they do not
+choose the edit points.
+
+Guest roles are Speaker, Co-host, and Member.
+Speaker and Co-host can be placed on stage; a Member cannot.
+A Co-host can go live, end or delete the broadcast, and make or revoke invites.
+Up to four people are on stage.
+Calls use Azure Communication Services Rooms.
+
+\subsection{Agents, Copilot, fans, auto live}
+
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+Agent & Output \\
+\midrule
+Event Interpreter & Third, flank, phase, possession sequence, danger \\
+Tactical Analyst & Once a minute: pressure, tempo, tilt, patterns, control or chaos \\
+Prediction Agent & Win, draw, loss, goal chance in ten minutes, next action, danger grid \\
+Explainability Agent & English ``why this matters'' when patterns change, odds move by 12 points, or a hidden event appears \\
+Visualization Agent & 3D pitch. Only the ball and the player on it are known positions \\
+Player Tracking Agent & Touches, passing, shots, expected goals, rating, heat map, distance, top speed \\
+Highlights Agent & Ranked moments and hidden events \\
+\bottomrule
+\end{tabularx}
+
+The chart counts calls the product allows in one match, not a measured audience.
+
+\begin{center}
+\begin{tikzpicture}[x=1.55mm, y=1mm]
+  \fill[CommBlue] (0,16) rectangle (20,24);
+  \node[anchor=west, font=\small, text=Ink] at (22,20) {Explainability, 20};
+  \fill[CommBlue!70!Canvas] (0,8) rectangle (40,16);
+  \node[anchor=west, font=\small, text=Ink] at (42,12) {Copilot answers, 40};
+  \fill[CommBlue!45!Canvas] (0,0) rectangle (60,8);
+  \node[anchor=west, font=\small, text=Ink] at (62,4) {Narration calls, 60};
+  \draw[Rule] (0,-2) -- (60,-2);
+  \node[font=\scriptsize, text=Muted, anchor=north] at (0,-3) {0};
+  \node[font=\scriptsize, text=Muted, anchor=north] at (60,-3) {60};
+\end{tikzpicture}
+\end{center}
+
+Ask Copilot answers from the live match and from the newest 50 finished matches
+in \texttt{.data/matches.json}.
+Cards never come from the model.
+Web search is off until enabled: Wikipedia, or Tavily with \texttt{KICKSTREAM\_TAVILY\_API\_KEY}.
+The same read-only answers are MCP tools at \texttt{POST /mcp}.
+
+The fan zone starts on a demo feed.
+X is optional.
+Other platforms post to \texttt{POST /api/fans/ingest}.
+Kickstream shows superchats and takes no payment.
+
+Auto live (\texttt{/live}) cycles 22 scenes, including one per match agent, every
+5 to 10 minutes.
+Stream 24/7 publishes \texttt{/live?output} and restarts it if it drops.
+It waits while the studio is on air.
+
+\section{Security, privacy, and identity}
+% area:security-privacy-identity
+
+On a developer machine the application has no sign-in of its own.
+Anyone who can reach the pipeline can stream to the configured channels, so the
+API stays on that machine.
+Stream keys live in \texttt{.data/output-keys.json} and are never sent back to a page.
+A guest tunnel must be listed in \texttt{KICKSTREAM\_PUBLIC\_HOSTS} first.
+If that list is empty, the gate is off and the tunnel would open the whole studio.
+
+On Azure, Container Apps authentication signs studio users in with Microsoft Entra ID.
+The application registration is named ``Kickstream studio'' plus the resource name.
+\texttt{sign\_in\_audience} is \texttt{AzureADMyOrg}.
+The only Graph permission is \texttt{User.Read}.
+App-role assignment is required.
+The deployer and every object id in \texttt{studio\_users} receive default access.
+The app reads \texttt{KICKSTREAM\_SIGNED\_IN\_HEADER}, set to \texttt{x-ms-client-principal-id}.
+When \texttt{public\_view} is true, anonymous clients reach the app and the app
+keeps \texttt{/live} and \texttt{/match} read-only, sending studio pages to
+\texttt{/.auth/login/aad}.
+When it is false, anonymous clients are redirected to login.
+\texttt{/guest/*}, \texttt{/api/guest/*}, and \texttt{/assets/*} stay open either way.
+
+\begin{center}
+\begin{tikzpicture}[
+  box/.style={draw=CommBlue, line width=0.6pt, fill=Wash, rounded corners=2pt,
+    align=center, font=\scriptsize, text=Ink, inner sep=1.1mm,
+    minimum height=8mm, minimum width=28mm},
+  arr/.style={-{Stealth[length=1.5mm]}, draw=CommBlue, line width=0.6pt},
+  lab/.style={font=\scriptsize\bfseries, text=Muted, anchor=east}
+]
+  \node[lab] at (0,0) {Local};
+  \node[box] (a) at (2.5,0) {Page};
+  \node[box] (b) at (6.8,0) {No sign-in};
+  \node[box, minimum width=38mm] (c) at (11.6,0) {Keys stay off the page};
+  \draw[arr] (a) -- (b);
+  \draw[arr] (b) -- (c);
+  \node[lab] at (0,-1.5) {Azure};
+  \node[box] (d) at (2.5,-1.5) {Page};
+  \node[box] (e) at (6.8,-1.5) {Entra gate};
+  \node[box, minimum width=38mm] (f) at (11.6,-1.5) {Read-only or studio};
+  \draw[arr] (d) -- (e);
+  \draw[arr] (e) -- (f);
+\end{tikzpicture}
+\end{center}
+{\small\color{Muted} AzureADMyOrg. Public view keeps \texttt{/live} and \texttt{/match} read-only. Studio pages go to sign-in.\par}
+
+Cosmos DB has \texttt{local\_authentication\_enabled = false}.
+The Container App's system-assigned identity holds Cosmos DB Built-in Data Contributor
+on that account only.
+Foundry is not created by Terraform.
+If \texttt{foundry\_resource\_id} is set, the same identity receives Azure AI User
+on that existing resource.
+
+Container App secrets are the registry admin password, the Communication Services
+connection string, the Entra client secret, the Speech key, and, only when
+provided, the API-Football key and the LLM key.
+The file share is Standard LRS with TLS 1.2 minimum, mounted with the storage
+account access key.
+The registry is Basic with the admin user enabled.
+
+Fan text is truncated and shown as plain text.
+MCP on a deployment sits behind the studio sign-in and only reads.
+A co-host can end or delete the broadcast and can go live.
+Synthetic clubs are fictional.
+Favourite-club preferences stay in the browser.
+
+\section{Deployment and operations}
+% area:deployment-and-operations
+
+\texttt{deploy/deploy.ps1} and \texttt{deploy/deploy.sh} require the Azure CLI
+and Terraform 1.9 or newer.
+They set \texttt{ARM\_SUBSCRIPTION\_ID} from \texttt{az account show}, apply the
+container registry first, build \texttt{kickstream:<tag>}, then apply the rest
+with \texttt{image\_tag}.
+Build uses \texttt{az acr build}, or local Docker with \texttt{-LocalBuild} or
+\texttt{--local-build}.
+\texttt{deploy/destroy.ps1} asks before deleting the stack and the app registration
+unless \texttt{-Force} is passed.
+\texttt{deploy/destroy.sh} is the shell counterpart.
+
+Providers: \texttt{azurerm} approximately 4.0, \texttt{azuread} approximately 3.0,
+\texttt{azapi} approximately 2.0, \texttt{random} approximately 3.6.
+Default region is \texttt{centralindia}.
+Communication Services data location defaults to India.
+
+\begin{center}
+\begin{tikzpicture}[
+  box/.style={draw=CommBlue, line width=0.6pt, fill=Wash, rounded corners=2pt,
+    align=center, font=\scriptsize, text=Ink, inner sep=1.4mm},
+  core/.style={box, fill=CommBlue, text=white, font=\scriptsize\bfseries, minimum width=34mm, minimum height=12mm},
+  arr/.style={-{Stealth[length=1.6mm]}, draw=CommBlue, line width=0.6pt}
+]
+  \node[core] (ca) at (0,0) {Container App\\1 replica};
+  \node[box] (reg) at (-4.6,1.7) {Registry};
+  \node[box] (files) at (0,1.7) {Files, 10 GiB};
+  \node[box] (cos) at (4.6,1.7) {Cosmos, 90 days};
+  \node[box] (acs) at (-4.6,-1.7) {Calls};
+  \node[box] (sp) at (0,-1.7) {Speech, S0};
+  \node[box] (id) at (4.6,-1.7) {Entra gate};
+  \draw[arr] (reg) -- (ca);
+  \draw[arr] (files) -- (ca);
+  \draw[arr] (cos) -- (ca);
+  \draw[arr] (acs) -- (ca);
+  \draw[arr] (sp) -- (ca);
+  \draw[arr] (id) -- (ca);
+\end{tikzpicture}
+\end{center}
+{\small\color{Muted} Terraform creates these resources and no others. Foundry is not one of them.\par}
+Registered namespaces: \texttt{Microsoft.App}, \texttt{Microsoft.CognitiveServices},
+\texttt{Microsoft.Communication}, \texttt{Microsoft.ContainerRegistry},
+\texttt{Microsoft.DocumentDB}, \texttt{Microsoft.OperationalInsights},
+\texttt{Microsoft.Storage}.
+
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+Resource & What the template sets \\
+\midrule
+Resource group \texttt{rg-\$\{name\}} & Deletion is not blocked while resources remain \\
+Log Analytics & PerGB2018, 30-day retention, permanently deleted on destroy \\
+Container Registry & Basic, admin user enabled \\
+Storage and share \texttt{data} & Standard LRS, TLS 1.2, 10 GiB, mounted at \texttt{/data} \\
+Communication Services & Guest rooms \\
+Azure AI Speech & Kind SpeechServices, SKU F0 or S0, default S0 \\
+Cosmos DB & Serverless, session, keys off, container \texttt{match\_log}, TTL default 90 days \\
+Container Apps environment & \texttt{cae-\$\{name\}}, attached to Log Analytics \\
+Container App & External ingress port 8000, one replica, 2 vCPU, 4 GiB \\
+Entra auth config \texttt{current} & Studio gate. Not a Marketplace purchase app \\
+Azure AI User & Only when \texttt{foundry\_resource\_id} is set \\
+\bottomrule
+\end{tabularx}
+
+The container size is 2 vCPU and 4 GiB because the hidden browser and ffmpeg need
+at least two vCPU, and Container Apps pairs 2 GiB with each vCPU.
+Both probes call \texttt{/api/health} on port 8000, past the sign-in.
+Startup runs every 10 seconds and allows 30 failures.
+Liveness waits 30 seconds, then every 30 seconds, and allows 6 failures.
+The payload reports the match, the stream state, and whether auto live is on.
+
+Defaults in variables, overridable from \texttt{terraform.tfvars}:
+\texttt{autolive} true, \texttt{public\_view} true, \texttt{real\_sources} false,
+\texttt{speech\_sku} S0, \texttt{speech\_daily\_chars} 200000,
+\texttt{match\_log\_ttl\_days} 90.
+Watch Log Analytics (30 days), \texttt{/api/health}, the per-destination status
+in the studio, the file share (Record to file plus Stream 24/7 fills 10 GiB),
+and the speech character cap (past it, captured auto-live speech goes quiet
+until midnight UTC).
+
+\section{Integrations and data sources}
+% area:integrations-and-data-sources
+
+Kickstream encodes one program and copies it.
+It does not host the public video.
+
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+Destination & Host supplies \\
+\midrule
+YouTube, Facebook, Twitch & A stream key. The ingest address is filled in \\
+X & The account's server address and stream key \\
+Record to file & Nothing. An MP4 is written on the data share \\
+\bottomrule
+\end{tabularx}
+
+\begin{center}
+\begin{tikzpicture}[
+  box/.style={draw=CommBlue, line width=0.6pt, fill=Wash, rounded corners=2pt,
+    align=center, font=\scriptsize, text=Ink, inner sep=1mm,
+    minimum height=8mm, minimum width=22mm},
+  src/.style={box, fill=CommBlue, text=white, font=\scriptsize\bfseries, minimum width=28mm},
+  arr/.style={-{Stealth[length=1.5mm]}, draw=CommBlue, line width=0.6pt}
+]
+  \node[src] (e) at (6.2,0) {One encode};
+  \node[box] (yt) at (0,-1.7) {YouTube};
+  \node[box] (x) at (3.1,-1.7) {X};
+  \node[box] (fb) at (6.2,-1.7) {Facebook};
+  \node[box] (tw) at (9.3,-1.7) {Twitch};
+  \node[box] (rec) at (12.4,-1.7) {File};
+  \draw[CommBlue, line width=0.6pt] (e.south) -- (6.2,-0.55);
+  \draw[CommBlue, line width=0.6pt] (0,-0.55) -- (12.4,-0.55);
+  \draw[arr] (0,-0.55) -- (yt.north);
+  \draw[arr] (3.1,-0.55) -- (x.north);
+  \draw[arr] (6.2,-0.55) -- (fb.north);
+  \draw[arr] (9.3,-0.55) -- (tw.north);
+  \draw[arr] (12.4,-0.55) -- (rec.north);
+\end{tikzpicture}
+\end{center}
+{\small\color{Muted} ffmpeg copies that picture. One failure does not stop the others.\par}
+
+Do not run the pipeline with \texttt{--reload} while going live: on Windows that
+mode cannot start ffmpeg.
+
+A deploy offers the synthetic match only unless \texttt{real\_sources = true}.
+Live feeds have key events and no ball positions.
+Pitch widgets then show that the coordinate is not available, rather than an invented one.
+
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+Source & Licence and limit \\
+\midrule
+Synthetic match & Fictional clubs. Same seed, same match. Default on a deploy \\
+Detector file & \texttt{KICKSTREAM\_DETECTOR\_FILE}. No video decoder in Kickstream \\
+StatsBomb Open Data & StatsBomb Open Data is non-commercial and must not ship in a paid offer. Attribution: logo and ``Data: StatsBomb'' \\
+API-Football & Free key, about 100 requests a day. One match is on the order of 80 requests \\
+OpenLigaDB & No key, ODbL, credit ``Data: OpenLigaDB''. Clock estimated from kick-off. Default leagues \texttt{bl1,la1,ucl} \\
+\bottomrule
+\end{tabularx}
+
+The bars are API-Football requests. They are provider limits, not a measured audience.
+
+\begin{center}
+\begin{tikzpicture}[x=1.15mm, y=1mm]
+  \node[anchor=east, font=\small, text=Ink] at (-3,13) {One match};
+  \fill[CommBlue] (0,10) rectangle (80,16);
+  \node[anchor=west, font=\scriptsize, text=Muted] at (83,13) {80};
+  \node[anchor=east, font=\small, text=Ink] at (-3,3) {Free day};
+  \fill[CommBlue!45!Canvas] (0,0) rectangle (100,6);
+  \node[anchor=west, font=\scriptsize, text=Muted] at (103,3) {100};
+  \draw[Rule] (0,-2) -- (100,-2);
+  \node[font=\scriptsize, text=Muted, anchor=north west] at (0,-3) {0};
+  \node[font=\scriptsize, text=Muted, anchor=north] at (100,-3) {100};
+\end{tikzpicture}
+\end{center}
+
+Azure AI Speech is the voice the capture can hear.
+F0 allows 0.5 million characters a month; S0 bills per character.
+The daily cap defaults to 200000.
+Microsoft Foundry is used when both the project endpoint and the deployment name
+are set; otherwise \texttt{KICKSTREAM\_LLM\_BASE\_URL}, \texttt{KICKSTREAM\_LLM\_MODEL},
+and \texttt{KICKSTREAM\_LLM\_API\_KEY}.
+\texttt{KICKSTREAM\_LLM\_MAX\_CALLS} defaults to 60 narration calls a match.
+Copilot web search uses Wikipedia, or Tavily when its key is set.
+The X and Tavily adapters are tested against documented payloads, not against
+those live services.
+Guest rooms use Communication Services, or \texttt{KICKSTREAM\_ROOMS=fake} locally.
+
+\section{Assumptions, constraints, and risks}
+% area:assumptions-constraints-risks
+
+\subsection{Assumptions}
+
+The deploying operator can create the resource group, the Entra application, and
+the role assignments.
+The image can run ffmpeg and Chromium.
+Synthetic clubs are fictional, and a head-to-head is only matches this
+installation has finished.
+Viewers share narration; personalization is a gateway filter.
+A model is optional. Templates are the supported path when no endpoint is set.
+
+\subsection{Constraints}
+
+StatsBomb Open Data is non-commercial and must not ship in a paid offer.
+Kickstream does not implement Microsoft Marketplace SaaS fulfillment, an Entra
+purchase landing page, or a live Partner Center offer.
+
+One replica only.
+Live feeds do not include ball positions.
+API-Football's free plan is about 100 requests a day.
+OpenLigaDB can arrive late, and its clock is estimated.
+Explainability and Ask Copilot are English.
+The stream has no bed and no crowd.
+Reel in-points are fixed at 8 seconds before the moment, for 15 seconds.
+The current templates pull the image with the registry admin user and mount
+files with the storage account key.
+
+\subsection{Risks}
+
+A replica restart drops the in-memory match and the ffmpeg process.
+The file share and the Cosmos log remain.
+
+\begin{center}
+\begin{tikzpicture}[
+  box/.style={draw=CommBlue, line width=0.6pt, fill=Wash, rounded corners=2pt,
+    align=center, font=\scriptsize, text=Ink, inner sep=1.2mm,
+    minimum width=36mm, minimum height=12mm},
+  gone/.style={box, draw=Muted, fill=Canvas}
+]
+  \node[gone] (m) {Memory\\gone};
+  \node[box, right=10mm of m] (f) {Files\\remain};
+  \node[box, right=10mm of f] (c) {Cosmos log\\remains};
+\end{tikzpicture}
+\end{center}
+
+Auto live can restart a 24/7 stream from saved settings.
+A studio encode does not resume itself.
+The default public view lets anyone watch \texttt{/live} and \texttt{/match} read-only.
+An empty public-host list plus a tunnel exposes studio controls.
+A co-host invite is an operator credential.
+S0 speech spends money per character, and the daily cap makes the captured voice
+go quiet rather than switching the encode to the browser voice.
+Record to file with Stream 24/7 fills the 10 GiB share.
+Cosmos has a single region.
+One failed destination does not stop the others, and nothing fails over to a
+second region.
+
+The safe commercial reading is: operate the synthetic match, or a feed you have
+a right to use; keep StatsBomb off any paid offer; and do not describe a
+Marketplace purchase flow as part of the product that ships today.
+
+\end{document}

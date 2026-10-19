@@ -213,6 +213,24 @@ test("one person on stage fills the box, and name tags can be switched off", () 
   expect(screen.queryByText("Sam")).toBeNull();
 });
 
+test("as circles, each person on stage gets a round camera the same size, side by side", () => {
+  const cameras = [
+    { id: "i1", name: "Sam Lee", acsId: null, present: true },
+    { id: "i2", name: "Kim", acsId: null, present: true },
+    { id: "i3", name: "Alex", acsId: null, present: true },
+  ];
+  show("cameras", { cameras }, { names: true, shape: "circle" });
+  const tiles = screen.getAllByTestId("camera-tile");
+  expect(tiles).toHaveLength(3);
+  for (const tile of tiles) {
+    expect(tile.style.borderRadius).toBe("50%");
+    // 400 wide less two 16 gaps, shared by three: each circle is 122 across, under the box's 200 height.
+    expect([tile.style.width, tile.style.height]).toEqual(["122px", "122px"]);
+  }
+  expect(screen.getByTestId("program-cameras").style.display).toBe("flex");
+  expect(screen.getByText("Kim")).toBeTruthy();
+});
+
 test("with no one on stage the cameras element shows nothing", () => {
   show("cameras");
   expect(screen.queryByTestId("program-cameras")).toBeNull();

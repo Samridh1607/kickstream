@@ -3,7 +3,7 @@
 import asyncio
 import contextlib
 import functools
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import AsyncIterable, Awaitable, Callable, Mapping
 from types import MappingProxyType
 
 from kickstream.contracts import MatchStatus, RunningMatch, TeamSheet
@@ -13,7 +13,10 @@ from kickstream.ports.bus import STATUS, EventBus
 from kickstream.ports.clock import Clock
 from kickstream.ports.match_source import LiveSource, ReplaySource, SourceFailure, SourceUnavailable
 from kickstream.simulator.generate import generate
+from kickstream.simulator.reader import EventReader
 from kickstream.simulator.stage import Simulator
+
+DETECTOR_SETUP = "Set KICKSTREAM_DETECTOR_FILE to the JSON Lines file your detector writes MatchEvents to."
 
 
 class MatchController:
@@ -29,8 +32,10 @@ class MatchController:
         live: Mapping[str, LiveSource] = MappingProxyType({}),
         live_match: Callable[..., LiveMatch] | None = None,
         live_poll_s: float | None = None,
+        detector: Callable[[], AsyncIterable[str]] | None = None,
     ) -> None:
         self._bus = bus
+        self._detector = detector
         self._clock_factory = clock_factory
         self._home = home
         self._away = away
@@ -40,7 +45,7 @@ class MatchController:
         self._started: list[str] = []
         self._teams = (home, away)
         self._running: RunningMatch | None = None
-        self._runner: Simulator | LiveMatch | None = None
+        self._runner: Simulator | LiveMatch | EventReader | None = None
         self._task: asyncio.Task | None = None
         self._prefix = prefix
         # Starting and stopping each span several awaits; overlapping calls must not interleave.
@@ -62,7 +67,7 @@ class MatchController:
     def running(self) -> RunningMatch | None:
         if self._task is None or self._task.done():
             return None
-        if isinstance(self._runner, LiveMatch):
+        if isinstance(self._runner, LiveMatch | EventReader):
             return self._running.model_copy(update={"problem": self._runner.problem})
         return self._running
 
@@ -88,8 +93,14 @@ class MatchController:
 
     async def _prepare(
         self, match_id: str, seed: int, speed: float, source: str, ref: str | None
-    ) -> tuple[TeamSheet, TeamSheet, Simulator | LiveMatch, Callable[[], Awaitable[None]]]:
+    ) -> tuple[TeamSheet, TeamSheet, Simulator | LiveMatch | EventReader, Callable[[], Awaitable[None]]]:
         """Everything that can fail happens here, before the running match is touched."""
+        if source == "detector":
+            if self._detector is None:
+                raise SourceUnavailable(DETECTOR_SETUP)
+            home, away = self._home, self._away
+            reader = EventReader(self._bus, self._detector())
+            return home, away, reader, functools.partial(reader.follow, match_id, home, away)
         if source == "simulated":
             home, away = self._home, self._away
             simulator = Simulator(self._bus, self._clock_factory(speed))

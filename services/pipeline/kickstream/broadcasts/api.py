@@ -1,6 +1,7 @@
 from collections.abc import Collection
+from urllib.parse import unquote
 
-from fastapi import APIRouter, HTTPException, WebSocket
+from fastapi import APIRouter, HTTPException, Request, WebSocket
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sse_starlette.sse import EventSourceResponse
@@ -93,6 +94,30 @@ def build_broadcasts_router(*, service: BroadcastService, socket_hosts: Collecti
     async def delete_reel(broadcast_id: str, reel_id: str) -> Broadcasts:
         service.delete_reel(broadcast_id, reel_id)
         return service.view()
+
+    @router.put(f"{BASE}/{{broadcast_id}}/reels/{{reel_id}}/edited")
+    async def put_edited(broadcast_id: str, reel_id: str, request: Request) -> Broadcasts:
+        # The body is the video itself; its name comes percent-encoded, as a header can carry only ASCII.
+        name = unquote(request.headers.get("x-file-name", ""))
+        await service.add_edited(broadcast_id, reel_id, request.stream(), name)
+        return service.view()
+
+    @router.delete(f"{BASE}/{{broadcast_id}}/reels/{{reel_id}}/edited")
+    async def delete_edited(broadcast_id: str, reel_id: str) -> Broadcasts:
+        service.remove_edited(broadcast_id, reel_id)
+        return service.view()
+
+    @router.get(f"{BASE}/{{broadcast_id}}/reels/{{reel_id}}/edited.mp4")
+    async def get_edited(broadcast_id: str, reel_id: str) -> FileResponse:
+        path = service.edited_file(broadcast_id, reel_id)
+        if path is None:
+            raise HTTPException(404, _NOT_HERE)
+        return FileResponse(
+            path,
+            media_type="video/mp4",
+            filename=f"reel-{reel_id}-edited.mp4",
+            content_disposition_type="inline",
+        )
 
     @router.get(f"{BASE}/{{broadcast_id}}/recordings/{{file}}")
     async def get_recording(broadcast_id: str, file: str) -> FileResponse:

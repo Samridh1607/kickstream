@@ -4,6 +4,7 @@ from dataclasses import replace
 import pytest
 
 from kickstream.adapters.agent_writer import AgentNarrativeWriter, moment_prompt, parse_json, recap_prompt
+from kickstream.adapters.model_client import openai_compatible
 from kickstream.adapters.scripted_writer import ScriptedNarrativeWriter
 from kickstream.domain.types import VARIANTS
 from kickstream.narration.service import NarrationService
@@ -27,7 +28,7 @@ def llm(server):
 
 
 def writer(llm):
-    return AgentNarrativeWriter(base_url=llm.base_url, model="fake-model", api_key="test-key")
+    return AgentNarrativeWriter(openai_compatible(llm.base_url, "fake-model", "test-key"), "fake-model")
 
 
 async def test_moment_is_written_by_two_agents_then_localized(llm):
@@ -159,7 +160,9 @@ async def test_service_falls_back_to_scripted_when_the_agents_misbehave(llm):
 
 
 async def test_service_falls_back_when_the_endpoint_is_unreachable():
-    dead = AgentNarrativeWriter(base_url="http://127.0.0.1:9/v1", model="fake-model", api_key="test-key")
+    dead = AgentNarrativeWriter(
+        openai_compatible("http://127.0.0.1:9/v1", "fake-model", "test-key"), "fake-model"
+    )
     narratives = await NarrationService(ScriptedNarrativeWriter(), dead, timeout_s=3).moment(moment_ctx())
     assert {n.source for n in narratives} == {"scripted"}
 

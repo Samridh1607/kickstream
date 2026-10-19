@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solution overview · Kickstream IT solution</title>
+  <link rel="stylesheet" href="theme.css">
+</head>
+<body>
+  <header class="ks-header">
+    <div class="ks-header-inner">
+      <a class="ks-brand" href="index.html">
+        <span class="ks-mark" aria-hidden="true"></span>
+        <span class="ks-brand-name">Kickstream</span>
+        <span class="ks-brand-sub">IT solution</span>
+      </a>
+      <nav class="ks-nav" aria-label="Solution documents">
+        <a href="index.html" aria-current="page">Overview</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="capabilities.html">Capabilities</a>
+        <a href="security.html">Security</a>
+        <a href="operations.html">Operations</a>
+        <a href="integrations.html">Integrations</a>
+        <a href="constraints.html">Constraints</a>
+      </nav>
+    </div>
+  </header>
+  <main class="ks-main">
+    <article class="ks-sheet">
+      <p class="ks-eyebrow">Solution overview and scope</p>
+      <h1>Kickstream solution overview and scope</h1>
+      <section data-area="solution-overview">
+        <p class="ks-lead">Kickstream is live-streaming software for football. A host creates a broadcast, composes scenes in the studio, and goes live to YouTube, X, Facebook and Twitch at once. What the program shows comes from a match event stream turned into live intelligence, AI narratives and recaps. Agents then cut the recording’s best moments into vertical reels.</p>
+        <figure class="ks-figure">
+          <img src="figures/home.png" alt="Kickstream home during a synthetic match">
+          <figcaption>Local demo. Home shows the next broadcast, the program preview, and each destination. The match is synthetic.</figcaption>
+        </figure>
+        <div class="ks-pair">
+          <figure class="ks-figure">
+            <img src="figures/studio.png" alt="Kickstream studio with the program and the scene strip">
+            <figcaption>Studio. A scene strip under the stage switches the program with a click. Keyboard shortcuts are not implemented.</figcaption>
+          </figure>
+          <figure class="ks-figure">
+            <img src="figures/match.png" alt="Kickstream match data for a synthetic fixture">
+            <figcaption>Match data. Seven agents, the agent flow, and the 3D pitch. Clubs are fictional.</figcaption>
+          </figure>
+        </div>
+        <p>This set describes the software in this repository: the web studio, the Python pipeline, and the Azure resources <code>deploy/terraform</code> actually creates. It is the solution description an architect or operator can build from. It is not a store listing.</p>
+        <div class="ks-note">
+          <p>Kickstream does not implement Microsoft Marketplace SaaS fulfillment, an Entra purchase landing page, or a live Partner Center offer. The Entra application in <code>deploy/terraform/auth.tf</code> is a single-tenant studio gate for the deployer, not a buyer sign-in.</p>
+        </div>
+        <div class="ks-grid">
+          <div class="ks-card">
+            <h3>Studio</h3>
+            <p>Home, broadcast, and studio. Scenes, banners, guests, and one Go live control.</p>
+          </div>
+          <div class="ks-card">
+            <h3>Match pipeline</h3>
+            <p>Ingest, interpret, explain, render, and personalize, plus seven match agents.</p>
+          </div>
+          <div class="ks-card">
+            <h3>Azure deploy</h3>
+            <p>One Container App, Cosmos match log, Communication Services, Speech, Files, Registry.</p>
+          </div>
+          <div class="ks-card">
+            <h3>Local run</h3>
+            <p>Python 3.13 and Node 24. A seeded 90-minute match plays in about three minutes.</p>
+          </div>
+        </div>
+        <h2>What is in scope</h2>
+        <ul>
+          <li>The web app in <code>apps/web</code>: home (<code>/</code>), a broadcast (<code>/broadcasts/{id}</code>), that broadcast’s studio, <code>/studio</code>, match data (<code>/match</code>), a guest page (<code>/guest/{secret}</code>), and auto live (<code>/live</code>).</li>
+          <li>The pipeline in <code>services/pipeline</code>: FastAPI on port 8000, match simulation or a chosen source, analytics, narration, overlay, gateway (Server-Sent Events and WebSockets), output to platforms, fans, broadcasts, reels, and Ask Copilot.</li>
+          <li>The deployment in <code>deploy/</code>: Terraform for the resource group, and <code>deploy.ps1</code> / <code>deploy.sh</code> to build the image and apply it.</li>
+          <li>Languages on the match surface: English, Spanish, and Hindi. Commentary modes: Fan and Analyst.</li>
+        </ul>
+        <h2>What is out of scope</h2>
+        <ul>
+          <li>A transactable Marketplace offer, fulfillment webhooks, metering, or a purchase landing page that resolves a Marketplace token.</li>
+          <li>StatsBomb Open Data inside a paid offer. That source is non-commercial and is off unless <code>real_sources</code> is set. See Integrations.</li>
+          <li>A video detector. The synthetic match, or a JSON Lines file named by <code>KICKSTREAM_DETECTOR_FILE</code>, stands in for detections. There is no video understanding in the pipeline.</li>
+          <li>Taking money from fans. Superchats are displayed. Payment stays on the platform the fan already used.</li>
+        </ul>
+        <h2>How to read the set</h2>
+        <table>
+          <thead>
+            <tr><th>Document</th><th>What it settles</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><a href="architecture.html">Architecture and data flow</a></td><td>The one process, the pipeline stages, and where state lives.</td></tr>
+            <tr><td><a href="capabilities.html">Functional capabilities</a></td><td>Studio, agents, Copilot, fan zone, auto live, broadcasts, and reels.</td></tr>
+            <tr><td><a href="security.html">Security, privacy, and identity</a></td><td>Local exposure, the Entra studio gate, secrets, and the match log.</td></tr>
+            <tr><td><a href="operations.html">Deployment and operations</a></td><td>Terraform resources, probes, scale, and the deploy scripts.</td></tr>
+            <tr><td><a href="integrations.html">Integrations and data sources</a></td><td>Platforms, match feeds, speech, models, and licences.</td></tr>
+            <tr><td><a href="constraints.html">Assumptions, constraints, and risks</a></td><td>Single replica, data licences, and what is not built.</td></tr>
+          </tbody>
+        </table>
+        <p class="ks-muted">The same text is typeset as <a href="kickstream-solution.pdf">kickstream-solution.pdf</a>. The briefing deck is <a href="kickstream-briefing.pdf">kickstream-briefing.pdf</a>.</p>
+      </section>
+    </article>
+  </main>
+  <footer class="ks-footer">
+    <p>Kickstream IT solution set. Describes this repository. It is not a Microsoft Marketplace listing.</p>
+  </footer>
+</body>
+</html>

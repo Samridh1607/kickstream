@@ -8,10 +8,10 @@ async function watchWakeLock(page: Page) {
   await page.addInitScript(() => {
     const seen: string[] = [];
     (window as unknown as { __wake: string[] }).__wake = seen;
-    const lock = (navigator as Navigator & { wakeLock?: { request(type: string): Promise<unknown> } }).wakeLock;
+    const lock = (navigator as unknown as { wakeLock?: { request(type?: string): Promise<unknown> } }).wakeLock;
     if (!lock) return;
     const request = lock.request.bind(lock);
-    lock.request = (type: string) => {
+    lock.request = (type?: string) => {
       seen.push(`asked:${type}`);
       return request(type).then(
         (sentinel) => { seen.push("held"); return sentinel; },

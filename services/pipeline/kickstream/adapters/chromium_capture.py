@@ -177,6 +177,17 @@ class ChromiumCapture:
                 ),
             )
             await self._within(browser_late, self._honest_user_agent())
+            # The program shows this computer's camera and carries its microphone when the studio
+            # asks for them. Only those two, and only for the program's own address: never the screen.
+            parts = urllib.parse.urlsplit(url)
+            await self._within(
+                browser_late,
+                self._call(
+                    "Browser.grantPermissions",
+                    origin=f"{parts.scheme}://{parts.netloc}",
+                    permissions=["videoCapture", "audioCapture"],
+                ),
+            )
             await self._within(browser_late, self._call("Page.navigate", url=url))
             await self._within(page_late, self._until_ready())
             await self._within(browser_late, self._size_content(width, height))

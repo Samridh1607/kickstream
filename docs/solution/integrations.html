@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Integrations · Kickstream IT solution</title>
+  <link rel="stylesheet" href="theme.css">
+</head>
+<body>
+  <header class="ks-header">
+    <div class="ks-header-inner">
+      <a class="ks-brand" href="index.html">
+        <span class="ks-mark" aria-hidden="true"></span>
+        <span class="ks-brand-name">Kickstream</span>
+        <span class="ks-brand-sub">IT solution</span>
+      </a>
+      <nav class="ks-nav" aria-label="Solution documents">
+        <a href="index.html">Overview</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="capabilities.html">Capabilities</a>
+        <a href="security.html">Security</a>
+        <a href="operations.html">Operations</a>
+        <a href="integrations.html" aria-current="page">Integrations</a>
+        <a href="constraints.html">Constraints</a>
+      </nav>
+    </div>
+  </header>
+  <main class="ks-main">
+    <article class="ks-sheet">
+      <p class="ks-eyebrow">Integrations and data sources</p>
+      <h1>Platforms, match feeds, speech, and models</h1>
+      <section data-area="integrations-and-data-sources">
+        <p class="ks-lead">Kickstream does not host the public video. It encodes one program and copies it to destinations the host already created. Match events come from a simulator, a detector file, or an optional feed. Models and speech are optional; templates and the browser voice cover the gaps.</p>
+        <figure class="ks-figure">
+          <svg viewBox="0 0 760 150" role="img" aria-label="One encode is copied to YouTube, X, Facebook, Twitch, and a file">
+            <style>
+              .n { fill: #F5F5F5; stroke: #0078D4; stroke-width: 1.5; }
+              .c { fill: #0078D4; }
+              .t { font: 600 13px "Segoe UI Variable", "Segoe UI", sans-serif; fill: #242424; }
+              .w { font: 600 13px "Segoe UI Variable", "Segoe UI", sans-serif; fill: #FFFFFF; }
+              .s { font: 12px "Segoe UI Variable", "Segoe UI", sans-serif; fill: #616161; }
+            </style>
+            <defs>
+              <marker id="copy" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0 0 L6 3 L0 6 Z" fill="#0078D4"/>
+              </marker>
+            </defs>
+            <rect class="c" x="300" y="8" width="160" height="36" rx="4"/>
+            <text class="w" x="380" y="31" text-anchor="middle">One encode</text>
+            <path d="M380 44 V68 M76 68 H651" stroke="#0078D4" stroke-width="1.6" fill="none"/>
+            <rect class="n" x="16" y="84" width="120" height="36" rx="4"/>
+            <rect class="n" x="156" y="84" width="100" height="36" rx="4"/>
+            <rect class="n" x="276" y="84" width="130" height="36" rx="4"/>
+            <rect class="n" x="426" y="84" width="120" height="36" rx="4"/>
+            <rect class="n" x="566" y="84" width="170" height="36" rx="4"/>
+            <text class="t" x="76" y="107" text-anchor="middle">YouTube</text>
+            <text class="t" x="206" y="107" text-anchor="middle">X</text>
+            <text class="t" x="341" y="107" text-anchor="middle">Facebook</text>
+            <text class="t" x="486" y="107" text-anchor="middle">Twitch</text>
+            <text class="t" x="651" y="107" text-anchor="middle">Record to file</text>
+            <path d="M76 68 V84" stroke="#0078D4" stroke-width="1.6" fill="none" marker-end="url(#copy)"/>
+            <path d="M206 68 V84" stroke="#0078D4" stroke-width="1.6" fill="none" marker-end="url(#copy)"/>
+            <path d="M341 68 V84" stroke="#0078D4" stroke-width="1.6" fill="none" marker-end="url(#copy)"/>
+            <path d="M486 68 V84" stroke="#0078D4" stroke-width="1.6" fill="none" marker-end="url(#copy)"/>
+            <path d="M651 68 V84" stroke="#0078D4" stroke-width="1.6" fill="none" marker-end="url(#copy)"/>
+            <text class="s" x="380" y="142" text-anchor="middle">ffmpeg copies that picture. One failure does not stop the others.</text>
+          </svg>
+          <figcaption>Destinations the host already created. Record to file needs no stream key.</figcaption>
+        </figure>
+        <h2>Stream destinations</h2>
+        <table>
+          <thead>
+            <tr><th>Destination</th><th>What the host supplies</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>YouTube</td><td>A stream key from YouTube Studio. The ingest address is filled in.</td></tr>
+            <tr><td>Facebook</td><td>A stream key from Facebook Live Producer. The ingest address is filled in.</td></tr>
+            <tr><td>Twitch</td><td>A stream key. The ingest address is filled in.</td></tr>
+            <tr><td>X</td><td>The account’s own server address and stream key from X Media Studio.</td></tr>
+            <tr><td>Record to file</td><td>Nothing. An MP4 is written under the data directory.</td></tr>
+          </tbody>
+        </table>
+        <p>Encode needs ffmpeg and a Chromium-based browser. <code>KICKSTREAM_FFMPEG</code> and <code>KICKSTREAM_BROWSER</code> override the paths. <code>KICKSTREAM_PROGRAM_URL</code> is the page the hidden browser opens (default the local studio output). Do not run the pipeline with <code>--reload</code> when going live: on Windows that mode cannot start ffmpeg.</p>
+        <h2>Match sources</h2>
+        <p>A deployment made with <code>deploy/</code> offers the synthetic match only, unless <code>real_sources = true</code>. Locally the Match tool can also select the sources below. Live feeds carry key events (score, goals, cards, substitutions, and some team stats from API-Football) and no ball positions. Pitch, 3D pitch, replays, momentum, expected-goals graphs, next-action prediction, and the tactics chart then show “Not available with live data” instead of invented coordinates. The Tactical Analyst and the Visualization Agent sit out.</p>
+        <table>
+          <thead>
+            <tr><th>Source</th><th>Kind</th><th>Licence and limit</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Synthetic match</td><td>Replay at 30× by default, or real time, 2×, 5×, 10×</td><td>Fictional clubs and players. The same seed is the same match. This is what a deploy offers by default.</td></tr>
+            <tr><td>Detector file</td><td>JSON Lines appended by an external detector</td><td><code>KICKSTREAM_DETECTOR_FILE</code>. <code>id</code>, <code>match_id</code>, and <code>seq</code> are numbered on arrival. A line that cannot be read is skipped. There is no video decoder in Kickstream.</td></tr>
+            <tr><td>StatsBomb Open Data</td><td>Past matches with positions and StatsBomb expected goals</td><td>StatsBomb Open Data is non-commercial and must not ship in a paid offer. Free for non-commercial use with attribution. The program shows the StatsBomb logo and “Data: StatsBomb”. Files cache under <code>.data/statsbomb/</code>.</td></tr>
+            <tr><td>API-Football</td><td>Live fixtures</td><td>Free key, about 100 requests a day and 10 a minute. Polled on a schedule (about 80 requests for one match). The day’s count is kept in <code>.data/api-football-budget.json</code> and resets at midnight UTC. The key is <code>KICKSTREAM_API_FOOTBALL_KEY</code>.</td></tr>
+            <tr><td>OpenLigaDB</td><td>Live scores for listed leagues</td><td>No key. Data under the ODbL licence. Credit “Data: OpenLigaDB”. Default leagues <code>bl1,la1,ucl</code>, overridable with <code>KICKSTREAM_OPENLIGADB_LEAGUES</code>. The clock is estimated from kick-off. Polled every 60 seconds while live.</td></tr>
+          </tbody>
+        </table>
+        <div class="ks-bars" aria-label="API-Football request limits">
+          <div><span>One match</span><span class="ks-bar"><i style="width: 80%"></i></span><span>80</span></div>
+          <div><span>Free day</span><span class="ks-bar"><i style="width: 100%"></i></span><span>100</span></div>
+        </div>
+        <p class="ks-muted">API-Football requests. About 80 for one match, and about 100 on the free plan for a day. These are provider limits, not a measured audience.</p>
+        <h2>Speech, models, search, and comments</h2>
+        <table>
+          <thead>
+            <tr><th>System</th><th>When it is used</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Azure AI Speech</td><td>Auto live’s captured voice. Key and region from the Speech resource (<code>KICKSTREAM_SPEECH_KEY</code>, <code>KICKSTREAM_SPEECH_REGION</code>). Daily character cap <code>KICKSTREAM_SPEECH_DAILY_CHARS</code> (default 200000). F0 allows 0.5 million characters a month; S0 is pay as you go. Repeated lines are cached. Without a key, or when Azure fails, the page uses the browser voice, which the stream does not hear.</td></tr>
+            <tr><td>Microsoft Foundry</td><td>Preferred model path when <code>KICKSTREAM_FOUNDRY_PROJECT_ENDPOINT</code> and <code>KICKSTREAM_FOUNDRY_DEPLOYMENT</code> are both set. The app’s managed identity needs Azure AI User. Terraform assigns that role only if <code>foundry_resource_id</code> points at an existing resource.</td></tr>
+            <tr><td>OpenAI-compatible chat</td><td><code>KICKSTREAM_LLM_BASE_URL</code>, <code>KICKSTREAM_LLM_MODEL</code>, <code>KICKSTREAM_LLM_API_KEY</code>. Used when Foundry is not set. <code>KICKSTREAM_LLM_MAX_CALLS</code> defaults to 60 per match for narration.</td></tr>
+            <tr><td>Wikipedia or Tavily</td><td>Ask Copilot web search, off until the host enables it. Wikipedia needs no key. Tavily needs <code>KICKSTREAM_TAVILY_API_KEY</code>. <code>KICKSTREAM_WEB_SEARCH=off</code> disables it. The Tavily adapter is tested against the documented response shape and has not been run against Tavily itself.</td></tr>
+            <tr><td>X API</td><td>Optional fan-zone source. <code>KICKSTREAM_X_BEARER_TOKEN</code> and <code>KICKSTREAM_X_QUERY</code>. Tested against the documented response shape, not against X itself. Other platforms use <code>POST /api/fans/ingest</code>.</td></tr>
+            <tr><td>MCP clients</td><td>Any client that speaks streamable HTTP can call <code>POST /mcp</code>. On a deployment that route is behind the studio sign-in.</td></tr>
+            <tr><td>Azure Communication Services</td><td>Guest rooms. Locally, a connection string, or <code>KICKSTREAM_ROOMS=fake</code> for invites without audio or video between people.</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </article>
+  </main>
+  <footer class="ks-footer">
+    <p>Kickstream IT solution set. Describes this repository. It is not a Microsoft Marketplace listing.</p>
+  </footer>
+</body>
+</html>

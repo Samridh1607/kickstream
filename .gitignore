@@ -11,3 +11,5 @@ playwright-report/
 .superpowers/
 .data/
 .data-e2e/
+.playwright-mcp/
+*.tsbuildinfo

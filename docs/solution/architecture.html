@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Architecture · Kickstream IT solution</title>
+  <link rel="stylesheet" href="theme.css">
+</head>
+<body>
+  <header class="ks-header">
+    <div class="ks-header-inner">
+      <a class="ks-brand" href="index.html">
+        <span class="ks-mark" aria-hidden="true"></span>
+        <span class="ks-brand-name">Kickstream</span>
+        <span class="ks-brand-sub">IT solution</span>
+      </a>
+      <nav class="ks-nav" aria-label="Solution documents">
+        <a href="index.html">Overview</a>
+        <a href="architecture.html" aria-current="page">Architecture</a>
+        <a href="capabilities.html">Capabilities</a>
+        <a href="security.html">Security</a>
+        <a href="operations.html">Operations</a>
+        <a href="integrations.html">Integrations</a>
+        <a href="constraints.html">Constraints</a>
+      </nav>
+    </div>
+  </header>
+  <main class="ks-main">
+    <article class="ks-sheet">
+      <p class="ks-eyebrow">Architecture and data flow</p>
+      <h1>One process carries the match and the stream</h1>
+      <section data-area="architecture-and-data-flow">
+        <p class="ks-lead">Kickstream runs as one program. Locally that is a FastAPI process on port 8000 plus the Vite app on port 5173. On Azure, <code>deploy/terraform</code> puts both behind a single Container App. Matches, the studio, and live streams are held in that process’s memory, so the app is pinned to one replica.</p>
+        <h2>Pipeline</h2>
+        <p>A match moves through five stages. The seven match agents sit beside that line and publish findings onto the same stream the browser reads.</p>
+        <figure class="ks-figure">
+          <svg viewBox="0 0 760 120" role="img" aria-label="Pipeline from ingest to the gateway, with agents and ffmpeg">
+            <style>
+              .n { fill: #F5F5F5; stroke: #0078D4; stroke-width: 1.5; }
+              .t { font: 600 14px "Segoe UI Variable", "Segoe UI", sans-serif; fill: #242424; }
+              .s { font: 12px "Segoe UI Variable", "Segoe UI", sans-serif; fill: #616161; }
+            </style>
+            <defs>
+              <marker id="pipe" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0 0 L6 3 L0 6 Z" fill="#0078D4"/>
+              </marker>
+            </defs>
+            <rect class="n" x="8" y="16" width="110" height="44" rx="4"/>
+            <rect class="n" x="150" y="16" width="110" height="44" rx="4"/>
+            <rect class="n" x="292" y="16" width="110" height="44" rx="4"/>
+            <rect class="n" x="434" y="16" width="110" height="44" rx="4"/>
+            <rect class="n" x="576" y="16" width="110" height="44" rx="4"/>
+            <text class="t" x="63" y="43" text-anchor="middle">Ingest</text>
+            <text class="t" x="205" y="43" text-anchor="middle">Interpret</text>
+            <text class="t" x="347" y="43" text-anchor="middle">Explain</text>
+            <text class="t" x="489" y="43" text-anchor="middle">Render</text>
+            <text class="t" x="631" y="43" text-anchor="middle">Gateway</text>
+            <path d="M118 38 H150" stroke="#0078D4" stroke-width="1.6" fill="none" marker-end="url(#pipe)"/>
+            <path d="M260 38 H292" stroke="#0078D4" stroke-width="1.6" fill="none" marker-end="url(#pipe)"/>
+            <path d="M402 38 H434" stroke="#0078D4" stroke-width="1.6" fill="none" marker-end="url(#pipe)"/>
+            <path d="M544 38 H576" stroke="#0078D4" stroke-width="1.6" fill="none" marker-end="url(#pipe)"/>
+            <text class="s" x="380" y="100" text-anchor="middle">Seven agents publish onto this stream. ffmpeg copies one encode to every destination.</text>
+          </svg>
+          <figcaption>One process. The browser reads the gateway. The hidden browser and ffmpeg are the encode.</figcaption>
+        </figure>
+        <ol class="ks-flow">
+          <li><strong>Ingest</strong><span>Simulator, detector file, or a match source</span></li>
+          <li><strong>Interpret</strong><span>Analytics: stats, pressure, events</span></li>
+          <li><strong>Explain</strong><span>Narration in Fan and Analyst wording</span></li>
+          <li><strong>Render</strong><span>Overlay graphics and scene widgets</span></li>
+          <li><strong>Personalize</strong><span>Gateway filters by mode, language, favourite</span></li>
+        </ol>
+        <p>The gateway fans the match out with Server-Sent Events and WebSockets. A page that joins late is not given the whole history of pitch scenes: it is replayed the newest pitch scene and the newest player report. WebSockets are accepted only from pages on the host the pipeline was reached at. Behind a proxy that rewrites <code>Host</code>, public names go in <code>KICKSTREAM_ALLOWED_HOSTS</code>. On the Container App, <code>KICKSTREAM_PUBLIC_HOSTS</code> is the app’s own FQDN, and requests through it reach only what the public-host gate allows.</p>
+        <h2>Narration and agents</h2>
+        <p>Narration is a second writer path from the match agents. Four Microsoft Agent Framework agents write when a model is configured: a Commentator and a Tactical Analyst on each key moment, a Recap Writer at half-time and full-time, and a Localizer into Spanish and Hindi. Each item is written once per mode and language and sent to every viewer on that variant, so model cost does not grow with the audience. Output is cached. If the model is slow, rate-limited, or unusable, that item falls back to a template and is marked scripted.</p>
+        <p>The seven match agents compute structured findings. Only the Explainability Agent produces prose, in English, at most 20 explanations a match, from templates when no model is set. Switching an agent off is stored in <code>.data/agents.json</code>. Agents that listen to it then have less to work on.</p>
+        <h2>Where state lives</h2>
+        <table>
+          <thead>
+            <tr><th>State</th><th>Local</th><th>Azure deploy</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Match playback, studio session, encode</td><td>Process memory</td><td>Same, inside the one replica</td></tr>
+            <tr><td>Broadcasts, studio document, uploads, narration cache, fan zone, auto-live settings, stream keys, recordings, reels</td><td><code>.data/</code></td><td>Azure Files share <code>data</code>, mounted at <code>/data</code></td></tr>
+            <tr><td>Match log: events, stats, narratives, agent findings</td><td>In-memory unless Cosmos settings are present</td><td>Cosmos DB database <code>kickstream</code>, container <code>match_log</code>, partition <code>/match_id</code></td></tr>
+            <tr><td>Guest calls</td><td>Azure Communication Services when <code>KICKSTREAM_ACS_CONNECTION_STRING</code> is set; <code>KICKSTREAM_ROOMS=fake</code> for a silent local trial</td><td>The Communication Services resource the template creates</td></tr>
+            <tr><td>Model</td><td>Foundry project, or any OpenAI-compatible chat endpoint. Templates if neither is set</td><td>Same variables. Foundry is not created by Terraform; an existing project can be named</td></tr>
+          </tbody>
+        </table>
+        <h2>Components</h2>
+        <table>
+          <thead>
+            <tr><th>Piece</th><th>Role</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>services/pipeline</code></td><td>Python 3.13, FastAPI, Microsoft Agent Framework. Serves the API, the built web app, and the live streams.</td></tr>
+            <tr><td><code>apps/web</code></td><td>Vite, React, TypeScript, Fluent UI v9. Studio, home, match data, guests, auto live.</td></tr>
+            <tr><td><code>packages/contracts</code></td><td>Shared JSON schema for the match and studio contracts.</td></tr>
+            <tr><td><code>deploy/docker</code></td><td>Image with the app, a Chromium browser for capture, and ffmpeg.</td></tr>
+            <tr><td><code>deploy/terraform</code></td><td>The only Azure footprint this solution claims. See Operations for the resource list.</td></tr>
+          </tbody>
+        </table>
+        <p>Going live does not send a separate video file per platform. The studio’s clean output (<code>/studio?output</code>, 1920×1080) is opened in a hidden Chromium browser. ffmpeg encodes that picture once and copies the stream to every destination. Microsoft Edge is used when it is present. Auto live captures <code>/live?output</code> the same way.</p>
+      </section>
+    </article>
+  </main>
+  <footer class="ks-footer">
+    <p>Kickstream IT solution set. Describes this repository. It is not a Microsoft Marketplace listing.</p>
+  </footer>
+</body>
+</html>

@@ -2,7 +2,7 @@ import {
   Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, makeStyles, MessageBar, MessageBarBody, Switch, Text, tokens,
 } from "@fluentui/react-components";
 import { useEffect, useState } from "react";
-import { AgentDetail, AgentOverview, AgentRail, isAgentView, type StudioView } from "./agents/AgentStudio";
+import { AgentDetail, AgentOverview, AgentRail, FollowedPlayer, follows, isAgentView, type StudioView } from "./agents/AgentStudio";
 import { type AgentId, fetchAgents, setAgentEnabled } from "./agents/api";
 import { fetchTeams, speedFromLocation, startMatch, type Teams } from "./api";
 import { Header } from "./components/Header";
@@ -34,6 +34,7 @@ const useStyles = makeStyles({
     padding: tokens.spacingHorizontalXL, alignItems: "start",
     "@media (max-width: 900px)": { gridTemplateColumns: "minmax(0, 1fr)" },
   },
+  content: { display: "flex", flexDirection: "column", minWidth: 0 },
   column: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL },
   panel: { padding: tokens.spacingHorizontalL, borderRadius: tokens.borderRadiusLarge, backgroundColor: tokens.colorNeutralBackground1, boxShadow: tokens.shadow2 },
   feed: { maxHeight: "70vh", display: "flex", flexDirection: "column" },
@@ -122,6 +123,8 @@ export function App({ eventSource, retryMs = 2000, pollMs = 3000, initialView = 
   const selectedNarrative = data.narratives.find((narrative) => narrative.moment_id === selectedId);
   const selectedMoment = data.moments.find((moment) => moment.id === selectedId);
   const selectedOverlay = selectedNarrative && data.overlays.find((overlay) => overlay.sources.includes(selectedNarrative.id));
+  const followedId = profile.player ?? null;
+  const follow = (player: string | null) => updateProfile({ ...profile, player });
 
   return (
     <div className={styles.app}>
@@ -141,51 +144,54 @@ export function App({ eventSource, retryMs = 2000, pollMs = 3000, initialView = 
       )}
       <div className={styles.shell}>
         <AgentRail catalog={catalog} match={data} view={view} language={language} onView={setView} />
-        {view === "overview" && (
-          <AgentOverview catalog={catalog} match={data} language={language} playerId={profile.player ?? null} problem={agentProblem}
-            onFollow={(player) => updateProfile({ ...profile, player })} onView={setView} onToggle={(agentId, enabled) => void toggleAgent(agentId, enabled)} />
-        )}
-        {isAgentView(view) && catalog && shownAgent && (
-          <AgentDetail agent={shownAgent} catalog={catalog} match={data} language={language} playerId={profile.player ?? null} problem={agentProblem}
-            onFollow={(player) => updateProfile({ ...profile, player })} onView={setView} onToggle={(agentId, enabled) => void toggleAgent(agentId, enabled)} />
-        )}
-        {view === "match" && (
-          <main className={styles.match}>
-            <div className={styles.column}>
-              <div className={styles.panel}>
-                {isKeyEvents(data.status) ? (
-                  <Text data-testid="live-data-only">{t(language, "liveDataOnly")}</Text>
-                ) : (
-                  <>
-                    <Switch checked={showPressure} label={t(language, "pressureMap")}
-                      onChange={(_, state) => setShowPressure(state.checked)} />
-                    <Pitch events={data.events} pressure={data.pressure} status={data.status} showPressure={showPressure} language={language} />
-                  </>
-                )}
+        <div className={styles.content}>
+          {follows(data, followedId) && <FollowedPlayer match={data} language={language} playerId={followedId} view={view} onFollow={follow} />}
+          {view === "overview" && (
+            <AgentOverview catalog={catalog} match={data} language={language} playerId={followedId} problem={agentProblem}
+              onFollow={follow} onView={setView} onToggle={(agentId, enabled) => void toggleAgent(agentId, enabled)} />
+          )}
+          {isAgentView(view) && catalog && shownAgent && (
+            <AgentDetail agent={shownAgent} catalog={catalog} match={data} language={language} playerId={followedId} problem={agentProblem}
+              onFollow={follow} onView={setView} onToggle={(agentId, enabled) => void toggleAgent(agentId, enabled)} />
+          )}
+          {view === "match" && (
+            <main className={styles.match}>
+              <div className={styles.column}>
+                <div className={styles.panel}>
+                  {isKeyEvents(data.status) ? (
+                    <Text data-testid="live-data-only">{t(language, "liveDataOnly")}</Text>
+                  ) : (
+                    <>
+                      <Switch checked={showPressure} label={t(language, "pressureMap")}
+                        onChange={(_, state) => setShowPressure(state.checked)} />
+                      <Pitch events={data.events} pressure={data.pressure} status={data.status} showPressure={showPressure} language={language} />
+                    </>
+                  )}
+                </div>
+                <div className={styles.panel}>
+                  <Timeline moments={data.moments} recaps={data.recaps} selectedId={selectedId} language={language}
+                    onSelect={select} onOpenRecap={setOpenRecap} />
+                </div>
+                <div className={styles.panel}>
+                  <StatsPanel stats={data.stats} status={data.status} language={language} />
+                </div>
               </div>
-              <div className={styles.panel}>
-                <Timeline moments={data.moments} recaps={data.recaps} selectedId={selectedId} language={language}
-                  onSelect={select} onOpenRecap={setOpenRecap} />
+              <div className={styles.column}>
+                <div className={`${styles.panel} ${styles.feed}`}>
+                  <NarrativeFeed narratives={data.narratives} selectedId={selectedId} language={language} onSelect={select} />
+                </div>
+                <div className={styles.panel}>
+                  <PipelinePanel narrative={selectedNarrative} moment={selectedMoment} overlay={selectedOverlay || undefined} profile={profile} />
+                </div>
               </div>
-              <div className={styles.panel}>
-                <StatsPanel stats={data.stats} status={data.status} language={language} />
-              </div>
-            </div>
-            <div className={styles.column}>
-              <div className={`${styles.panel} ${styles.feed}`}>
-                <NarrativeFeed narratives={data.narratives} selectedId={selectedId} language={language} onSelect={select} />
-              </div>
-              <div className={styles.panel}>
-                <PipelinePanel narrative={selectedNarrative} moment={selectedMoment} overlay={selectedOverlay || undefined} profile={profile} />
-              </div>
-            </div>
-          </main>
-        )}
-        {view === "overlay" && (
-          <main>
-            <OverlayTab overlays={data.overlays} language={language} />
-          </main>
-        )}
+            </main>
+          )}
+          {view === "overlay" && (
+            <main>
+              <OverlayTab overlays={data.overlays} language={language} />
+            </main>
+          )}
+        </div>
       </div>
       <PreferencesDrawer open={preferencesOpen} profile={profile} teams={playing} onChange={updateProfile}
         onClose={() => setPreferencesOpen(false)} />

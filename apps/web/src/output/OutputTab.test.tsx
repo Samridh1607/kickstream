@@ -85,7 +85,7 @@ test("idle destinations can be switched, removed and sent live", async () => {
   expect(first.getByText("Key ending wxyz")).toBeTruthy();
   // Each change keeps the controls disabled until its answer arrives: the next one waits for that.
   const ready = async <T extends HTMLElement>(find: () => T) => {
-    await waitFor(() => expect((find() as HTMLElement & { disabled: boolean }).disabled).toBe(false));
+    await waitFor(() => expect((find() as HTMLElement as HTMLButtonElement).disabled).toBe(false));
     return find();
   };
   fireEvent.click(await ready(() => first.getByRole("switch", { name: "Send to YouTube" })));

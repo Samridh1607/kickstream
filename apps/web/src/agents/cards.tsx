@@ -10,6 +10,7 @@ import { type ReactElement, type ReactNode, type RefObject, useCallback, useMemo
 import { CompareBars, Counted, HeatGrid, LineGraph, NEUTRAL, ShareBar, type Sides, Swatch } from "../charts/charts";
 import type { AgentRun, MatchStatus, PlayEvent, Studio, TeamTactics } from "../contracts";
 import { type Language, type StringKey, t } from "../i18n";
+import { useCanUseStudio } from "../shell/viewer";
 import { isKeyEvents } from "../matches/liveData";
 import { MotionStyles, rise, SETTLE, slide } from "../motion/motion";
 import type { MatchData } from "../stream/store";
@@ -123,7 +124,11 @@ interface CardProps {
 type Added = { intent: "success"; scene: string } | { intent: "error"; message: string };
 
 /** Puts the 3D pitch, as the viewer has it framed, into one of the studio's scenes or a new one. */
-function AddToScene({ camera, view, onAdded }: { camera: "auto" | Camera; view: RefObject<View>; onAdded(result: Added): void }) {
+function AddToScene(props: { camera: "auto" | Camera; view: RefObject<View>; onAdded(result: Added): void }) {
+  return useCanUseStudio() ? <SceneMenu {...props} /> : null;
+}
+
+function SceneMenu({ camera, view, onAdded }: { camera: "auto" | Camera; view: RefObject<View>; onAdded(result: Added): void }) {
   const [studio, setStudio] = useState<Studio | null>(null);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -369,6 +374,7 @@ export function PlayerCard({ match, language, playerId, onChoose, detailed = fal
             {([
               ["touches", player.touches, 0], ["passes", player.passes, 0], ["passAccuracy", player.pass_accuracy, 0], ["shots", player.shots, 0],
               ["xg", player.xg, 2], ["goals", player.goals, 0], ["fouls", player.fouls, 0],
+              ["distance", player.distance ?? 0, 0], ["topSpeed", player.top_speed ?? 0, 0],
             ] as [StringKey, number, number][]).map(([key, value, digits]) => (
               <div key={key} className={styles.stat}>
                 <Text weight="semibold" size={400}><Counted value={value} digits={digits} /></Text>
@@ -376,6 +382,9 @@ export function PlayerCard({ match, language, playerId, onChoose, detailed = fal
               </div>
             ))}
           </div>
+          {player.callout ? (
+            <Text size={200} data-testid="player-callout">{player.callout}</Text>
+          ) : null}
           <div style={{ maxWidth: 360 }}>
             <HeatGrid cols={report.cols} rows={report.rows} values={player.heat} color={colors[player.team]} label={`${player.name}: ${t(language, "touches")}`} />
           </div>
@@ -393,6 +402,33 @@ export function PlayerCard({ match, language, playerId, onChoose, detailed = fal
           )}
         </>
       )}
+    </Card>
+  );
+}
+
+/** The followed player's key moments and highlights, newest first, kept for the whole match. */
+export function TheirMomentsCard({ match, language, playerId, onStop }: CardProps & { playerId: string; onStop(): void }) {
+  const styles = useStyles();
+  const colors = colorsOf(match.status);
+  const covered = new Set(match.highlights.map((highlight) => highlight.moment_id));
+  const items = [
+    ...match.highlights.filter((highlight) => highlight.player_id === playerId)
+      .map((highlight) => ({ id: highlight.id, minute: highlight.minute, team: highlight.team, title: highlight.title, detail: highlight.reason })),
+    ...match.moments.filter((moment) => moment.player_id === playerId && !covered.has(moment.id))
+      .map((moment) => ({ id: moment.id, minute: moment.minute, team: moment.team, title: HIGHLIGHT_LABELS[moment.kind], detail: `${moment.score_home}–${moment.score_away}` })),
+  ].sort((a, b) => b.minute - a.minute);
+  return (
+    <Card agent="highlights" title={t(language, "theirMoments")} testId="card-their-moments"
+      extra={<Button size="small" appearance="subtle" icon={<DismissRegular />} onClick={onStop}>{t(language, "stopFollowing")}</Button>}>
+      {items.length === 0 && <Waiting>{t(language, "theirMomentsEmpty")}</Waiting>}
+      <ul className={mergeClasses(styles.list, styles.scroll)}>
+        {items.map((item) => (
+          <li key={item.id} data-testid="their-moment" className={mergeClasses(styles.item, styles.favourite)} style={{ borderLeftColor: colors[item.team], animation: slide() }}>
+            <Text weight="semibold">{item.minute}' {item.title}</Text>
+            <Text size={200} className={styles.muted}>{item.detail}</Text>
+          </li>
+        ))}
+      </ul>
     </Card>
   );
 }

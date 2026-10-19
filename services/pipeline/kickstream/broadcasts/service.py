@@ -11,12 +11,25 @@ from pathlib import Path
 
 from kickstream.broadcasts import reels, rules
 from kickstream.broadcasts.rules import BroadcastError, BroadcastsState
-from kickstream.contracts import Broadcasts, KeyMoment, MatchStatus, Narrative, Output, Reel
+from kickstream.contracts import Broadcasts, EditedReel, KeyMoment, MatchStatus, Narrative, Output, Reel
 from kickstream.ports.broadcasts import LiveOutput
 from kickstream.ports.output import RecordStore
 from kickstream.ports.reels import ClipCutter, ClipFailure, ReelBrief, ReelCandidate, ReelPick, ReelProducer
 
 log = logging.getLogger(__name__)
+# A reel edited in Clipchamp: a few minutes of 1080p at most. Larger is almost surely the wrong file.
+MAX_EDITED_BYTES = 512 * 1024 * 1024
+EDITED_NAME = "Edited in Clipchamp.mp4"
+_TOO_BIG = "An edited reel can be at most 512 MB. Export it from Clipchamp at 1080p or lower."
+_NOT_MP4 = (
+    "That is not an MP4 video. In Clipchamp, choose Export and save the video as MP4, then add that file."
+)
+
+
+def _file_name(name: str) -> str:
+    """The name the edited file had on the streamer's computer, shown beside it; never used as a path."""
+    shown = " ".join(name.replace("\\", "/").rsplit("/", 1)[-1].split())[:120]
+    return shown or EDITED_NAME
 
 
 class BroadcastService:
@@ -95,6 +108,17 @@ class BroadcastService:
 
     def _reel_path(self, broadcast_id: str, reel_id: str) -> Path:
         return self._reels_dir / broadcast_id / f"{reel_id}.mp4"
+
+    def edited_file(self, broadcast_id: str, reel_id: str) -> Path | None:
+        """The reel's version edited in Clipchamp, if it has one on disk."""
+        broadcast = rules.find(self._state, broadcast_id)
+        if broadcast is None or not any(r.id == reel_id and r.edited for r in broadcast.reels):
+            return None
+        path = self._edited_path(broadcast_id, reel_id)
+        return path if path.is_file() else None
+
+    def _edited_path(self, broadcast_id: str, reel_id: str) -> Path:
+        return self._reels_dir / broadcast_id / f"{reel_id}-edited.mp4"
 
     # --- changing -------------------------------------------------------------------------------
 
@@ -199,6 +223,52 @@ class BroadcastService:
     def delete_reel(self, broadcast_id: str, reel_id: str) -> None:
         self._apply(lambda state: rules.delete_reel(state, broadcast_id, reel_id))
         self._reel_path(broadcast_id, reel_id).unlink(missing_ok=True)
+        self._edited_path(broadcast_id, reel_id).unlink(missing_ok=True)
+
+    async def add_edited(
+        self, broadcast_id: str, reel_id: str, chunks: AsyncIterator[bytes], name: str
+    ) -> None:
+        """Keep the version of a reel edited in Clipchamp beside the original, replacing any before it.
+
+        The file is written to disk as it arrives, never held in memory, and only an MP4 within
+        the limit takes the place of the last one: anything else leaves the reel as it was.
+        """
+        rules.ready_reel(self._state, broadcast_id, reel_id)
+        final = self._edited_path(broadcast_id, reel_id)
+        final.parent.mkdir(parents=True, exist_ok=True)
+        part = final.with_name(f".{final.name}.{self._new_id()}.part")
+        size = 0
+        head = b""
+        try:
+            with part.open("wb") as out:
+                async for chunk in chunks:
+                    size += len(chunk)
+                    if size > MAX_EDITED_BYTES:
+                        raise BroadcastError(422, "edited", _TOO_BIG)
+                    if len(head) < 12:
+                        head += chunk[: 12 - len(head)]
+                    await asyncio.to_thread(out.write, chunk)
+            # Every MP4 (and the MOV it shares its format with) opens with an "ftyp" box.
+            if head[4:8] != b"ftyp":
+                raise BroadcastError(422, "edited", _NOT_MP4)
+            edited = EditedReel(name=_file_name(name), size_bytes=size, added_at=self._now())
+            before = rules.ready_reel(self._state, broadcast_id, reel_id).edited
+            # The reel may have been deleted while the file arrived: then there is nothing to add to.
+            self._apply(lambda state: rules.set_edited(state, broadcast_id, reel_id, edited))
+            try:
+                part.replace(final)
+            except OSError as exc:
+                self._apply(lambda state: rules.set_edited(state, broadcast_id, reel_id, before))
+                raise BroadcastError(
+                    503, "edited", "The edited reel could not be saved. Nothing was changed."
+                ) from exc
+        finally:
+            part.unlink(missing_ok=True)
+
+    def remove_edited(self, broadcast_id: str, reel_id: str) -> None:
+        """Go back to the original reel."""
+        self._apply(lambda state: rules.set_edited(state, broadcast_id, reel_id, None))
+        self._edited_path(broadcast_id, reel_id).unlink(missing_ok=True)
 
     async def _make_reels(self, broadcast_id: str) -> None:
         try:

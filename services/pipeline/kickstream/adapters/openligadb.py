@@ -197,7 +197,7 @@ class OpenLigaDb:
 
     def __init__(
         self,
-        leagues: tuple[str, ...] = ("pl", "la1", "ucl"),
+        leagues: tuple[str, ...] = ("bl1", "la1", "ucl"),
         base_url: str = OPENLIGADB,
         get: Get = http_get,
         now: Callable[[], float] = time.time,

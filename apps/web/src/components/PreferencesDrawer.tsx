@@ -3,7 +3,7 @@ import {
 } from "@fluentui/react-components";
 import type { Teams } from "../api";
 import type { ViewerProfile } from "../contracts";
-import { LANGUAGE_NAMES, LANGUAGES, type Language, t } from "../i18n";
+import { LANGUAGE_NAMES, LANGUAGES, type Language, type Mode, MODES, t } from "../i18n";
 
 const useStyles = makeStyles({
   body: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL },
@@ -34,6 +34,13 @@ export function PreferencesDrawer({ open, profile, teams, onChange, onClose }: P
         </DrawerHeaderTitle>
       </DrawerHeader>
       <DrawerBody className={styles.body}>
+        <Field label={t(language, "mode")}>
+          <Select value={profile.mode} onChange={(_, data) => onChange({ ...profile, mode: data.value as Mode })}>
+            {MODES.map((option) => (
+              <option key={option} value={option}>{t(language, option)}</option>
+            ))}
+          </Select>
+        </Field>
         <Field label={t(language, "favoriteClub")}>
           <Select value={club} onChange={(_, data) => onChange({ ...profile, club: data.value || null })}>
             <option value="">{t(language, "none")}</option>

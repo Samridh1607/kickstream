@@ -6,12 +6,13 @@ import { AskCopilot } from "../copilot/AskCopilot";
 import { LiveStatus } from "../output/OutputTab";
 import { useIsDark, useThemeChoice } from "../theme";
 import { BrandLogo } from "./BrandLogo";
+import { useCanUseStudio } from "./viewer";
 
 export type NavPage = "home" | "studio" | "live" | "match";
 
-const LINKS: { page: NavPage; href: string; label: string; icon: ReactNode }[] = [
-  { page: "home", href: "/", label: "Home", icon: <HomeRegular /> },
-  { page: "studio", href: "/studio", label: "Studio", icon: <VideoClipMultipleRegular /> },
+const LINKS: { page: NavPage; href: string; label: string; icon: ReactNode; studio?: true }[] = [
+  { page: "home", href: "/", label: "Home", icon: <HomeRegular />, studio: true },
+  { page: "studio", href: "/studio", label: "Studio", icon: <VideoClipMultipleRegular />, studio: true },
   { page: "live", href: "/live", label: "Auto live", icon: <BotSparkleRegular /> },
   { page: "match", href: "/match", label: "Match data", icon: <DataTrendingRegular /> },
 ];
@@ -66,9 +67,10 @@ export function ThemeToggle({ className }: { className?: string }) {
 /** The bar across the top of every streamer page: where to go, and whether the stream is on. */
 export function AppNav({ current, output = null, now = Date.now() / 1000, children }: AppNavProps) {
   const styles = useStyles();
+  const studio = useCanUseStudio();
   return (
     <header className={styles.nav}>
-      <a href="/" className={styles.brand} aria-label="Kickstream home">
+      <a href={studio ? "/" : "/live"} className={styles.brand} aria-label="Kickstream home">
         <BrandLogo />
         <span className={styles.brandText}>
           <Text weight="bold" size={400}>Kickstream</Text>
@@ -76,7 +78,7 @@ export function AppNav({ current, output = null, now = Date.now() / 1000, childr
         </span>
       </a>
       <nav aria-label="Main" className={styles.links}>
-        {LINKS.map((link) => (
+        {LINKS.filter((link) => studio || !link.studio).map((link) => (
           <a key={link.href} href={link.href} className={mergeClasses(styles.link, link.page === current && styles.current)}
             aria-current={link.page === current ? "page" : undefined}>
             {link.icon}
@@ -86,7 +88,7 @@ export function AppNav({ current, output = null, now = Date.now() / 1000, childr
       </nav>
       {children && <div className={styles.extras}>{children}</div>}
       <div className={styles.end}>
-        <LiveStatus output={output} now={now} />
+        {studio && <LiveStatus output={output} now={now} />}
         <AskCopilot />
         <ThemeToggle />
       </div>

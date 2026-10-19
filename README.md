@@ -36,7 +36,7 @@ Every streamer page has the same top bar. While the stream is on, its right side
 
 ## Real match data
 
-Instead of the simulated match, you can play a real one from three free sources. Choose it in the studio's **Match** tool, or with **Choose match** on the **Match data** page.
+Kickstream is built around synthetic match data: the simulated match is what it plays by default, and the only data a deployment made with `deploy/` offers. As an optional extension for local use, you can instead play a real one from three free sources. Choose it in the studio's **Match** tool, or with **Choose match** on the **Match data** page.
 
 | Source | Kind | What it gives | Key | Free limits | Credit |
 |---|---|---|---|---|---|
@@ -46,7 +46,7 @@ Instead of the simulated match, you can play a real one from three free sources.
 
 - **StatsBomb** files are downloaded on first use into `.data/statsbomb/`, so a match played once replays offline. The first start of a match waits a few seconds for the download. The match list never shows a score, so a replay is not spoiled. StatsBomb's [licence](https://github.com/hudl/open-data/blob/master/LICENSE.pdf) allows non-commercial use with attribution and asks for their logo, which is why the program shows it in a corner while a StatsBomb match plays.
 - **API-Football** is polled every 90 seconds while a match is live (every 5 minutes at half-time, every 10 before kick-off and every 2 in the last 15 minutes before it). That is about 80 requests for one match, fixture lists included. Every request is counted; the Match tool shows the day's count, kept in `.data/api-football-budget.json`, which resets at midnight UTC and follows API-Football's own count, so other programs using the same key spend the same 100. When the day's requests are spent, the match keeps its last state and resumes after midnight UTC. The free plan does not cover every season; when it refuses a match, the Match tool shows API-Football's own message and what to do.
-- **OpenLigaDB** is entered by its community, so goals can arrive late or be corrected. It has no live clock, so the minute and half-time are estimated from the kick-off time. It is polled every 60 seconds while live. The leagues offered are the Premier League, LaLiga and the Champions League (`pl,la1,ucl`); set `KICKSTREAM_OPENLIGADB_LEAGUES` to OpenLigaDB league shortcuts to change them, for example `bl1` for the Bundesliga.
+- **OpenLigaDB** is entered by its community, so goals can arrive late or be corrected. It has no live clock, so the minute and half-time are estimated from the kick-off time. It is polled every 60 seconds while live. The leagues offered are the Bundesliga, LaLiga and the Champions League (`bl1,la1,ucl`); set `KICKSTREAM_OPENLIGADB_LEAGUES` to OpenLigaDB league shortcuts to change them.
 
 To get and set the API-Football key:
 
@@ -71,7 +71,8 @@ Whatever you choose is also the **next match**: when a studio countdown ends, it
 | Variable | Meaning |
 |---|---|
 | `KICKSTREAM_API_FOOTBALL_KEY` | Your API-Football key, in `.env` |
-| `KICKSTREAM_OPENLIGADB_LEAGUES` | OpenLigaDB league shortcuts, comma-separated (default `pl,la1,ucl`) |
+| `KICKSTREAM_OPENLIGADB_LEAGUES` | OpenLigaDB league shortcuts, comma-separated (default `bl1,la1,ucl`) |
+| `KICKSTREAM_REAL_SOURCES` | `off`: offer only synthetic matches (the simulated match and a detector feed). A deployment made with `deploy/` sets it off unless `real_sources = true` |
 | `KICKSTREAM_STATSBOMB_URL`, `KICKSTREAM_API_FOOTBALL_URL`, `KICKSTREAM_OPENLIGADB_URL` | For tests only: where each source is read from |
 | `KICKSTREAM_LIVE_POLL_S` | For tests only: poll live sources every N seconds instead of their schedule |
 
@@ -87,15 +88,19 @@ Whatever you choose is also the **next match**: when a studio countdown ends, it
 
 ## AI narratives
 
-With no configuration, narratives come from templates and are marked **Scripted**. To have the agents write them, point Kickstream at any OpenAI-compatible Chat Completions endpoint before starting the pipeline:
+With no configuration, narratives come from templates and are marked **Scripted**. To have the agents write them, point Kickstream at a model before starting the pipeline: a Microsoft Foundry project deployment, or any OpenAI-compatible Chat Completions endpoint. When both are set, the Foundry project is used.
 
 | Variable | Meaning |
 |---|---|
+| `KICKSTREAM_FOUNDRY_PROJECT_ENDPOINT` | Foundry project endpoint, `https://<resource>.services.ai.azure.com/api/projects/<project>` |
+| `KICKSTREAM_FOUNDRY_DEPLOYMENT` | Model deployment name in that project |
 | `KICKSTREAM_LLM_BASE_URL` | Endpoint base URL, ending in `/v1` |
 | `KICKSTREAM_LLM_MODEL` | Model or deployment name |
 | `KICKSTREAM_LLM_API_KEY` | API key |
 | `KICKSTREAM_LLM_MAX_CALLS` | Model calls allowed per match (default 60) |
 | `KICKSTREAM_CACHE_DIR` | Where agent output is cached (default `.cache/narration`) |
+
+The Foundry project is signed in to with Microsoft Entra ID, not a key: `az login` on your machine, the app's managed identity in Azure. That identity needs the **Azure AI User** role on the project. All the agents share one Foundry client.
 
 Four Microsoft Agent Framework agents do the writing: a Commentator and a Tactical Analyst work on each key moment concurrently, a Recap Writer covers half-time and full-time, and a Localizer translates into Spanish and Hindi. Each item is written once per mode and language and sent to every viewer on that variant, so model cost does not grow with the number of viewers. Output is cached, so replaying the same match costs no model calls. If the model is slow, rate-limited or returns something unusable, that item falls back to a template.
 
@@ -129,7 +134,7 @@ The studio is laid out around the picture, as in StreamYard: what goes out is al
 
 Scenes, settings and uploaded images are kept in `.data/` (set `KICKSTREAM_DATA_DIR` to move it). The program uses the on-air scene's commentary, or the **Default commentary** and language from the Settings tool.
 
-The **Match data** page (`/match`) is for analysts: its narration and agent output are always in the Analyst wording.
+On the **Match data** page (`/match`), **Preferences** sets the wording (**Fan** or **Analyst**, Analyst by default), the language and a favourite club and player; they are kept in the browser. Following a player, from Preferences or the player card, keeps their card, the 3D pitch following them and their key moments and highlights above every view for the rest of the match, until **Stop following**. The studio's own default commentary stays in its Settings tool.
 
 ## Match agents
 
@@ -147,9 +152,11 @@ Seven agents work on every match. Each is declared the way a Copilot Studio agen
 
 Three things to know:
 
-- **There is no video here.** The synthetic match feed stands in for a detector's output. A real detector would publish to the same `events` topic.
+- **There is no video here.** The synthetic match feed stands in for a detector's output. A real detector can feed the same `events` topic through a file: set `KICKSTREAM_DETECTOR_FILE` to a JSON Lines file it appends to, one MatchEvent per line (pass distance and difficulty, ball speed and shot speed included; `id`, `match_id` and `seq` are left out and numbered on arrival). **Detector feed** then appears in the Match tool; starting it follows the file until a `full_time` line, and a line that cannot be read is skipped and counted. `python -m kickstream.simulator.reader feed.jsonl` writes a sample feed from the simulated match.
+- **Speed and pass quality.** Every pass carries its distance and difficulty and every shot its speed; each side's average pass distance and difficulty sit beside its pass accuracy, and the Player Tracking Agent reports each player's distance covered and top speed, calling out one who passes 500 m or 25 m/s.
+- **Control and chaos.** The Tactical Analyst and the Explainability Agent add a **control** fact when momentum passes the swing threshold, and a **chaos** fact when the rhythm is frantic and neither side has that control.
 - **Only the ball and the player on it are known positions.** The Visualization Agent places the other players from the formation and the ball, and the 3D pitch draws them dashed and says so.
-- **The agents compute; one writes.** Only the Explainability Agent produces prose. Without a model it writes from templates. With the `KICKSTREAM_LLM_*` variables set, a Microsoft Agent Framework agent writes instead, for at most 20 explanations a match, falling back to the templates on any failure. Its text is English only.
+- **The agents compute; one writes.** Only the Explainability Agent produces prose. Without a model it writes from templates. With a model set (a Foundry project or the `KICKSTREAM_LLM_*` variables; see [AI narratives](#ai-narratives)), a Microsoft Agent Framework agent writes instead, for at most 20 explanations a match, falling back to the templates on any failure. Its text is English only.
 
 Any agent can be switched off on its page; the agents that listen to it then have less to work on. The switches are kept in `.data/agents.json`.
 
@@ -174,7 +181,7 @@ The **Ask Copilot** button in the top bar of every streamer page opens a chat pa
 
 - **The record is what Kickstream has seen.** The two clubs are fictional, so a head to head or a player's record counts the matches finished on this installation, kept in `.data/matches.json` (the newest 50). Before the first one finishes, it says there is nothing on record.
 - **Web search** is a switch under the question box, off until you turn it on. It is used only for a question the match cannot answer, and it sends that question to the search service. The default is Wikipedia, which needs no key; with `KICKSTREAM_TAVILY_API_KEY` set, Tavily searches the whole web instead. `KICKSTREAM_WEB_SEARCH=off` turns it off. The Tavily adapter is tested against its documented response shape and has not been run against Tavily itself.
-- **Wording**: without a model, answers are assembled from the recorded numbers. With the `KICKSTREAM_LLM_*` variables set, a Microsoft Agent Framework agent words each answer from those same facts and the web results, for at most 40 answers a match, falling back to the assembled answer on any failure. The cards never come from the model.
+- **Wording**: without a model, answers are assembled from the recorded numbers. With a model set (a Foundry project or the `KICKSTREAM_LLM_*` variables), a Microsoft Agent Framework agent words each answer from those same facts and the web results, for at most 40 answers a match, falling back to the assembled answer on any failure. The cards never come from the model.
 - **Ask one agent**: type `@` (or press **Tag an agent**) and pick one of the seven agents, or type a tag such as `@tactics`, `@prediction`, `@highlights` or `@TacticalAnalyst`. The question goes to that agent's part of the match: the latest plays, the tactics, the forecast, why something matters, where play is happening, a player, or the highlights. The reply says **Answered by** that agent.
 - **Answers** are written in Markdown (headings, lists, tables) with charts: the two sides' numbers as bars, the forecast as a donut, where play happens by thirds.
 - **When Ask Copilot cannot be reached**, the pane shows a sample answer of the same kind, marked **Sample — not live data**, with the reason, so the layout of an answer can still be seen. Its numbers are made up.
@@ -184,6 +191,9 @@ The **Ask Copilot** button in the top bar of every streamer page opens a chat pa
 |---|---|
 | `GET /api/copilot` | Whether a model words the answers, which search service is used, and how many matches are on record |
 | `POST /api/copilot/ask` | `{question, mode?, web?, match_id?, agent?}`: the answer, its cards and charts, any web sources, which agent answered and questions to ask next. Without `match_id` it answers about the current match |
+| `POST /mcp` | The same answers as Model Context Protocol tools (streamable HTTP) |
+
+**As MCP tools.** Any MCP client (GitHub Copilot in VS Code, Claude, an Azure AI Foundry agent) can put Ask Copilot's questions to Kickstream at `http://127.0.0.1:8000/mcp`. The tools are `ask_copilot`, `match_state`, `win_prediction`, `tactics`, `player_report`, `head_to_head`, `highlight`, `play_history`, `why_it_matters` and `where_play_is`. Each returns the answer assembled from the recorded numbers, the facts it rests on and its cards; none calls a model or searches the web, and all of them only read. Leave `match_id` out for the current match. On a deployment, `/mcp` sits behind the same sign-in as the studio, and only the hosts the app serves are accepted.
 
 ## Fan zone
 
@@ -246,7 +256,7 @@ Pages follow live data over WebSockets, which the pipeline accepts only from pag
 
 **Auto live** (`/live`) runs a channel by itself, with no one in the studio. It cycles through 22 full-screen scenes: one for each of the seven match agents (Event Interpreter, Tactical Analyst, Prediction, Explainability, Visualization, Player Tracking, Highlights), one of all seven at work, and others such as the score centre, the 3D stadium, the pressure map, momentum, expected goals, win probability, key moments and the fan zone. Every 5 to 10 minutes (a random time between the two, which you set) it moves to another scene with an animated transition, and an AI commentator introduces it. Between scenes it speaks again as often as you set (every 2 minutes at first), and the match agents' narratives are read out as they come.
 
-The voice is Azure AI Speech (neural voices, chosen on the page). Without a Speech key, or while Azure fails, the page speaks with the browser's own voices instead, Microsoft Edge's natural voices when they are there. Only the Azure voice is carried on the stream: the hidden browser that captures the page has no speakers, so a stream relying on the browser voice is silent. Lines are written by the Explainability model when the `KICKSTREAM_LLM_*` variables are set, at most `KICKSTREAM_AUTOLIVE_LLM_PER_HOUR` of them an hour, and from templates otherwise.
+The voice is Azure AI Speech (neural voices, chosen on the page). Without a Speech key, or while Azure fails, the page speaks with the browser's own voices instead, Microsoft Edge's natural voices when they are there. Only the Azure voice is carried on the stream: the hidden browser that captures the page has no speakers, so a stream relying on the browser voice is silent. Lines are written by the Explainability model when a model is set (a Foundry project or the `KICKSTREAM_LLM_*` variables), at most `KICKSTREAM_AUTOLIVE_LLM_PER_HOUR` of them an hour, and from templates otherwise.
 
 On the page you turn auto live on or off, choose which scenes it uses (or show one now), set the minutes between scenes, turn the commentary and narration on or off, pick the voice and its speed, and listen in. **Keep a match on** starts a replayed match whenever none is running, so there is always something to show. **Stream 24/7** puts `/live?output` on air through the destinations set up in the studio's **Stream** tool (add one there first) and keeps it there: if the stream stops it is started again after 5 seconds, then 15, 30, up to 5 minutes between tries, and 5 minutes back on air resets the wait. While the studio is on air, auto live waits for it to finish. Turning **Stream 24/7** or auto live off is how the stream it started ends; stopping it elsewhere only makes it start again. A **Record to file** destination left on fills the disk over days, so stream 24/7 to platforms only. Settings are kept in `.data/autolive.json` and survive a restart. Left open on a screen, `/live` keeps the screen from sleeping where the browser allows it, and loads itself again after two minutes without the server.
 
@@ -281,6 +291,14 @@ Starting the Output with no broadcast (through the API, for example) still saves
 
 On an ended broadcast's page, **Generate reels** cuts up to four 15-second vertical clips (1080 × 1920) from the recording, around its goals, red cards and big chances, or spread through it when there were none. With a model configured, two Microsoft Agent Framework agents do the choosing: a Highlight Editor picks the moments and a Social Copywriter writes each reel's title, caption and hashtags. Without a model, or if they fail, templates do it. The agents never set the times: each clip starts 8 seconds before its moment. Each reel plays on the page, downloads as an MP4, and has a button that copies its post. Reels are kept in `.data/reels/`.
 
+**Edit in Clipchamp.** Each finished reel has **Edit in Clipchamp**, for Microsoft's video editor. Clipchamp has no way for another app to hand it a video, so the reel goes there as a file:
+
+1. **Save the reel and open Clipchamp** saves the reel's MP4, named after its title, to your downloads and opens [Clipchamp](https://app.clipchamp.com/) in a new tab.
+2. In Clipchamp, sign in, choose **Create a new video**, then **Import media**, pick the reel, and edit it: text, music, stickers, captions. Then **Export** it at 1080p.
+3. Back on the broadcast's page, **Add the edited video** takes the MP4 Clipchamp exported. It is kept beside the original, which stays as it was.
+
+A reel with an edited version is marked **Edited in Clipchamp** and plays and downloads that version; **Original** switches back to the first cut. **Replace the edited video** takes a newer export, and **Remove edited version** goes back to the original. Only an MP4 (or MOV) up to 512 MB is taken, written to disk as it arrives; deleting a reel deletes its edited version too.
+
 | Endpoint | Use |
 |---|---|
 | `GET /api/broadcasts`, `/api/broadcasts/socket` | Every broadcast, once or live |
@@ -290,6 +308,15 @@ On an ended broadcast's page, **Generate reels** cuts up to four 15-second verti
 | `POST /api/broadcasts/{id}/live`, `/end` | Go live with it, or end it |
 | `POST /api/broadcasts/{id}/reels` | Generate reels from its recording |
 | `GET /api/broadcasts/{id}/recordings/{file}`, `/reels/{reel}.mp4` | Its recordings and reels, with range requests for seeking |
+| `PUT /api/broadcasts/{id}/reels/{reel}/edited` | The reel's version edited in Clipchamp: the MP4 itself as the body, its name percent-encoded in `X-File-Name` |
+| `GET /api/broadcasts/{id}/reels/{reel}/edited.mp4` | The edited version, with range requests for seeking |
+| `DELETE /api/broadcasts/{id}/reels/{reel}/edited` | Remove the edited version and go back to the original |
+
+## Your own camera
+
+To be on the stream yourself without setting up guests, open the studio's **Settings** tool and turn on **Show my camera and use my microphone**. Choose the camera and microphone (**Find devices** lists them; the browser asks once to use them) and the name for your tag. You then appear in a camera circle on the program, with your voice on the stream, and the stage shows your picture too (without your sound, so you do not hear yourself).
+
+This works where Kickstream runs: the hidden browser that streams the program opens the camera and microphone on the same computer, so it needs no Azure Communication Services. It is given the camera and microphone only, never the screen. On a server, which has no camera, use guests instead. The devices are saved by name, so a camera that is unplugged shows as **(not found)** and the default one is used until it is back.
 
 ## Guests
 
@@ -301,7 +328,7 @@ In a broadcast's studio, the **Guests** tool (or **Invite a guest** under Backst
 | Co-host | yes | when you put them there | can open it |
 | Member | yes | never | no |
 
-Copy the link and send it. The guest checks their camera and microphone, gives a name, and joins. You add up to four people to the stage, including yourself with **Join with camera** and **Add me to stage**. Who is on stage appears in the scene's **Cameras** element (the **Interview** template has one), or in a picture-in-picture box when the scene has none, and their voices are on the stream. While the broadcast is live, everyone backstage is muted. **Revoke** stops a link at once; ending or deleting the broadcast stops them all.
+Copy the link and send it. The guest checks their camera and microphone, gives a name, and joins. You add up to four people to the stage, including yourself with **Join with camera** and **Add me to stage**. Who is on stage appears in the scene's **Cameras** element (the **Interview** template has one), or, when the scene has none, as a row of camera circles in the bottom-right corner, one circle per person, above the ticker; their voices are on the stream. In **Edit layout**, a Cameras element's **Shape** is **Boxes** (a grid) or **Circles** (one round camera each, side by side, as large as the element allows). While the broadcast is live, everyone backstage is muted. **Revoke** stops a link at once; ending or deleting the broadcast stops them all.
 
 Calls go through Azure Communication Services Rooms. Create a Communication Services resource in the Azure portal, then put its connection string in a `.env` file at the top of the project (it is ignored by git):
 
@@ -340,19 +367,48 @@ A co-host can do everything you can in the studio: go live, end or delete the br
 ./deploy/destroy.ps1    # or ./deploy/destroy.sh; deletes everything, stored broadcasts included
 ```
 
-Run `deploy` again to ship a new version. Only you (whoever deploys) can sign in to the studio. To let others in, co-hosts included, add their Entra object IDs to `studio_users` in `deploy/terraform/terraform.tfvars` (copy `terraform.tfvars.example`); the API-Football and model keys go there too. Guests need no account: their invite pages (`/guest/...`) stay open. The Communication Services connection string goes from Terraform straight into a Container Apps secret.
+Run `deploy` again to ship a new version. Only you (whoever deploys) can sign in to the studio. To let others in, co-hosts included, add their Entra object IDs to `studio_users` in `deploy/terraform/terraform.tfvars` (copy `terraform.tfvars.example`); the API-Football and model keys go there too. Guests need no account: their invite pages (`/guest/...`) stay open. So do `/live` and `/match`, for anyone to watch, read-only (`public_view = false` closes them); every other page sends people to sign in. Only synthetic matches are offered there (`real_sources = true` adds the real sources). The Communication Services connection string goes from Terraform straight into a Container Apps secret.
 
-Terraform's state, in `deploy/terraform`, holds every secret it created; it is ignored by git, so keep that folder on the machine you deploy from. The app runs as one replica, since matches and the studio live in its memory. If the registry refuses to build (`TasksOperationsNotAllowed`, on some free subscriptions), run `deploy.ps1 -LocalBuild` (or `deploy.sh --local-build`) with Docker installed.
+Every match's log (its events, narration and agent output, which replays and late joiners are served from) is kept in **Azure Cosmos DB for NoSQL**: a serverless account, partitioned by match, that deletes a match's log after `match_log_ttl_days` (90 by default). The app signs in to it with its managed identity; the account takes no keys. Writes are queued and sent in the background, so a slow write never holds up the match, and a match not in memory is read back from Cosmos DB, so a restart keeps every replay. Locally, with no `KICKSTREAM_COSMOS_ENDPOINT`, the log stays in memory as before.
+
+Terraform's state, in `deploy/terraform`, holds every secret it created; it is ignored by git, so keep that folder on the machine you deploy from. The app runs as one replica, since the running match and the studio live in its memory. If the registry refuses to build (`TasksOperationsNotAllowed`, on some free subscriptions), run `deploy.ps1 -LocalBuild` (or `deploy.sh --local-build`) with Docker installed.
 
 | Path | Contents |
 |---|---|
 | `deploy/docker/Dockerfile` | One image: the pipeline serving the API and the built web app, with Chromium and ffmpeg for going live |
-| `deploy/terraform/` | Resource group, registry, storage, Communication Services, Speech, the Container App and its Entra sign-in |
+| `deploy/terraform/` | Resource group, registry, storage, Cosmos DB, Communication Services, Speech, the Container App and its Entra sign-in |
 | `deploy/deploy.*`, `deploy/destroy.*` | Create or update everything; delete everything |
+| `deploy/github-setup.*` | One-time setup for deploying from GitHub |
+| `.github/workflows/` | CI on every push and pull request; Deploy after CI passes on `main` |
+
+### Deploy from GitHub
+
+**CI** runs on every push and pull request: ruff, the pipeline tests, a check that both generated contract files match the schema, the web typecheck, tests and build, and `terraform validate`. **Deploy** runs after CI passes on `main` (or from the Actions tab), does what `deploy.sh` does, and waits until the new revision answers. It stays switched off until the setup script has run:
+
+```powershell
+./deploy/github-setup.ps1   # or ./deploy/github-setup.sh; needs the Azure CLI and the GitHub CLI, signed in
+```
+
+It needs an Azure account that is an Owner of the subscription. It creates:
+
+- An Entra app that GitHub Actions signs in as, through OIDC with no secret, trusted only for this repository's `production` environment. It is an Owner of the subscription, and has two Microsoft Graph permissions so Terraform can register the studio's sign-in: `Application.ReadWrite.OwnedBy` and `AppRoleAssignment.ReadWrite.All`. Granting those needs a Global Administrator; the script says so if you are not one.
+- A private storage account for Terraform's state, used with Entra ID rather than keys.
+- The repository variables the workflow reads: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `TFSTATE_RESOURCE_GROUP` and `TFSTATE_STORAGE_ACCOUNT`, plus `STUDIO_USERS` set to you.
+
+Then every push to `main` deploys, or run `gh workflow run deploy.yml`. Settings that `terraform.tfvars` holds locally are repository variables here:
+
+- **Repository variables:** `STUDIO_USERS` (comma-separated object IDs), `FOUNDRY_PROJECT_ENDPOINT`, `FOUNDRY_DEPLOYMENT`, `FOUNDRY_RESOURCE_ID`, `LLM_BASE_URL`, `LLM_MODEL`, `APP_NAME`, `AZURE_LOCATION`, `AUTOLIVE`, `SPEECH_SKU`, and `LOCAL_BUILD=true` to build with Docker on the runner when the registry refuses.
+- **Secrets:** `LLM_API_KEY` and `API_FOOTBALL_KEY`.
+
+A deployment made from GitHub keeps its state in that storage account, not on your machine. To hand a deployment you made locally over to GitHub, write the same `backend_override.tf` the workflow writes in `deploy/terraform` and run `terraform init -migrate-state` with its `-backend-config` values; otherwise the first run from GitHub creates a second deployment.
 
 | Variable | Use |
 |---|---|
 | `KICKSTREAM_WEB_DIR` | The built web app (`apps/web/dist`); the pipeline serves it, so no dev server is needed |
+| `KICKSTREAM_COSMOS_ENDPOINT` | The Cosmos DB account the match logs are kept in; unset keeps them in memory |
+| `KICKSTREAM_COSMOS_DATABASE`, `KICKSTREAM_COSMOS_CONTAINER` | Its database and container (default `kickstream`, `match_log`) |
+| `KICKSTREAM_PUBLIC_VIEW` | `on`: anyone may watch `/live` and `/match` without signing in; what they can reach only reads. Set by `deploy/` when `public_view = true` (the default) |
+| `KICKSTREAM_SIGN_IN_URL` | Where a studio page sends someone not signed in, when the sign-in in front lets everyone through (with the public view) |
 | `KICKSTREAM_SIGNED_IN_HEADER` | The header a sign-in proxy in front names the signed-in user in; requests with it reach the studio. Set it only behind such a proxy: through a plain tunnel anyone can send the header |
 
 ## Layout

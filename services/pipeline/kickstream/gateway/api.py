@@ -25,7 +25,7 @@ _LIVE_REF = re.compile(r"[0-9]+")
 class StartMatch(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    source: Literal["simulated", "statsbomb", "api_football", "openligadb"] = "simulated"
+    source: Literal["simulated", "statsbomb", "api_football", "openligadb", "detector"] = "simulated"
     seed: int | None = Field(default=None, ge=0, le=2**31 - 1)
     # ASCII digits only: \d would also let other scripts' digits through
     ref: str | None = Field(default=None, pattern=r"^[0-9]{1,10}(/[0-9]{1,10}){0,2}$")
@@ -33,9 +33,11 @@ class StartMatch(BaseModel):
 
     @model_validator(mode="after")
     def _fits_the_source(self) -> "StartMatch":
-        if self.source == "simulated":
+        if self.source in ("simulated", "detector"):
             if self.ref is not None:
-                raise ValueError("a simulated match takes no ref")
+                raise ValueError(f"a {self.source} match takes no ref")
+            if self.source == "detector" and self.seed is not None:
+                raise ValueError("a detector match takes no seed")
             return self
         if self.seed is not None:
             raise ValueError(f"a {self.source} match takes no seed")

@@ -9,6 +9,7 @@ import type { AutoLive, AutoLiveSettings, FanZone, Output, ViewerProfile } from 
 import { FANS_STREAM } from "../fans/api";
 import { OUTPUT_STREAM } from "../output/api";
 import { AppNav } from "../shell/AppNav";
+import { useCanUseStudio } from "../shell/viewer";
 import { useMatch } from "../stream/store";
 import { type CurrentMatchOptions, useCurrentMatch } from "../stream/useCurrentMatch";
 import { useLiveDocument } from "../stream/useLiveDocument";
@@ -151,14 +152,17 @@ export function AutoLivePage(props: Options) {
   const styles = useStyles();
   const { eventSource, retryMs } = props;
   const { doc, accept, data, now, narrative, connected } = useProgram(props);
-  const { doc: output } = useLiveDocument<Output>(OUTPUT_STREAM, eventSource, retryMs);
+  // A viewer, not signed in to the studio, watches and listens; only the studio's users change anything.
+  const studio = useCanUseStudio();
+  const { doc: output } = useLiveDocument<Output>(studio ? OUTPUT_STREAM : null, eventSource, retryMs);
   useStayAwake({ connected, reloadWhenCutOff: true, ...props.awake });
   const [sound, setSound] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const { spoken, speaker } = useAutoLiveVoice(doc, narrative, { on: sound, stream: false, monitor: true, deps: props.speech });
   const size = useWindowSize();
-  const previewWidth = Math.max(320, Math.min(1280, (size.width > 1100 ? size.width - 440 : size.width) - 96));
+  // The settings column sits beside the preview only for the studio's users.
+  const previewWidth = Math.max(320, Math.min(1280, (studio && size.width > 1100 ? size.width - 440 : size.width) - 96));
   const scale = previewWidth / CANVAS.width;
 
   const attempt = async (work: () => Promise<AutoLive>) => {
@@ -216,8 +220,8 @@ export function AutoLivePage(props: Options) {
               caption={captionOf(doc, now, spoken.text, !sound)} speaking={spoken.text !== null} />
           </div>
           <div className={styles.row}>
-            <Button appearance="primary" icon={<NextRegular />} disabled={busy} onClick={() => void attempt(nextScene)}>Next screen</Button>
-            <Button icon={<ChatSparkleRegular />} disabled={busy || !s.enabled || !s.commentary} onClick={() => void attempt(sayNow)}>Say something now</Button>
+            {studio && <Button appearance="primary" icon={<NextRegular />} disabled={busy} onClick={() => void attempt(nextScene)}>Next screen</Button>}
+            {studio && <Button icon={<ChatSparkleRegular />} disabled={busy || !s.enabled || !s.commentary} onClick={() => void attempt(sayNow)}>Say something now</Button>}
             {sound
               ? <Button icon={<SpeakerMuteRegular />} onClick={() => setSound(false)}>Mute this preview</Button>
               : <Button icon={<Speaker2Regular />} onClick={() => void turnSoundOn()}>Hear the commentary here</Button>}
@@ -226,7 +230,7 @@ export function AutoLivePage(props: Options) {
               {` · ${doc.matches_started} matches started · ${doc.stream_restarts} stream restarts`}
             </Text>
           </div>
-          <section className={styles.card} aria-label="Screens">
+          {studio && <section className={styles.card} aria-label="Screens">
             <Text weight="semibold" size={500}>Screens ({s.scenes.length} of {doc.scenes.length} in the rotation)</Text>
             <div className={styles.scenes}>
               {doc.scenes.map((scene) => (
@@ -239,10 +243,10 @@ export function AutoLivePage(props: Options) {
                 </div>
               ))}
             </div>
-          </section>
+          </section>}
         </div>
 
-        <div className={styles.column}>
+        {studio && <div className={styles.column}>
           <section className={styles.card} aria-label="Auto live">
             <Switch label="Auto live" checked={s.enabled} disabled={busy} onChange={(_, value) => save({ enabled: value.checked })} />
             <Text className={styles.muted}>Rotates the screens with live AI commentary, keeps a match playing and, if you want, keeps the stream on air around the clock.</Text>
@@ -308,7 +312,7 @@ export function AutoLivePage(props: Options) {
               <Text>{output ? `Output: ${output.state}` : "Output: unknown"}</Text>
             </div>
           </section>
-        </div>
+        </div>}
       </main>
     </div>
   );

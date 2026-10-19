@@ -5,9 +5,9 @@ post for each. Neither chooses times or sees the video: they work from the momen
 """
 
 from agent_framework import Agent
-from agent_framework.openai import OpenAIChatCompletionClient
 
 from kickstream.adapters.agent_writer import parse_json
+from kickstream.adapters.model_client import ClientFactory
 from kickstream.ports.reels import ReelBrief, ReelPick
 
 HIGHLIGHT_EDITOR = "highlight_editor"
@@ -100,14 +100,12 @@ def _posts(reply: dict, picks: list[tuple[str, str]]) -> list[ReelPick]:
 class AgentReelProducer:
     name = "AI agents"
 
-    def __init__(self, base_url: str, model: str, api_key: str) -> None:
+    def __init__(self, new_client: ClientFactory, model: str) -> None:
         self.model = model
-        self._base_url = base_url
-        self._api_key = api_key
+        self._new_client = new_client
 
     def _agent(self, name: str) -> Agent:
-        client = OpenAIChatCompletionClient(model=self.model, base_url=self._base_url, api_key=self._api_key)
-        return Agent(client=client, name=name, instructions=_INSTRUCTIONS[name])
+        return Agent(client=self._new_client(), name=name, instructions=_INSTRUCTIONS[name])
 
     async def produce(self, brief: ReelBrief) -> list[ReelPick]:
         edited = await self._agent(HIGHLIGHT_EDITOR).run(editor_prompt(brief))

@@ -18,6 +18,7 @@ from kickstream.contracts import (
     BroadcastScore,
     BroadcastSession,
     BroadcastStats,
+    EditedReel,
     KeyMoment,
     MatchStatus,
     Narrative,
@@ -384,6 +385,26 @@ def end_reels(state: BroadcastsState, broadcast_id: str) -> BroadcastsState:
     if current is None or not current.generating:
         return state
     return _put(state, _change(current, generating=False))
+
+
+def ready_reel(state: BroadcastsState, broadcast_id: str, reel_id: str) -> Reel:
+    """The finished reel an edited version can be added to."""
+    reel = next((r for r in get(state, broadcast_id).reels if r.id == reel_id), None)
+    if reel is None:
+        raise BroadcastError(404, "reel", "That reel no longer exists.")
+    if reel.state != "ready":
+        raise BroadcastError(409, "reel", "Only a finished reel can have an edited version.")
+    return reel
+
+
+def set_edited(
+    state: BroadcastsState, broadcast_id: str, reel_id: str, edited: EditedReel | None
+) -> BroadcastsState:
+    """The reel's version edited in Clipchamp, kept beside the original; None goes back to the original."""
+    ready_reel(state, broadcast_id, reel_id)
+    current = get(state, broadcast_id)
+    reels = [r.model_copy(update={"edited": edited}) if r.id == reel_id else r for r in current.reels]
+    return _put(state, _change(current, reels=reels))
 
 
 def delete_reel(state: BroadcastsState, broadcast_id: str, reel_id: str) -> BroadcastsState:

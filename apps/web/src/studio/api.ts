@@ -14,7 +14,7 @@ export class StudioRequestError extends Error {
   }
 }
 
-async function toError(response: Response): Promise<StudioRequestError> {
+export async function toError(response: Response): Promise<StudioRequestError> {
   let field: string | null = null;
   let message = `The request failed (${response.status}).`;
   try {

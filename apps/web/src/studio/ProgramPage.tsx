@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FanZone, Scene, Studio, ViewerProfile } from "../contracts";
 import { FANS_STREAM } from "../fans/api";
+import { type MediaDeps, useThisComputer } from "../calls/thisComputer";
 import { type ProgramCallOptions, useProgramCall } from "../people/useProgramCall";
 import { useMatch } from "../stream/store";
 import { useLiveDocument } from "../stream/useLiveDocument";
 import { type CurrentMatchOptions, useCurrentMatch } from "../stream/useCurrentMatch";
 import { startCapture } from "./capture";
 import type { CameraTile } from "./elements";
-import { fitScale, nextLayer } from "./geometry";
+import { CANVAS, fitScale, nextLayer } from "./geometry";
 import { programMode } from "./mode";
 import { SceneCanvas } from "./SceneCanvas";
 import { useCaptureOffer } from "./useCaptureOffer";
@@ -22,12 +23,24 @@ export function withReplayFallback(scene: Scene, studio: Studio): Scene {
   return { ...scene, elements: [...scene.elements, fallback] };
 }
 
-const CAMERAS_BOX = { x: 1440, y: 740, width: 440, height: 300 };
+const CIRCLE = 260; // across, on the 1920 x 1080 canvas
+const CIRCLE_GAP = 24;
+const CIRCLE_MARGIN = 40;
+const ABOVE_TICKER = 100; // the templates' ticker runs along the bottom 80
 
-/** People on stage must be seen: add a picture-in-picture box to a scene that shows no cameras. */
+/** One camera circle per person on stage, in a row from the bottom-right corner growing to the left. */
+function camerasCorner(count: number) {
+  const width = count * CIRCLE + (count - 1) * CIRCLE_GAP;
+  return { x: CANVAS.width - CIRCLE_MARGIN - width, y: CANVAS.height - ABOVE_TICKER - CIRCLE, width, height: CIRCLE };
+}
+
+/** People on stage must be seen: add a row of camera circles to a scene that shows no cameras. */
 export function withCamerasFallback(scene: Scene, cameras: readonly CameraTile[]): Scene {
   if (cameras.length === 0 || scene.elements.some((element) => element.type === "cameras" && element.visible)) return scene;
-  const fallback = { id: "__cameras", type: "cameras" as const, ...CAMERAS_BOX, layer: nextLayer(scene.elements), visible: true, props: { names: true } };
+  const fallback = {
+    id: "__cameras", type: "cameras" as const, ...camerasCorner(cameras.length), layer: nextLayer(scene.elements), visible: true,
+    props: { names: true, shape: "circle" },
+  };
   return { ...scene, elements: [...scene.elements, fallback] };
 }
 
@@ -69,8 +82,8 @@ export function isOutputView(search: string): boolean {
 
 /** The clean output: the active scene, scaled to the window, with no controls. */
 export function ProgramPage({
-  eventSource, retryMs, pollMs, capture = startCapture, newCall, seat, connectAudio, rejoinMs,
-}: CurrentMatchOptions & ProgramCallOptions & { capture?: typeof startCapture }) {
+  eventSource, retryMs, pollMs, capture = startCapture, newCall, seat, connectAudio, rejoinMs, media,
+}: CurrentMatchOptions & ProgramCallOptions & { capture?: typeof startCapture; media?: MediaDeps }) {
   const { studio, offset } = useStudio(eventSource, retryMs);
   const mode = studio ? programMode(studio) : undefined;
   const language = studio?.settings.language;
@@ -83,6 +96,12 @@ export function ProgramPage({
   const now = useNow() + offset;
   const size = useWindowSize();
   const guests = useProgramCall({ eventSource, retryMs, newCall, seat, connectAudio, rejoinMs });
+  // This computer's own camera, and its microphone on the program's sound, when the studio has them on.
+  const thisComputer = useThisComputer(studio?.settings.local_camera, { sound: true, deps: media, connectAudio });
+  const cameras = useMemo(
+    () => (thisComputer.tile ? [thisComputer.tile, ...guests.cameras] : guests.cameras),
+    [thisComputer.tile, guests.cameras],
+  );
   const { doc: fans } = useLiveDocument<FanZone>(FANS_STREAM, eventSource, retryMs);
   useCaptureOffer(Boolean(studio), capture);
 
@@ -91,8 +110,8 @@ export function ProgramPage({
     <div data-testid="program"
       style={{ position: "fixed", inset: 0, display: "grid", placeItems: "center", overflow: "hidden", backgroundColor: "#000000", cursor: "none" }}>
       {studio && active && (
-        <SceneCanvas scene={withFallbacks(active, studio, guests.cameras, fans)} scale={fitScale(size.width, size.height)}
-          data={{ match, studio, now, language: studio.settings.language, fans, cameras: guests.cameras, renderVideo: guests.renderVideo }} />
+        <SceneCanvas scene={withFallbacks(active, studio, cameras, fans)} scale={fitScale(size.width, size.height)}
+          data={{ match, studio, now, language: studio.settings.language, fans, cameras, renderVideo: guests.renderVideo }} />
       )}
     </div>
   );

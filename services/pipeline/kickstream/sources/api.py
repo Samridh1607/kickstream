@@ -11,6 +11,7 @@ from kickstream.ports.match_source import LiveSource, ReplaySource, SourceFailur
 SIMULATED = SourceInfo(
     id="simulated", name="Simulated match", kind="simulated", detail="full", available=True
 )
+DETECTOR = SourceInfo(id="detector", name="Detector feed", kind="detector", detail="full", available=True)
 
 
 class SourceRefusal(Refusal):
@@ -48,6 +49,7 @@ def build_sources_router(
     live: Mapping[str, LiveSource],
     running: Callable[[], RunningMatch | None],
     today: Callable[[], date] = date.today,
+    detector: bool = False,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/sources")
 
@@ -59,6 +61,8 @@ def build_sources_router(
     @router.get("")
     async def get_sources() -> Sources:
         listed = [SIMULATED, *map(_replay_info, replays.values()), *map(_live_info, live.values())]
+        if detector:
+            listed.append(DETECTOR)
         return Sources(sources=listed, running=running())
 
     @router.get("/{source}/competitions")

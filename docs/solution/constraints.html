@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Constraints · Kickstream IT solution</title>
+  <link rel="stylesheet" href="theme.css">
+</head>
+<body>
+  <header class="ks-header">
+    <div class="ks-header-inner">
+      <a class="ks-brand" href="index.html">
+        <span class="ks-mark" aria-hidden="true"></span>
+        <span class="ks-brand-name">Kickstream</span>
+        <span class="ks-brand-sub">IT solution</span>
+      </a>
+      <nav class="ks-nav" aria-label="Solution documents">
+        <a href="index.html">Overview</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="capabilities.html">Capabilities</a>
+        <a href="security.html">Security</a>
+        <a href="operations.html">Operations</a>
+        <a href="integrations.html">Integrations</a>
+        <a href="constraints.html" aria-current="page">Constraints</a>
+      </nav>
+    </div>
+  </header>
+  <main class="ks-main">
+    <article class="ks-sheet">
+      <p class="ks-eyebrow">Assumptions, constraints, and risks</p>
+      <h1>What this solution assumes, and what it refuses</h1>
+      <section data-area="assumptions-constraints-risks">
+        <p class="ks-lead">The repository is a working studio and a deployable Container App. Several boundaries are deliberate. Treating them as already solved will mis-state the product.</p>
+        <div class="ks-grid">
+          <div class="ks-card"><h3>One replica</h3><p>A second copy would not see this match, this studio, or this encode.</p></div>
+          <div class="ks-card"><h3>StatsBomb off</h3><p>Open Data is non-commercial and must not ship in a paid offer.</p></div>
+          <div class="ks-card"><h3>No purchase flow</h3><p>Marketplace fulfillment is not in this repository.</p></div>
+          <div class="ks-card"><h3>Speech on air</h3><p>Only Azure speech is captured. The browser voice is silence.</p></div>
+        </div>
+        <figure class="ks-figure">
+          <svg viewBox="0 0 760 108" role="img" aria-label="A restart drops memory and keeps files and the Cosmos log">
+            <style>
+              .gone { fill: #FFFFFF; stroke: #616161; stroke-width: 1.5; }
+              .keep { fill: #F5F5F5; stroke: #0078D4; stroke-width: 1.5; }
+              .t { font: 600 14px "Segoe UI Variable", "Segoe UI", sans-serif; fill: #242424; }
+              .s { font: 12px "Segoe UI Variable", "Segoe UI", sans-serif; fill: #616161; }
+            </style>
+            <rect class="gone" x="16" y="16" width="220" height="56" rx="4"/>
+            <rect class="keep" x="270" y="16" width="220" height="56" rx="4"/>
+            <rect class="keep" x="524" y="16" width="220" height="56" rx="4"/>
+            <text class="t" x="126" y="40" text-anchor="middle">Memory</text>
+            <text class="s" x="126" y="58" text-anchor="middle">Match and encode are gone</text>
+            <text class="t" x="380" y="40" text-anchor="middle">Files</text>
+            <text class="s" x="380" y="58" text-anchor="middle">Share at /data remains</text>
+            <text class="t" x="634" y="40" text-anchor="middle">Cosmos log</text>
+            <text class="s" x="634" y="58" text-anchor="middle">match_log remains</text>
+          </svg>
+          <figcaption>A replica restart. Auto live can start a 24/7 stream again from saved settings. A studio encode does not resume itself.</figcaption>
+        </figure>
+        <h2>Assumptions</h2>
+        <ul>
+          <li>The operator who deploys has an Azure CLI session and permission to create the resource group, the Entra application, and the role assignments.</li>
+          <li>The container image can run ffmpeg and a Chromium browser. The studio’s own camera path needs a camera on that machine; a server uses guests instead.</li>
+          <li>Clubs and players in the synthetic match are fictional. A head-to-head is the matches this installation has finished, at most the newest 50.</li>
+          <li>Viewers of one match share narration. Personalization is a filter at the gateway (mode, language, favourite), not a separate model call per viewer.</li>
+          <li>A model endpoint is optional. Templates are the supported path when Foundry and <code>KICKSTREAM_LLM_*</code> are unset.</li>
+        </ul>
+        <h2>Constraints</h2>
+        <div class="ks-risk">
+          <p>StatsBomb Open Data is non-commercial and must not ship in a paid offer. A deploy leaves real sources off unless <code>real_sources</code> is set true. Attribution (logo and “Data: StatsBomb”) is required wherever that source is used.</p>
+        </div>
+        <div class="ks-note">
+          <p>Kickstream does not implement Microsoft Marketplace SaaS fulfillment, an Entra purchase landing page, or a live Partner Center offer. Publishing and co-sell are outside this repository.</p>
+        </div>
+        <ul>
+          <li><code>min_replicas = 1</code> and <code>max_replicas = 1</code>. A second replica would not share the in-memory match, studio, or ffmpeg process.</li>
+          <li>Live API-Football and OpenLigaDB feeds have no ball positions. Widgets that need a pitch coordinate say so, rather than inventing one.</li>
+          <li>API-Football’s free plan is about 100 requests a day. One match costs on the order of 80, including fixture lists. The budget file follows the provider’s count.</li>
+          <li>OpenLigaDB is community-entered. Goals can arrive late. The minute and half-time are estimated.</li>
+          <li>Explainability prose and Ask Copilot answers are English. Narration for the program can be English, Spanish, or Hindi, in Fan or Analyst wording.</li>
+          <li>The stream has no bed music and no crowd. Silence means nobody unmuted is in the call, or auto live fell back to a browser voice the capture cannot hear.</li>
+          <li>Highlight times are fixed: a reel starts 8 seconds before the moment and runs 15 seconds. The model may choose the moment and the words. It does not choose the edit points.</li>
+          <li>Container Registry admin credentials and the storage account key are how the current templates pull the image and mount <code>/data</code>.</li>
+        </ul>
+        <h2>Risks</h2>
+        <table>
+          <thead>
+            <tr><th>Risk</th><th>What actually happens</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Replica restart</td><td>Memory of the live match and the ffmpeg process is gone. Files on the share and the Cosmos match log remain. Auto live restarts a 24/7 stream from saved settings. A studio show does not resume mid-encode by itself.</td></tr>
+            <tr><td>Public view</td><td>With the default <code>public_view</code>, anyone can watch <code>/live</code> and <code>/match</code> read-only. Studio routes still require a studio user.</td></tr>
+            <tr><td>Empty public-host list</td><td>A tunnel opened while <code>KICKSTREAM_PUBLIC_HOSTS</code> is empty exposes the whole studio, including stream controls.</td></tr>
+            <tr><td>Co-host</td><td>A co-host can end or delete the broadcast and can go live. Treat the invite as an operator credential.</td></tr>
+            <tr><td>Speech spend</td><td>S0 bills per character. The daily cap stops Azure speech; it does not stop the stream from going quiet when the browser voice cannot be captured.</td></tr>
+            <tr><td>Disk</td><td>Record to file combined with Stream 24/7 fills the 10 GiB share. The product’s own guidance is to stream 24/7 to platforms only.</td></tr>
+            <tr><td>Registry admin user</td><td>The admin password sits in a Container App secret. Rotating it means updating that secret and the registry together.</td></tr>
+            <tr><td>Untested live adapters</td><td>The X and Tavily adapters are checked against documented payloads. They have not been run against those services in this repository’s test suite.</td></tr>
+            <tr><td>One destination fails</td><td>The others continue. The top bar shows the failed one. There is no automatic failover to a second region: Cosmos has a single geo location.</td></tr>
+          </tbody>
+        </table>
+        <p>Taken together, the safe commercial reading is: operate the synthetic match, or a feed you have a right to use; keep StatsBomb off any paid offer; and do not describe a Marketplace purchase flow as part of the product that ships today.</p>
+      </section>
+    </article>
+  </main>
+  <footer class="ks-footer">
+    <p>Kickstream IT solution set. Describes this repository. It is not a Microsoft Marketplace listing.</p>
+  </footer>
+</body>
+</html>

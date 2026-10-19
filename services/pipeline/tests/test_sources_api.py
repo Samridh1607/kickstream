@@ -338,7 +338,7 @@ def test_the_sources_settings_come_from_the_environment():
     )
     assert defaults.api_football_url == "https://v3.football.api-sports.io"
     assert defaults.openligadb_url == "https://api.openligadb.de"
-    assert (defaults.openligadb_leagues, defaults.live_poll_s) == (("pl", "la1", "ucl"), None)
+    assert (defaults.openligadb_leagues, defaults.live_poll_s) == (("bl1", "la1", "ucl"), None)
     custom = Settings.from_env(
         {
             "KICKSTREAM_API_FOOTBALL_KEY": KEY,
@@ -404,3 +404,16 @@ def test_the_configured_addresses_are_the_ones_asked(tmp_path, monkeypatch):
 def test_the_default_suite_cannot_reach_the_internet():
     with pytest.raises(AssertionError, match="internet"):
         urllib.request.urlopen("https://example.com")  # noqa: S310
+
+
+def test_with_real_sources_off_only_synthetic_matches_are_offered(tmp_path):
+    settings = Settings(
+        None, None, None, cache_dir=tmp_path / "cache", data_dir=tmp_path / "data", real_sources=False
+    )
+    app = create_app(settings, clock_factory=lambda speed: InstantClock(), match_prefix="m")
+    with TestClient(app) as client:
+        assert [s["id"] for s in client.get("/api/sources").json()["sources"]] == ["simulated"]
+        refused = client.post("/api/matches", json={"source": "statsbomb", "ref": "43/3/1", "speed": 1})
+        assert refused.status_code in (404, 409, 422)
+    assert Settings.from_env({"KICKSTREAM_REAL_SOURCES": "off"}).real_sources is False
+    assert Settings.from_env({}).real_sources is True

@@ -17,6 +17,11 @@ output "resource_group" {
   value = azurerm_resource_group.main.name
 }
 
+output "cosmos_endpoint" {
+  description = "The match log's Cosmos DB account."
+  value       = azurerm_cosmosdb_account.main.endpoint
+}
+
 output "container_app" {
   value = azurerm_container_app.main.name
 }

@@ -99,6 +99,10 @@ class EventInterpreter:
                 player_in_id=event.player_in_id,
                 xg=event.xg,
                 located=event.located,
+                pass_distance=event.pass_distance,
+                pass_difficulty=event.pass_difficulty,
+                ball_speed=event.ball_speed,
+                shot_speed=event.shot_speed,
             )
         ]
 
